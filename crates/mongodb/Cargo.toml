@@ -24,7 +24,7 @@ chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
 kernel.workspace = true
-mongodb = { version = "3.4.1", features = ["bson-3"] }
+mongodb = "3.4.1"
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
