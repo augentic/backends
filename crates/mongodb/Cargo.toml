@@ -1,5 +1,5 @@
 [package]
-name = "backend-mongodb"
+name = "warp-mongodb"
 description = "MongoDB resource provider"
 publish = false
 readme = "README.md"

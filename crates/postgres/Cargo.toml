@@ -1,5 +1,5 @@
 [package]
-name = "backend-postgres"
+name = "warp-postgres"
 description = "Postgres resource provider"
 publish = false
 readme = "README.md"

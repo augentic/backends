@@ -40,7 +40,7 @@ WRT provides a thin wrapper around wasmtime for ergonomic integration of host-ba
 
 WRT follows the WebAssembly Component Model's guest/host pattern:
 
-- **Guest**: Application code compiled to WebAssembly (`.wasm`). Uses WASI interfaces to interact with the outside world. The guest is portable and backend-agnostic.
+- **Guest**: Application code compiled to WebAssembly (`.wasm`). Uses WASI interfaces to interact with the outside world. The guest is portable and warp-agnostic.
 
 - **Host**: The native runtime that loads and executes the WebAssembly guest. Provides concrete implementations of WASI interfaces by connecting to actual backends (Redis, Kafka, Postgres, etc.).
 

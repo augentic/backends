@@ -1,5 +1,5 @@
 [package]
-name = "backend-redis"
+name = "warp-redis"
 description = "Redis resource provider"
 publish = false
 readme = "README.md"

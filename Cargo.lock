@@ -366,126 +366,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "backend-azure"
-version = "0.20.0"
-dependencies = [
- "anyhow",
- "azure_core",
- "azure_identity",
- "azure_security_keyvault_secrets",
- "base64ct",
- "fromenv",
- "futures",
- "http",
- "kernel",
- "tracing",
- "wasi-identity",
- "wasi-vault",
-]
-
-[[package]]
-name = "backend-kafka"
-version = "0.20.0"
-dependencies = [
- "anyhow",
- "chrono",
- "csv",
- "fromenv",
- "futures",
- "http",
- "jsonschema 0.38.1",
- "kernel",
- "rand 0.9.2",
- "rdkafka",
- "schema-registry-client",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "wasi-messaging",
-]
-
-[[package]]
-name = "backend-mongodb"
-version = "0.20.0"
-dependencies = [
- "anyhow",
- "chrono",
- "fromenv",
- "futures",
- "kernel",
- "mongodb",
- "serde",
- "serde_json",
- "tracing",
- "wasi-blobstore",
-]
-
-[[package]]
-name = "backend-nats"
-version = "0.20.0"
-dependencies = [
- "anyhow",
- "async-nats",
- "chrono",
- "fromenv",
- "futures",
- "kernel",
- "nkeys",
- "tokio",
- "tracing",
- "wasi-blobstore",
- "wasi-keyvalue",
- "wasi-messaging",
-]
-
-[[package]]
-name = "backend-opentelemetry"
-version = "0.20.0"
-dependencies = [
- "anyhow",
- "fromenv",
- "futures",
- "kernel",
- "opentelemetry-proto",
- "tonic",
- "tracing",
- "wasi-otel",
-]
-
-[[package]]
-name = "backend-postgres"
-version = "0.20.0"
-dependencies = [
- "anyhow",
- "chrono",
- "deadpool-postgres",
- "fromenv",
- "futures",
- "kernel",
- "rustls",
- "serde_json",
- "tokio-postgres",
- "tokio-postgres-rustls",
- "tracing",
- "wasi-sql",
- "webpki-roots 1.0.4",
-]
-
-[[package]]
-name = "backend-redis"
-version = "0.20.0"
-dependencies = [
- "anyhow",
- "fromenv",
- "futures",
- "kernel",
- "redis",
- "tracing",
- "wasi-keyvalue",
-]
-
-[[package]]
 name = "backon"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5525,6 +5405,126 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
 dependencies = [
  "try-lock",
+]
+
+[[package]]
+name = "warp-azure"
+version = "0.20.0"
+dependencies = [
+ "anyhow",
+ "azure_core",
+ "azure_identity",
+ "azure_security_keyvault_secrets",
+ "base64ct",
+ "fromenv",
+ "futures",
+ "http",
+ "kernel",
+ "tracing",
+ "wasi-identity",
+ "wasi-vault",
+]
+
+[[package]]
+name = "warp-kafka"
+version = "0.20.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "csv",
+ "fromenv",
+ "futures",
+ "http",
+ "jsonschema 0.38.1",
+ "kernel",
+ "rand 0.9.2",
+ "rdkafka",
+ "schema-registry-client",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wasi-messaging",
+]
+
+[[package]]
+name = "warp-mongodb"
+version = "0.20.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "fromenv",
+ "futures",
+ "kernel",
+ "mongodb",
+ "serde",
+ "serde_json",
+ "tracing",
+ "wasi-blobstore",
+]
+
+[[package]]
+name = "warp-nats"
+version = "0.20.0"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "chrono",
+ "fromenv",
+ "futures",
+ "kernel",
+ "nkeys",
+ "tokio",
+ "tracing",
+ "wasi-blobstore",
+ "wasi-keyvalue",
+ "wasi-messaging",
+]
+
+[[package]]
+name = "warp-opentelemetry"
+version = "0.20.0"
+dependencies = [
+ "anyhow",
+ "fromenv",
+ "futures",
+ "kernel",
+ "opentelemetry-proto",
+ "tonic",
+ "tracing",
+ "wasi-otel",
+]
+
+[[package]]
+name = "warp-postgres"
+version = "0.20.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "deadpool-postgres",
+ "fromenv",
+ "futures",
+ "kernel",
+ "rustls",
+ "serde_json",
+ "tokio-postgres",
+ "tokio-postgres-rustls",
+ "tracing",
+ "wasi-sql",
+ "webpki-roots 1.0.4",
+]
+
+[[package]]
+name = "warp-redis"
+version = "0.20.0"
+dependencies = [
+ "anyhow",
+ "fromenv",
+ "futures",
+ "kernel",
+ "redis",
+ "tracing",
+ "wasi-keyvalue",
 ]
 
 [[package]]

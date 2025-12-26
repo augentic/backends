@@ -1,5 +1,5 @@
 [package]
-name = "backend-azure"
+name = "warp-azure"
 description = "Azure resource provider"
 publish = false
 readme = "README.md"
