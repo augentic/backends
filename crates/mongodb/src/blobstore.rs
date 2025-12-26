@@ -4,8 +4,8 @@ use std::sync::Arc;
 use anyhow::{Context, anyhow};
 use chrono::Utc;
 use futures::{FutureExt, StreamExt};
-use mongodb::bson::{self, Bson, Document};
 use mongodb::Collection;
+use mongodb::bson::{self, Bson, Document};
 use serde::{Deserialize, Serialize};
 use wasi_blobstore::{
     Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,

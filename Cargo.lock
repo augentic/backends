@@ -312,7 +312,7 @@ dependencies = [
  "fromenv",
  "futures",
  "http",
- "kernel",
+ "kernel 0.19.0",
  "tracing",
  "wasi-identity",
  "wasi-vault",
@@ -678,9 +678,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.50"
+version = "1.2.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f50d563227a1c37cc0a263f64eca3334388c01c5e4c4861a9def205c614383c"
+checksum = "7a0aeaff4ff1a90589618835a598e545176939b97874f7abc7851caa0618f203"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -1570,9 +1570,9 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844"
+checksum = "645cbb3a84e60b7531617d5ae4e57f7e27308f6445f5abf653209ea76dec8dff"
 
 [[package]]
 name = "fixedbitset"
@@ -2425,7 +2425,7 @@ dependencies = [
  "futures",
  "http",
  "jsonschema 0.38.1",
- "kernel",
+ "kernel 0.19.0",
  "rand 0.9.2",
  "rdkafka",
  "schema-registry-client",
@@ -2450,6 +2450,22 @@ dependencies = [
  "futures",
  "serde",
  "serde_json",
+ "tokio",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+]
+
+[[package]]
+name = "kernel"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
+dependencies = [
+ "anyhow",
+ "clap",
+ "credibil-otel",
+ "futures",
+ "serde",
  "tokio",
  "tracing",
  "wasmtime",
@@ -2758,7 +2774,7 @@ dependencies = [
  "chrono",
  "fromenv",
  "futures",
- "kernel",
+ "kernel 0.19.0",
  "mongodb 3.4.1",
  "serde",
  "serde_json",
@@ -2857,7 +2873,7 @@ dependencies = [
  "chrono",
  "fromenv",
  "futures",
- "kernel",
+ "kernel 0.19.0",
  "nkeys",
  "tokio",
  "tracing",
@@ -3126,7 +3142,7 @@ dependencies = [
  "anyhow",
  "fromenv",
  "futures",
- "kernel",
+ "kernel 0.19.0",
  "opentelemetry-proto",
  "tonic",
  "tracing",
@@ -3385,7 +3401,7 @@ dependencies = [
  "deadpool-postgres",
  "fromenv",
  "futures",
- "kernel",
+ "kernel 0.19.0",
  "rustls",
  "serde_json",
  "tokio-postgres",
@@ -3845,7 +3861,7 @@ dependencies = [
  "anyhow",
  "fromenv",
  "futures",
- "kernel",
+ "kernel 0.19.0",
  "redis 1.0.2",
  "tracing",
  "wasi-keyvalue",
@@ -5581,73 +5597,62 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasi-blobstore"
-version = "0.19.0"
-source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "c46f5d54ac64574f88b6cedf3993d080ac1bc4d5ed8b3f1076c38e0768ccb2dc"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
 dependencies = [
  "anyhow",
  "bytes",
- "fromenv",
  "futures",
- "kernel",
+ "kernel 0.20.0",
  "parking_lot",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.49.0",
+ "wit-bindgen 0.50.0",
 ]
 
 [[package]]
 name = "wasi-identity"
-version = "0.19.0"
-source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "7f085356f5d971a5e57008ade183191d9d15777be1a7cc2e07be7eb9ec5149cd"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
 dependencies = [
  "anyhow",
  "fromenv",
  "futures",
- "kernel",
+ "kernel 0.20.0",
  "oauth2",
  "serde",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.49.0",
+ "wit-bindgen 0.50.0",
 ]
 
 [[package]]
 name = "wasi-keyvalue"
-version = "0.19.0"
-source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "2bd895375f7085674839b5e5dfee24a6eb51f1f9c7ef5a39b9876da5495aa2d5"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
 dependencies = [
  "anyhow",
- "base64ct",
- "chrono",
- "fromenv",
  "futures",
- "kernel",
+ "kernel 0.20.0",
  "parking_lot",
  "serde",
- "serde_json",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.49.0",
+ "wit-bindgen 0.50.0",
 ]
 
 [[package]]
 name = "wasi-messaging"
-version = "0.19.0"
-source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "6cf2dade1bdf46ee63ef9737cfdcec1c3f05f2076b76eabd90440d1fde1e2a87"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
 dependencies = [
  "anyhow",
- "credibil-error",
- "fromenv",
  "futures",
  "http",
- "kernel",
+ "kernel 0.20.0",
  "serde",
  "time",
  "tokio",
@@ -5655,21 +5660,20 @@ dependencies = [
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.49.0",
+ "wit-bindgen 0.50.0",
 ]
 
 [[package]]
 name = "wasi-otel"
-version = "0.19.0"
-source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "8f74b63cbe6248421cd68e3873d080f33f9625f7b2888e98c24b4250d7231241"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
 dependencies = [
  "anyhow",
  "cfg-if",
  "credibil-otel",
  "futures",
  "hex",
- "kernel",
+ "kernel 0.20.0",
  "num-traits",
  "opentelemetry 0.31.0",
  "opentelemetry-proto",
@@ -5680,56 +5684,51 @@ dependencies = [
  "tracing-subscriber",
  "wasi-otel-attr",
  "wasmtime",
- "wit-bindgen 0.49.0",
+ "wit-bindgen 0.50.0",
 ]
 
 [[package]]
 name = "wasi-otel-attr"
-version = "0.19.0"
-source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "049cb91c367a5062350bcd139f2df6b9afcc7f52dd6a191f6f9ee07094bae100"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "tracing",
 ]
 
 [[package]]
 name = "wasi-sql"
-version = "0.19.0"
-source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "8da02b74644d7188461be4cc16c2979b3f201578a159813b0d8566e4529c91b5"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
 dependencies = [
  "anyhow",
  "base64ct",
  "fromenv",
  "futures",
- "kernel",
+ "kernel 0.20.0",
  "parking_lot",
  "rusqlite",
  "serde_json",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.49.0",
+ "wit-bindgen 0.50.0",
 ]
 
 [[package]]
 name = "wasi-vault"
-version = "0.19.0"
-source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "953d464d6624ce63eb0b364e5c73fa619804cc02025e75b2880d7b7002f60cff"
+version = "0.20.0"
+source = "git+https://github.com/credibil/wrt#f31c3ce1f1aa91545d79d2c154fc368d239bfc8c"
 dependencies = [
  "anyhow",
- "fromenv",
  "futures",
- "kernel",
+ "kernel 0.20.0",
  "parking_lot",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.49.0",
+ "wit-bindgen 0.50.0",
 ]
 
 [[package]]
@@ -6609,9 +6608,9 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
 name = "wit-bindgen"
-version = "0.49.0"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c64be1abfe5d4fdb2d41581fac134e8c9204da1e604b5500926478b7f264e36f"
+checksum = "a3f72f96146c1e2648232350c3c59efe5a17738767f72efdc5e766b9e4a8c896"
 dependencies = [
  "bitflags",
  "futures",
@@ -6620,9 +6619,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen-core"
-version = "0.49.0"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "886e8e938e4e9fe54143c080cbb99d7db5d19242b62ef225dbb28e17b3223bd8"
+checksum = "6ee98d5747ec63897e51101c8cafad569cc639346332c0378772ef4baeea8ed2"
 dependencies = [
  "anyhow",
  "heck",
@@ -6631,9 +6630,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen-rust"
-version = "0.49.0"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "145cac8fb12d99aea13a3f9e0d07463fa030edeebab2c03805eda0e1cc229bba"
+checksum = "8596d6a44bcc2b66e99213c342a85ff72be1109972f5353bb07d05a890a0c257"
 dependencies = [
  "anyhow",
  "heck",
@@ -6647,9 +6646,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen-rust-macro"
-version = "0.49.0"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6042452ac4e58891cdb6321bb98aabb9827dbaf6f4e971734d8dd86813319aea"
+checksum = "098fd8b2c4bab0052159a87d02acad740a9c809afe9dcf5bd0b92eb3f63da154"
 dependencies = [
  "anyhow",
  "prettyplease",
