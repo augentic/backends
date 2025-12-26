@@ -1,7 +1,6 @@
 [package]
 name = "warp-opentelemetry"
 description = "OpenTelemetry gRPC resource provider"
-publish = false
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true

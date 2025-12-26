@@ -1,7 +1,6 @@
 [package]
 name = "warp-kafka"
 description = "Kafka messaging resource"
-publish = false
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true
