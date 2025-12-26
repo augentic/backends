@@ -73,9 +73,6 @@ wasi-otel = { version = "0.20.0", registry = "credibil" }
 wasi-sql = { version = "0.20.0", registry = "credibil" }
 wasi-vault = { version = "0.20.0", registry = "credibil" }
 
-[patch.crates-io]
-# wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-40.0.0" }
-
 [patch.credibil]
 kernel = { git = "https://github.com/credibil/wrt" }
 wasi-blobstore = { git = "https://github.com/credibil/wrt" }
