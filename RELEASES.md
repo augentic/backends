@@ -7,6 +7,16 @@ Unreleased
 
 ### Changed
 
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+* Migrate by @andrewweston in https://github.com/augentic/backends/pull/1
+
+## New Contributors
+* @andrewweston made their first contribution in https://github.com/augentic/backends/pull/1
+
+**Full Changelog**: https://github.com/augentic/backends/commits/v0.20.0
+
 ---
 
 Release notes for previous releases can be found on the respective release
