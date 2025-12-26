@@ -1,5 +1,5 @@
 [package]
-name = "opentelemetry"
+name = "backend-opentelemetry"
 description = "OpenTelemetry gRPC resource provider"
 publish = false
 readme = "README.md"

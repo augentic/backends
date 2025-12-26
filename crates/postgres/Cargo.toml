@@ -1,5 +1,5 @@
 [package]
-name = "postgres"
+name = "backend-postgres"
 description = "Postgres resource provider"
 publish = false
 readme = "README.md"

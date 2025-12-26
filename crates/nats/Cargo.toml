@@ -1,5 +1,5 @@
 [package]
-name = "nats"
+name = "backend-nats"
 description = "NATS provider for messaging, keyvalue, and blobstore"
 publish = false
 readme = "README.md"

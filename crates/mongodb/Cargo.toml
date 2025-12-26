@@ -1,5 +1,5 @@
 [package]
-name = "mongodb"
+name = "backend-mongodb"
 description = "MongoDB resource provider"
 publish = false
 readme = "README.md"

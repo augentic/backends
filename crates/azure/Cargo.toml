@@ -1,5 +1,5 @@
 [package]
-name = "azure"
+name = "backend-azure"
 description = "Azure resource provider"
 publish = false
 readme = "README.md"

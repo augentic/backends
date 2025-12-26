@@ -73,16 +73,6 @@ wasi-otel = { version = "0.20.0", registry = "credibil" }
 wasi-sql = { version = "0.20.0", registry = "credibil" }
 wasi-vault = { version = "0.20.0", registry = "credibil" }
 
-[patch.credibil]
-kernel = { git = "https://github.com/credibil/wrt" }
-wasi-blobstore = { git = "https://github.com/credibil/wrt" }
-wasi-identity = { git = "https://github.com/credibil/wrt" }
-wasi-keyvalue = { git = "https://github.com/credibil/wrt" }
-wasi-messaging = { git = "https://github.com/credibil/wrt" }
-wasi-otel = { git = "https://github.com/credibil/wrt" }
-wasi-sql = { git = "https://github.com/credibil/wrt" }
-wasi-vault = { git = "https://github.com/credibil/wrt" }
-
 [profile.release]
 lto = true
 opt-level = "s"
