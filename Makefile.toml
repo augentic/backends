@@ -1,0 +1,152 @@
+# Install: `cargo install cargo-make`
+# Help: https://sagiegurari.github.io/cargo-make/
+
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[config]
+default_to_workspace = true
+skip_core_tasks = true
+skip_crate_env_info = true
+skip_git_env_info = true
+skip_rust_env_info = true
+
+# -------------------------------------
+# Build and test
+# -------------------------------------
+
+[tasks.clean]
+command = "cargo"
+args = ["clean"]
+
+[tasks.build]
+command = "cargo"
+args = ["build"]
+dependencies = ["clean"]
+
+[tasks.test]
+command = "cargo"
+args = ["nextest", "run", "--all", "--all-features", "--no-tests=pass"]
+dependencies = ["clean"]
+env = { RUSTFLAGS = "-Dwarnings" }
+
+[tasks.test-doc]
+command = "cargo"
+args = ["test", "--doc", "--all-features", "--workspace"]
+
+# -------------------------------------
+# Basic hygiene
+# -------------------------------------
+
+[tasks.fmt]
+script = "cargo +nightly fmt --all"
+# dependencies = ["fmt-toml"]
+
+# [tasks.fmt-toml]
+# command = "taplo"
+# args = ["format"]
+# install_crate = "taplo-cli"
+
+[tasks.lint]
+command = "cargo"
+args = ["clippy", "--all-features"]
+install_crate = { rustup_component_name = "clippy" }
+
+[tasks.vet-imports]
+command = "cargo"
+args = ["vet", "regenerate", "imports"]
+install_crate = "cargo-vet"
+
+[tasks.vet-exempt]
+command = "cargo"
+args = ["vet", "regenerate", "exemptions"]
+install_crate = "cargo-vet"
+
+[tasks.vet-unpub]
+command = "cargo"
+args = ["vet", "regenerate", "unpublished"]
+install_crate = "cargo-vet"
+
+[tasks.vet]
+command = "cargo"
+args = ["vet", "--locked"]
+install_crate = "cargo-vet"
+dependencies = ["vet-imports", "vet-exempt", "vet-unpub"]
+
+[tasks.miri]
+script = '''
+cargo +nightly miri setup
+cargo +nightly miri nextest run --no-tests=pass
+'''
+
+[tasks.alt-miri]
+script = '''
+rustup override set nightly
+rustup +nightly component add miri
+rustup +nightly target add aarch64-apple-darwin
+cargo miri setup
+cargo miri nextest run --no-tests=pass
+'''
+
+[tasks.audit]
+command = "cargo"
+args = ["audit"]
+
+[tasks.unused]
+command = "cargo"
+args = ["machete", "--skip-target-dir"]
+install_crate = "cargo-machete"
+
+[tasks.outdated]
+command = "cargo"
+args = [
+    "outdated",
+    "--workspace",
+    "--exit-code",
+    "1",
+    "--depth",
+    "1",
+    "--ignore",
+    "prost",
+]
+install_crate = "cargo-outdated"
+
+[tasks.deny]
+command = "cargo"
+args = ["deny", "--workspace", "check"]
+install_crate = "cargo-deny"
+
+[tasks.check]
+dependencies = ["audit", "fmt", "lint", "outdated", "unused"]
+
+# Emulate CI
+[tasks.ci]
+dependencies = ["lint", "test", "test-doc", "vet", "outdated", "deny", "fmt"]
+
+# -------------------------------------
+# Examples
+# -------------------------------------
+
+[tasks.run-example]
+description = "Run an example guest/host pair. Usage: cargo make run-example <example-name>"
+script = '''
+#!/usr/bin/env bash
+EXAMPLE=${1}
+if [ -z "$EXAMPLE" ]; then
+    echo "Usage: cargo make run-example <example-name>"
+    exit 1
+fi
+
+WASM_NAME=$(echo "${EXAMPLE}" | tr '-' '_')
+
+if [ -f .env ]; then
+    echo "Loading .env file"
+    set -a && source .env && set +a
+fi
+
+echo "Building guest for example: $EXAMPLE"
+cargo build --example ${EXAMPLE}-wasm --target wasm32-wasip2
+
+echo "Running host for example: $EXAMPLE"
+cargo run --example ${EXAMPLE} -- run ./target/wasm32-wasip2/debug/examples/${WASM_NAME}_wasm.wasm
+'''
