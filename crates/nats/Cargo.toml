@@ -16,14 +16,14 @@ version.workspace = true
 [lints]
 workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[dependencies]
 anyhow.workspace = true
 async-nats = "0.45.0"
 chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
-nkeys = "0.4.5"
 kernel.workspace = true
+nkeys = "0.4.5"
 tokio.workspace = true
 tracing.workspace = true
 wasi-blobstore.workspace = true

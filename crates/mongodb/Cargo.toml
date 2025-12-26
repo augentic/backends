@@ -13,16 +13,18 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[lib]
+
 [lints]
 workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[dependencies]
 anyhow.workspace = true
 chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
-mongodb = "3.4.1"
 kernel.workspace = true
+mongodb = { version = "3.4.1", features = ["bson-3"] }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

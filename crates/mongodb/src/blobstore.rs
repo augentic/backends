@@ -2,10 +2,10 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::{Context, anyhow};
-use bson::{Bson, Document, doc};
 use chrono::Utc;
 use futures::{FutureExt, StreamExt};
-use mongodb::{Collection, bson};
+use mongodb::bson::{self, Bson, Document};
+use mongodb::Collection;
 use serde::{Deserialize, Serialize};
 use wasi_blobstore::{
     Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
@@ -93,7 +93,7 @@ impl Container for MongoDbContainer {
             // let mut bytes = vec![];
             // object.read_to_end(&mut bytes).await?;
 
-            let Some(blob) = collection.find_one(doc! { "name": name }).await? else {
+            let Some(blob) = collection.find_one(bson::doc! { "name": name }).await? else {
                 return Err(anyhow!("Object not found"));
             };
 
@@ -116,7 +116,7 @@ impl Container for MongoDbContainer {
 
         async move {
             // `put` should update any previous value, so delete first
-            collection.delete_one(doc! { "name": &name }).await?;
+            collection.delete_one(bson::doc! { "name": &name }).await?;
 
             let bytes = data;
 
@@ -127,7 +127,7 @@ impl Container for MongoDbContainer {
                     // HACK: blob data is a string not an object
                     let stringified = serde_json::from_slice::<String>(&bytes)
                         .context("deserializing into String")?;
-                    doc! {"_string": stringified}
+                    bson::doc! {"_string": stringified}
                 }
                 None => return Err(anyhow!("OutgoingValue is empty")),
             };
@@ -152,7 +152,7 @@ impl Container for MongoDbContainer {
         let collection = self.collection.clone();
 
         async move {
-            let mut list = collection.find(doc! {}).await?;
+            let mut list = collection.find(bson::doc! {}).await?;
             let mut names = vec![];
 
             while let Some(n) = list.next().await {
@@ -172,7 +172,7 @@ impl Container for MongoDbContainer {
         let collection = self.collection.clone();
 
         async move {
-            collection.delete_one(doc! { "name": name }).await.context("deleting object")?;
+            collection.delete_one(bson::doc! { "name": name }).await.context("deleting object")?;
             Ok(())
         }
         .boxed()
@@ -183,7 +183,7 @@ impl Container for MongoDbContainer {
         tracing::trace!("checking existence of object: {name}");
         let collection = self.collection.clone();
 
-        async move { Ok(collection.find_one(doc! { "name": name }).await?.is_some()) }.boxed()
+        async move { Ok(collection.find_one(bson::doc! { "name": name }).await?.is_some()) }.boxed()
     }
 
     fn object_info(&self, name: String) -> FutureResult<ObjectMetadata> {
@@ -191,7 +191,7 @@ impl Container for MongoDbContainer {
         let collection = self.collection.clone();
 
         async move {
-            let Some(blob) = collection.find_one(doc! { "name": name }).await? else {
+            let Some(blob) = collection.find_one(bson::doc! { "name": name }).await? else {
                 return Err(anyhow!("Object not found"));
             };
 

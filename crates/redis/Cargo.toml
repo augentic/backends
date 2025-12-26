@@ -16,11 +16,11 @@ version.workspace = true
 [lints]
 workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[dependencies]
 anyhow.workspace = true
 fromenv.workspace = true
 futures.workspace = true
-redis = { version = "1.0.1", features = ["connection-manager", "tokio-rustls-comp"] }
 kernel.workspace = true
+redis = { version = "1.0.1", features = ["connection-manager", "tokio-rustls-comp"] }
 tracing.workspace = true
 wasi-keyvalue.workspace = true

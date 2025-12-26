@@ -16,12 +16,12 @@ version.workspace = true
 [lints]
 workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[dependencies]
 anyhow.workspace = true
 fromenv.workspace = true
 futures.workspace = true
 kernel.workspace = true
-opentelemetry-proto = { version="0.31.0", features = ["gen-tonic"] }
+opentelemetry-proto = { version = "0.31.0", features = ["gen-tonic"] }
 tonic = "0.14.2"
 tracing.workspace = true
 wasi-otel.workspace = true
