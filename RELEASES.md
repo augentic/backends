@@ -1,10 +1,34 @@
 ## 0.20.0
 
+Unreleased
+
+## Fixed
+
+<!-- Release notes generated using configuration in .github/release.yaml at v0.20.0 -->
+
+## What's Changed
+* Migrate by @andrewweston in https://github.com/augentic/backends/pull/1
+
+
+**Full Changelog**: https://github.com/augentic/backends/commits/v0.20.0
+
+---
+
+## 0.20.0
+
 Released 2025-12-26
 
 ### Changed
 
 * Migrate backends to new repository structure
+
+<!-- Release notes generated using configuration in .github/release.yaml at v0.20.0 -->
+
+## What's Changed
+* Migrate by @andrewweston in https://github.com/augentic/backends/pull/1
+
+
+**Full Changelog**: https://github.com/augentic/backends/commits/v0.20.0
 
 ---
 
