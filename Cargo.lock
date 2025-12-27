@@ -5409,7 +5409,7 @@ dependencies = [
 
 [[package]]
 name = "warp-azure"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "azure_core",
@@ -5427,7 +5427,7 @@ dependencies = [
 
 [[package]]
 name = "warp-kafka"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5449,7 +5449,7 @@ dependencies = [
 
 [[package]]
 name = "warp-mongodb"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5465,7 +5465,7 @@ dependencies = [
 
 [[package]]
 name = "warp-nats"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -5483,7 +5483,7 @@ dependencies = [
 
 [[package]]
 name = "warp-opentelemetry"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -5497,7 +5497,7 @@ dependencies = [
 
 [[package]]
 name = "warp-postgres"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5516,7 +5516,7 @@ dependencies = [
 
 [[package]]
 name = "warp-redis"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "anyhow",
  "fromenv",
