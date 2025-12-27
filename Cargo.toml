@@ -64,14 +64,14 @@ tokio = { version = "1.47.1", default-features = false }
 tracing = "0.1.41"
 
 # credibil registry
-kernel = { version = "0.20.0", registry = "credibil" }
-wasi-blobstore = { version = "0.20.0", registry = "credibil" }
-wasi-identity = { version = "0.20.0", registry = "credibil" }
-wasi-keyvalue = { version = "0.20.0", registry = "credibil" }
-wasi-messaging = { version = "0.20.0", registry = "credibil" }
-wasi-otel = { version = "0.20.0", registry = "credibil" }
-wasi-sql = { version = "0.20.0", registry = "credibil" }
-wasi-vault = { version = "0.20.0", registry = "credibil" }
+kernel = { version = "0.20.1", registry = "credibil" }
+wasi-blobstore = { version = "0.20.1", registry = "credibil" }
+wasi-identity = { version = "0.20.1", registry = "credibil" }
+wasi-keyvalue = { version = "0.20.1", registry = "credibil" }
+wasi-messaging = { version = "0.20.1", registry = "credibil" }
+wasi-otel = { version = "0.20.1", registry = "credibil" }
+wasi-sql = { version = "0.20.1", registry = "credibil" }
+wasi-vault = { version = "0.20.1", registry = "credibil" }
 
 [profile.release]
 lto = true

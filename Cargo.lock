@@ -2363,9 +2363,9 @@ dependencies = [
 
 [[package]]
 name = "kernel"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "d2fcf5d751f71de9c0a5db0f56289a0d74277862c82aeaa5d3e13b1a6491023b"
+checksum = "1c17ee899cb990f68a2cb6fe499bac562fba8c4e3f24d81062060e58c0fdd49e"
 dependencies = [
  "anyhow",
  "clap",
@@ -5535,9 +5535,9 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasi-blobstore"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "af46699aa69448c03ec7e3637eb738ba7432128866e8d27543d0414aea712e5f"
+checksum = "d763c0b58be2247a59769aa66d13fa0459c304339405e346988155c1c8a4f503"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5552,9 +5552,9 @@ dependencies = [
 
 [[package]]
 name = "wasi-identity"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "06184cc66253fa5ea95836b73318e86b56c4f3ab681b5b492200bf24a230879c"
+checksum = "bff69b3f7ac82f7d2a6b35e88555ff33a5a0204137dd837b43a3ddd8f8d5f914"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -5570,15 +5570,17 @@ dependencies = [
 
 [[package]]
 name = "wasi-keyvalue"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "939c696c559597f4fdf26319d7bcd0fcff30e06f46c58fd566816d2e5300e261"
+checksum = "cb4b77d977eb7d86b3c705eec6b080759d795151c3dd163fcb10612b33f5c8da"
 dependencies = [
  "anyhow",
+ "chrono",
  "futures",
  "kernel",
  "parking_lot",
  "serde",
+ "serde_json",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
@@ -5587,9 +5589,9 @@ dependencies = [
 
 [[package]]
 name = "wasi-messaging"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "9ab4042b6e8de4d3128c794e6146ed29515cb29b04a58b4ce68baa8cb8b69334"
+checksum = "8024cd3e27be0903b861e998acb0e2b474fd7d65cfd448e24431f79dfffded37"
 dependencies = [
  "anyhow",
  "futures",
@@ -5607,9 +5609,9 @@ dependencies = [
 
 [[package]]
 name = "wasi-otel"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "cc234c08a28dfcc1d163726442b5dace657081a07a8b6db6e997bc1514254751"
+checksum = "4d24a538a8c52ce0595d9244fbe33d1335eea97a936deec2cd7e50ec0e203ba4"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -5632,9 +5634,9 @@ dependencies = [
 
 [[package]]
 name = "wasi-otel-attr"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "53bc8da409c3d69122b6de6bddff0ebdb8a52de30d63a20e71433ef9846b8268"
+checksum = "0ffb268d3fa74b286ae75e394df0bbdacdcc2176cc60dc28810ba47ed41bda09"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5643,9 +5645,9 @@ dependencies = [
 
 [[package]]
 name = "wasi-sql"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "add9848899b18a35b6e9d2f8d41063d3ebd62f3d10732f9c139d3cab5fe34506"
+checksum = "14c7536b60b78da76b012160288325528c6a7b8d57730caa6369f246676b72e7"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -5663,9 +5665,9 @@ dependencies = [
 
 [[package]]
 name = "wasi-vault"
-version = "0.20.0"
+version = "0.20.1"
 source = "sparse+https://pkgs.dev.azure.com/credibil/_packaging/credibil/Cargo/index/"
-checksum = "7e29d291cfc246481c71e135295a3263cf899f5cf186a80dd521275790901889"
+checksum = "a8a71306d778b72f50dafd769ecd03516ff70ce79405b8b4414ade45a1ce8cb5"
 dependencies = [
  "anyhow",
  "futures",
@@ -6806,6 +6808,6 @@ dependencies = [
 
 [[package]]
 name = "zmij"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0095ecd462946aa3927d9297b63ef82fb9a5316d7a37d134eeb36e58228615a"
+checksum = "4af59da1029247450b54ba43e0b62c8e376582464bbe5504dd525fe521e7e8fd"
