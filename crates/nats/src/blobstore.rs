@@ -6,10 +6,10 @@ use async_nats::jetstream;
 use async_nats::jetstream::object_store::{Config, ObjectStore};
 use chrono::Utc;
 use futures::{FutureExt, StreamExt};
-use tokio::io::AsyncReadExt;
 use qwasr_wasi_blobstore::{
     Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
 };
+use tokio::io::AsyncReadExt;
 
 use crate::Client;
 

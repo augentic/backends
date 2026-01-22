@@ -1,9 +1,9 @@
 //! OpenTelemetry implementation for the OpenTelemetry gRPC resource.
 
 use futures::FutureExt;
-use qwasr::FutureResult;
 use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest;
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
+use qwasr::FutureResult;
 use qwasr_wasi_otel::WasiOtelCtx;
 
 use crate::Client;

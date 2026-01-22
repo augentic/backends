@@ -78,8 +78,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use chrono::TimeZone;
+
+    use super::*;
 
     fn assert_serializes_successfully(value: &PgType, ty: &Type) {
         let mut buf = BytesMut::new();
