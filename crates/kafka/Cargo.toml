@@ -21,7 +21,7 @@ chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
 http.workspace = true
-jsonschema = "0.40.0"
+jsonschema = { version = "0.40.0", default-features = false }
 qwasr.workspace = true
 qwasr-wasi-messaging.workspace = true
 rand = "0.9.2"
