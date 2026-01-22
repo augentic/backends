@@ -6,7 +6,7 @@ use anyhow::{Context, anyhow};
 use async_nats::HeaderMap;
 use futures::future::FutureExt;
 use futures::stream::{self, StreamExt};
-use wasi_messaging::{
+use qwasr_wasi_messaging::{
     Client, FutureResult, Message, MessageProxy, Metadata, Reply, RequestOptions, Subscriptions,
     WasiMessagingCtx,
 };

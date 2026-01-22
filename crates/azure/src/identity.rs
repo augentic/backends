@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use azure_core::credentials::TokenCredential;
 use azure_identity::{ManagedIdentityCredential, ManagedIdentityCredentialOptions, UserAssignedId};
 use futures::future::FutureExt;
-use wasi_identity::{AccessToken, FutureResult, Identity, WasiIdentityCtx};
+use qwasr_wasi_identity::{AccessToken, FutureResult, Identity, WasiIdentityCtx};
 
 use crate::Client;
 

@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use fromenv::FromEnv;
-use kernel::Backend;
+use qwasr::Backend;
 use redis::aio::{ConnectionManager, ConnectionManagerConfig};
 use tracing::instrument;
 
@@ -53,7 +53,7 @@ pub struct ConnectOptions {
     pub max_delay: u64,
 }
 
-impl kernel::FromEnv for ConnectOptions {
+impl qwasr::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }

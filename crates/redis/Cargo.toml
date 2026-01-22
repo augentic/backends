@@ -19,7 +19,7 @@ workspace = true
 anyhow.workspace = true
 fromenv.workspace = true
 futures.workspace = true
-kernel.workspace = true
+qwasr.workspace = true
+qwasr-wasi-keyvalue.workspace = true
 redis = { version = "1.0.1", features = ["connection-manager", "tokio-rustls-comp"] }
 tracing.workspace = true
-wasi-keyvalue.workspace = true

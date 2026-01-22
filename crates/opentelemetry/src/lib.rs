@@ -8,9 +8,9 @@ use std::fmt::Debug;
 
 use anyhow::{Context, Result};
 use fromenv::FromEnv;
-use kernel::Backend;
 use opentelemetry_proto::tonic::collector::metrics::v1::metrics_service_client::MetricsServiceClient;
 use opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient;
+use qwasr::Backend;
 use tonic::transport::Channel;
 use tracing::instrument;
 
@@ -55,7 +55,7 @@ pub struct ConnectOptions {
     pub grpc_url: String,
 }
 
-impl kernel::FromEnv for ConnectOptions {
+impl qwasr::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }

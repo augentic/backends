@@ -54,24 +54,25 @@ unused_result_ok = "warn"
 
 [workspace.dependencies]
 anyhow = "1.0.100"
-chrono = "0.4.42"
+chrono = "0.4.43"
 fromenv = "0.1.0"
 futures = "0.3.31"
 http = "1.3.1"
+rustls = { version = "0.23.36", default-features = false, features = ["logging", "ring", "std"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.147"
-tokio = { version = "1.47.1", default-features = false }
+serde_json = "1.0.149"
+tokio = { version = "1.49.0", default-features = false }
 tracing = "0.1.41"
 
 # credibil registry
-kernel = { version = "0.20.0", registry = "credibil" }
-wasi-blobstore = { version = "0.20.0", registry = "credibil" }
-wasi-identity = { version = "0.20.0", registry = "credibil" }
-wasi-keyvalue = { version = "0.20.0", registry = "credibil" }
-wasi-messaging = { version = "0.20.0", registry = "credibil" }
-wasi-otel = { version = "0.20.0", registry = "credibil" }
-wasi-sql = { version = "0.20.0", registry = "credibil" }
-wasi-vault = { version = "0.20.0", registry = "credibil" }
+qwasr = { version = "0.26.0", registry = "credibil" }
+qwasr-wasi-blobstore = { version = "0.26.0", registry = "credibil" }
+qwasr-wasi-identity = { version = "0.26.0", registry = "credibil" }
+qwasr-wasi-keyvalue = { version = "0.26.0", registry = "credibil" }
+qwasr-wasi-messaging = { version = "0.26.0", registry = "credibil" }
+qwasr-wasi-otel = { version = "0.26.0", registry = "credibil" }
+qwasr-wasi-sql = { version = "0.26.0", registry = "credibil" }
+qwasr-wasi-vault = { version = "0.26.0", registry = "credibil" }
 
 [profile.release]
 lto = true

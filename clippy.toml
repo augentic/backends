@@ -69,4 +69,5 @@ allowed-duplicate-crates = [
   "wit-bindgen-rust-macro",
   "wit-component",
   "wit-parser",
+  "wasi",
 ]

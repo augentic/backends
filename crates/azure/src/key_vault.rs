@@ -8,7 +8,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use futures::TryStreamExt;
 use futures::future::FutureExt;
 use http::StatusCode;
-use wasi_vault::{FutureResult, Locker, WasiVaultCtx};
+use qwasr_wasi_vault::{FutureResult, Locker, WasiVaultCtx};
 
 use crate::Client;
 

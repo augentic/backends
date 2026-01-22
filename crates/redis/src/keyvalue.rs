@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use futures::FutureExt;
+use qwasr_wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
 use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
-use wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
 
 use crate::Client;
 
