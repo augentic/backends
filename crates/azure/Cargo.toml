@@ -26,7 +26,7 @@ base64ct = { version = "1.8.0", features = ["std"] }
 fromenv.workspace = true
 futures.workspace = true
 http.workspace = true
-kernel.workspace = true
+qwasr.workspace = true
+qwasr-wasi-identity.workspace = true
+qwasr-wasi-vault.workspace = true
 tracing.workspace = true
-wasi-identity.workspace = true
-wasi-vault.workspace = true

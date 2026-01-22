@@ -1,23 +1,28 @@
+use std::convert::TryFrom;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{Context, anyhow, bail};
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use deadpool_postgres::Object;
 use futures::future::FutureExt;
+use qwasr_wasi_sql::{Connection, DataType, Field, FutureResult, Row, WasiSqlCtx};
 use tokio_postgres::row::Row as PgRow;
-use tokio_postgres::types::ToSql;
-use wasi_sql::{Connection, DataType, Field, FormattedValue, FutureResult, Row, WasiSqlCtx};
 
 use crate::Client;
-
-type Param = Box<dyn ToSql + Send + Sync>;
-type ParamRef<'a> = &'a (dyn ToSql + Sync);
+use crate::types::{Param, ParamRef, PgType};
 
 impl WasiSqlCtx for Client {
     fn open(&self, name: String) -> FutureResult<Arc<dyn Connection>> {
         tracing::debug!("getting connection {name}");
-        let pool = self.0.clone();
 
+        let pool = match self.0.get(&name.to_ascii_uppercase()) {
+            Some(p) => p.clone(),
+            None => {
+                return futures::future::ready(Err(anyhow!("unknown postgres pool '{name}'")))
+                    .boxed();
+            }
+        };
         async move {
             let cnn = pool.get().await.context("issue getting connection")?;
             Ok(Arc::new(PostgresConnection(Arc::new(cnn))) as Arc<dyn Connection>)
@@ -27,7 +32,7 @@ impl WasiSqlCtx for Client {
 }
 
 #[derive(Debug)]
-struct PostgresConnection(Arc<Object>);
+pub struct PostgresConnection(Arc<Object>);
 
 impl Connection for PostgresConnection {
     fn query(&self, query: String, params: Vec<DataType>) -> FutureResult<Vec<Row>> {
@@ -42,7 +47,13 @@ impl Connection for PostgresConnection {
             let param_refs: Vec<ParamRef> =
                 pg_params.iter().map(|b| b.as_ref() as ParamRef).collect();
 
-            let pg_rows = cnn.query(&query, &param_refs).await.context("query failed")?;
+            let pg_rows = cnn
+                .query(&query, &param_refs)
+                .await
+                .inspect_err(|e| {
+                    dbg!(e);
+                })
+                .context("query failed")?;
             tracing::debug!("query returned {} rows", pg_rows.len());
 
             let mut wasi_rows = Vec::new();
@@ -88,52 +99,82 @@ impl Connection for PostgresConnection {
     }
 }
 
-// Parses a string parameter into a Postgres-compatible type.
-//
-// Note: Postgres has a huge variety of types - many more than are represented
-// in `wasi-sql::DataType`. The `WIT` may need to be expanded in future to
-// support more types, and this function updated accordingly.
-fn into_param(value: &DataType) -> anyhow::Result<Param> {
-    match value {
-        DataType::Int32(i) => Ok(Box::new(*i) as Param), // INT, SERIAL
-        DataType::Int64(i) => Ok(Box::new(*i) as Param), // BIGINT, BIGSERIAL
-        DataType::Uint32(u) => Ok(Box::new(*u) as Param), // OID
-        DataType::Uint64(_u) => Err(anyhow!("no Postgres equivalent for uint64")),
-        DataType::Float(f) => Ok(Box::new(*f) as Param), // REAL
-        DataType::Double(d) => Ok(Box::new(*d) as Param), // DOUBLE PRECISION
-        DataType::Str(s) => Ok(Box::new(s.clone()) as Param), // TEXT, VARCHAR, CHAR(n), NAME
-        DataType::Boolean(b) => Ok(Box::new(*b) as Param), // BOOL
-        DataType::Date(fv) => fv.as_ref().map_or_else(
-            || Ok(Box::new(None::<NaiveDate>) as Param),
-            |fv| match NaiveDate::parse_from_str(&fv.value, &fv.format) {
-                Ok(d) => Ok(Box::new(d) as Param),
-                Err(e) => Err(anyhow!("invalid date format: {e}")),
-            },
-        ), // DATE
-        DataType::Time(fv) => fv.as_ref().map_or_else(
-            || Ok(Box::new(None::<chrono::NaiveTime>) as Param),
-            |fv| match chrono::NaiveTime::parse_from_str(&fv.value, &fv.format) {
-                Ok(t) => Ok(Box::new(t) as Param),
-                Err(e) => Err(anyhow!("invalid time format: {e}")),
-            },
-        ), // TIME
-        DataType::Timestamp(fv) => fv.as_ref().map_or_else(
-            || Ok(Box::new(None::<chrono::NaiveDateTime>) as Param),
-            |fv| match chrono::NaiveDateTime::parse_from_str(&fv.value, &fv.format) {
-                Ok(ts) => Ok(Box::new(ts) as Param),
-                Err(e) => Err(anyhow!("invalid timestamp format: {e}")),
-            },
-        ), // TIMESTAMP
-        DataType::Binary(v) => Ok(Box::new(v.clone()) as Param), // BYTEA
-    }
+fn parse_date(source: Option<&str>) -> anyhow::Result<Option<NaiveDate>> {
+    source.map(|s| NaiveDate::from_str(s).context("invalid date format")).transpose()
 }
 
-// Converts a Postgres row into a `wasi-sql` `Row`.
-//
-//
-// Note: Postgres has a huge variety of types - many more than are represented
-// in `wasi-sql::DataType`. The `WIT` may need to be expanded in future to
-// support more types, and this function updated accordingly.
+fn parse_time(source: Option<&str>) -> anyhow::Result<Option<NaiveTime>> {
+    source.map(|s| NaiveTime::from_str(s).context("invalid time format")).transpose()
+}
+
+fn parse_timestamp_naive(source: Option<&str>) -> anyhow::Result<Option<NaiveDateTime>> {
+    source
+        .map(|s| {
+            NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f")
+                .context("invalid naive timestamp format")
+        })
+        .transpose()
+}
+
+#[cfg(test)]
+fn parse_timestamp_tz(source: Option<&str>) -> anyhow::Result<Option<DateTime<Utc>>> {
+    source
+        .map(|s| {
+            DateTime::parse_from_rfc3339(s)
+                .map(|ts| ts.with_timezone(&Utc))
+                .context("invalid RFC3339 timestamp")
+        })
+        .transpose()
+}
+
+fn into_param(value: &DataType) -> anyhow::Result<Param> {
+    let pg_value = match value {
+        DataType::Int32(v) => PgType::Int32(*v),
+        DataType::Int64(v) => PgType::Int64(*v),
+        DataType::Uint32(v) => PgType::Uint32(*v),
+        DataType::Uint64(v) => {
+            // Postgres doesn't support u64, so clamping it to i64.
+            let converted = match v {
+                Some(raw) => {
+                    let clamped = i64::try_from(*raw).map_err(|err| {
+                        anyhow!("uint64 value {raw} exceeds i64::MAX and cannot be stored: {err}")
+                    })?;
+                    Some(clamped)
+                }
+                None => None,
+            };
+            PgType::Int64(converted)
+        }
+        DataType::Float(v) => PgType::Float(*v),
+        DataType::Double(v) => PgType::Double(*v),
+        DataType::Str(v) => PgType::Text(v.clone()),
+        DataType::Boolean(v) => PgType::Bool(*v),
+        DataType::Date(v) => PgType::Date(parse_date(v.as_deref())?),
+        DataType::Time(v) => PgType::Time(parse_time(v.as_deref())?),
+        DataType::Timestamp(v) => {
+            // Try RFC3339 format first (with timezone)
+            if let Some(s) = v.as_deref() {
+                if let Ok(ts) = DateTime::parse_from_rfc3339(s) {
+                    PgType::TimestampTz(Some(ts.with_timezone(&Utc)))
+                } else {
+                    // Fall back to naive timestamp format
+                    PgType::Timestamp(parse_timestamp_naive(v.as_deref())?)
+                }
+            } else {
+                PgType::Timestamp(None)
+            }
+        }
+        DataType::Binary(v) => PgType::Binary(v.clone()),
+    };
+
+    Ok(Box::new(pg_value) as Param)
+}
+
+/// Converts a ``PostgreSQL`` row to WASI SQL format.
+///
+/// # Testing
+/// This function will have to tested via integration tests with a real database
+/// due to the difficulty of mocking `tokio_postgres::Row`.
 fn into_wasi_row(pg_row: &PgRow, idx: usize) -> anyhow::Result<Row> {
     let mut fields = Vec::new();
     for (i, col) in pg_row.columns().iter().enumerate() {
@@ -171,29 +212,29 @@ fn into_wasi_row(pg_row: &PgRow, idx: usize) -> anyhow::Result<Row> {
             }
             "date" => {
                 let v: Option<NaiveDate> = pg_row.try_get(i)?;
-                let formatted = v.map(|date| date.format("%Y-%m-%d").to_string());
-                DataType::Date(formatted.map(|value| FormattedValue {
-                    value,
-                    format: "%Y-%m-%d".to_string(),
-                }))
+                let formatted = v.map(|date| date.to_string());
+                DataType::Date(formatted)
             }
             "time" => {
-                let v: Option<chrono::NaiveTime> = pg_row.try_get(i)?;
-                let formatted = v.map(|time| time.format("%H:%M:%S").to_string());
-                DataType::Time(formatted.map(|value| FormattedValue {
-                    value,
-                    format: "%H:%M:%S".to_string(),
-                }))
+                let v: Option<NaiveTime> = pg_row.try_get(i)?;
+                let formatted = v.map(|time| time.to_string());
+                DataType::Time(formatted)
             }
             "timestamp" => {
-                let v: Option<chrono::NaiveDateTime> = pg_row.try_get(i)?;
-                // Use explicit format compatible with NaiveDateTime (no timezone)
-                let format_str = "%Y-%m-%dT%H:%M:%S";
-                let formatted = v.map(|dt| dt.format(format_str).to_string());
-                DataType::Timestamp(formatted.map(|value| FormattedValue {
-                    value,
-                    format: format_str.to_string(),
-                }))
+                let v: Option<NaiveDateTime> = pg_row.try_get(i)?;
+                let formatted = v.map(|dt| dt.to_string());
+                DataType::Timestamp(formatted)
+            }
+            "timestamptz" => {
+                let v: Option<DateTime<Utc>> = pg_row.try_get(i)?;
+                let formatted = v.map(|dtz| dtz.to_rfc3339());
+                DataType::Timestamp(formatted)
+            }
+            "json" | "jsonb" => {
+                let v: Option<tokio_postgres::types::Json<serde_json::Value>> =
+                    pg_row.try_get(i)?;
+                let as_str = v.map(|json| json.0.to_string());
+                DataType::Str(as_str)
             }
             "bytea" => {
                 let v: Option<Vec<u8>> = pg_row.try_get(i)?;
@@ -211,4 +252,98 @@ fn into_wasi_row(pg_row: &PgRow, idx: usize) -> anyhow::Result<Row> {
         index: idx.to_string(),
         fields,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{Datelike, Timelike};
+
+    use super::*;
+
+    #[test]
+    fn parse_date_valid() {
+        let valid = parse_date(Some("2024-12-25")).unwrap().unwrap();
+        assert_eq!(valid.year(), 2024);
+        assert_eq!(valid.month(), 12);
+        assert_eq!(valid.day(), 25);
+
+        assert!(parse_date(None).unwrap().is_none());
+        parse_date(Some("invalid-date")).unwrap_err();
+    }
+
+    #[test]
+    fn parse_time_valid() {
+        let valid = parse_time(Some("14:30:45.123456")).unwrap().unwrap();
+        assert_eq!(valid.hour(), 14);
+        assert_eq!(valid.minute(), 30);
+        assert_eq!(valid.second(), 45);
+
+        assert!(parse_time(None).unwrap().is_none());
+        parse_time(Some("25:00:00")).unwrap_err();
+    }
+
+    #[test]
+    fn parse_timestamp_tz_valid() {
+        let valid = parse_timestamp_tz(Some("2024-01-20T15:30:45Z")).unwrap().unwrap();
+        assert_eq!(valid.year(), 2024);
+        assert_eq!(valid.month(), 1);
+        assert_eq!(valid.day(), 20);
+
+        let with_offset = parse_timestamp_tz(Some("2024-01-20T15:30:45+05:00")).unwrap().unwrap();
+        assert_eq!(with_offset.hour(), 10);
+
+        assert!(parse_timestamp_tz(None).unwrap().is_none());
+        parse_timestamp_tz(Some("not a timestamp")).unwrap_err();
+    }
+
+    #[test]
+    fn parse_timestamp_naive_valid() {
+        let valid = parse_timestamp_naive(Some("2024-01-20 15:30:45.123")).unwrap().unwrap();
+        assert_eq!(valid.year(), 2024);
+        assert_eq!(valid.month(), 1);
+        assert_eq!(valid.day(), 20);
+        assert_eq!(valid.hour(), 15);
+
+        assert!(parse_timestamp_naive(None).unwrap().is_none());
+        parse_timestamp_naive(Some("2024/01/20 15:30:45")).unwrap_err();
+    }
+
+    #[test]
+    fn into_param_valid_conversions() {
+        // Basic types
+        into_param(&DataType::Int32(Some(42))).unwrap();
+        into_param(&DataType::Int64(Some(i64::MAX))).unwrap();
+        into_param(&DataType::Uint32(Some(u32::MAX))).unwrap();
+        into_param(&DataType::Uint64(Some(100))).unwrap(); // within i64 range
+        into_param(&DataType::Float(Some(std::f32::consts::PI))).unwrap();
+        into_param(&DataType::Double(Some(std::f64::consts::E))).unwrap();
+        into_param(&DataType::Str(Some("test".to_string()))).unwrap();
+        into_param(&DataType::Boolean(Some(true))).unwrap();
+        into_param(&DataType::Binary(Some(vec![0x01, 0x02]))).unwrap();
+
+        // None values
+        into_param(&DataType::Int32(None)).unwrap();
+        into_param(&DataType::Str(None)).unwrap();
+    }
+
+    #[test]
+    fn into_param_invalid_conversions() {
+        let uint64_overflow = DataType::Uint64(Some(u64::MAX));
+        let result = into_param(&uint64_overflow);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("exceeds i64::MAX"));
+
+        into_param(&DataType::Date(Some("invalid".to_string()))).unwrap_err();
+        into_param(&DataType::Time(Some("25:00:00".to_string()))).unwrap_err();
+        into_param(&DataType::Timestamp(Some("not a timestamp".to_string()))).unwrap_err();
+    }
+
+    #[test]
+    fn into_param_timestamp_format_detection() {
+        let with_tz = DataType::Timestamp(Some("2024-01-20T15:30:45Z".to_string()));
+        into_param(&with_tz).unwrap();
+
+        let naive = DataType::Timestamp(Some("2024-01-20 15:30:45".to_string()));
+        into_param(&naive).unwrap();
+    }
 }

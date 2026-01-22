@@ -87,7 +87,7 @@ version = "1.6.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.base64ct]]
-version = "1.8.1"
+version = "1.8.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.bigdecimal]]
@@ -135,7 +135,7 @@ version = "1.2.51"
 criteria = "safe-to-deploy"
 
 [[exemptions.chrono]]
-version = "0.4.42"
+version = "0.4.43"
 criteria = "safe-to-deploy"
 
 [[exemptions.combine]]
@@ -260,10 +260,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.deadpool-runtime]]
 version = "0.1.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.der]]
-version = "0.7.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.der_derive]]
@@ -418,24 +414,8 @@ criteria = "safe-to-deploy"
 version = "0.5.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.icu_collections]]
-version = "2.1.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.icu_locale_core]]
-version = "2.1.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.icu_normalizer]]
-version = "2.1.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.icu_normalizer_data]]
-version = "2.1.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.icu_provider]]
-version = "2.1.1"
+[[exemptions.inherent]]
+version = "1.0.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.integer-encoding]]
@@ -646,10 +626,6 @@ criteria = "safe-to-deploy"
 version = "0.12.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.pem-rfc7468]]
-version = "0.7.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.petgraph]]
 version = "0.7.1"
 criteria = "safe-to-deploy"
@@ -672,10 +648,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.pkcs8]]
 version = "0.10.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.pkg-config]]
-version = "0.3.32"
 criteria = "safe-to-deploy"
 
 [[exemptions.portable-atomic]]
@@ -844,6 +816,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.schema-registry-client]]
 version = "0.4.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.sea-query]]
+version = "0.32.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.security-framework]]
@@ -1150,10 +1126,6 @@ criteria = "safe-to-deploy"
 version = "0.50.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.writeable]]
-version = "0.6.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.wyz]]
 version = "0.5.1"
 criteria = "safe-to-deploy"
@@ -1187,5 +1159,5 @@ version = "0.11.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.zmij]]
-version = "0.1.10"
+version = "1.0.15"
 criteria = "safe-to-deploy"

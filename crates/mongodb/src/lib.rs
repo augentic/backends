@@ -6,7 +6,7 @@ mod blobstore;
 
 use anyhow::{Context, Result};
 use fromenv::FromEnv;
-use kernel::Backend;
+use qwasr::Backend;
 use tracing::instrument;
 
 #[derive(Debug, Clone)]
@@ -32,7 +32,7 @@ pub struct ConnectOptions {
     pub uri: String,
 }
 
-impl kernel::FromEnv for ConnectOptions {
+impl qwasr::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }

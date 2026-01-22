@@ -7,7 +7,7 @@ use futures::{FutureExt, StreamExt};
 use mongodb::Collection;
 use mongodb::bson::{self, Bson, Document};
 use serde::{Deserialize, Serialize};
-use wasi_blobstore::{
+use qwasr_wasi_blobstore::{
     Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
 };
 

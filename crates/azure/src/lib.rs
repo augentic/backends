@@ -13,7 +13,7 @@ use azure_core::credentials::{Secret, TokenCredential};
 use azure_identity::{ClientSecretCredential, DeveloperToolsCredential};
 use azure_security_keyvault_secrets::SecretClient;
 use fromenv::FromEnv;
-use kernel::Backend;
+use qwasr::Backend;
 use tracing::instrument;
 
 #[derive(Clone)]
@@ -78,7 +78,7 @@ pub struct CredentialOptions {
     pub client_secret: String,
 }
 
-impl kernel::FromEnv for ConnectOptions {
+impl qwasr::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }

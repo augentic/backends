@@ -7,7 +7,7 @@ use async_nats::jetstream::object_store::{Config, ObjectStore};
 use chrono::Utc;
 use futures::{FutureExt, StreamExt};
 use tokio::io::AsyncReadExt;
-use wasi_blobstore::{
+use qwasr_wasi_blobstore::{
     Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
 };
 

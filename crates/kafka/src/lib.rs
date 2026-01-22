@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use fromenv::{FromEnv, ParseResult};
-use kernel::Backend;
+use qwasr::Backend;
 use rand::random_range;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::producer::{DeliveryResult, ProducerContext, ThreadedProducer};
@@ -144,7 +144,7 @@ impl From<&ConnectOptions> for ClientConfig {
     }
 }
 
-impl kernel::FromEnv for ConnectOptions {
+impl qwasr::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }

@@ -6,7 +6,7 @@ use anyhow::Context;
 use futures::FutureExt;
 use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
-use wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
+use qwasr_wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
 
 use crate::Client;
 

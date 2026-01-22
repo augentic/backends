@@ -7,14 +7,14 @@ use futures::Stream;
 use futures::future::FutureExt;
 use futures::stream::StreamExt;
 use futures::task::{Context, Poll};
+use qwasr_wasi_messaging::{
+    Client, FutureResult, Message, MessageProxy, Metadata, RequestOptions, Subscriptions,
+    WasiMessagingCtx,
+};
 use rdkafka::message::{Header, Headers, OwnedHeaders, OwnedMessage};
 use rdkafka::producer::BaseRecord;
 use rdkafka::{Message as _, Timestamp};
 use tokio::sync::mpsc;
-use wasi_messaging::{
-    Client, FutureResult, Message, MessageProxy, Metadata, RequestOptions, Subscriptions,
-    WasiMessagingCtx,
-};
 
 const CAPACITY: usize = 1024;
 
@@ -168,7 +168,7 @@ impl Message for KafkaMessage {
         self.0.payload().map_or(0, <[u8]>::len)
     }
 
-    fn reply(&self) -> Option<wasi_messaging::Reply> {
+    fn reply(&self) -> Option<qwasr_wasi_messaging::Reply> {
         None
     }
 

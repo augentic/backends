@@ -6,7 +6,7 @@ use async_nats::jetstream::kv::Config;
 use async_nats::jetstream::{self, kv};
 use futures::TryStreamExt;
 use futures::future::FutureExt;
-use wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
+use qwasr_wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
 
 use crate::Client;
 

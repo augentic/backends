@@ -11,7 +11,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use async_nats::AuthError;
 use fromenv::{FromEnv, ParseResult};
-use kernel::Backend;
+use qwasr::Backend;
 use tracing::instrument;
 
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ pub struct ConnectOptions {
     pub seed: Option<String>,
 }
 
-impl kernel::FromEnv for ConnectOptions {
+impl qwasr::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }
