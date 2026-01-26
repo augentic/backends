@@ -142,8 +142,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.clap_lex]]
-version = "0.7.6"
-when = "2025-10-13"
+version = "0.7.7"
+when = "2026-01-12"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -276,8 +276,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.flate2]]
-version = "1.1.5"
-when = "2025-10-24"
+version = "1.1.8"
+when = "2026-01-12"
 user-id = 980
 user-login = "Byron"
 user-name = "Sebastian Thiel"
@@ -290,8 +290,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.h2]]
-version = "0.4.12"
-when = "2025-08-06"
+version = "0.4.13"
+when = "2026-01-05"
 user-id = 359
 user-login = "seanmonstar"
 user-name = "Sean McArthur"
@@ -372,8 +372,8 @@ user-login = "Manishearth"
 user-name = "Manish Goregaokar"
 
 [[publisher.indexmap]]
-version = "2.12.1"
-when = "2025-11-20"
+version = "2.13.0"
+when = "2026-01-07"
 user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
@@ -400,8 +400,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.libc]]
-version = "0.2.178"
-when = "2025-12-02"
+version = "0.2.180"
+when = "2026-01-08"
 user-id = 55123
 user-login = "rust-lang-owner"
 
@@ -510,8 +510,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.proc-macro2]]
-version = "1.0.105"
-when = "2026-01-05"
+version = "1.0.106"
+when = "2026-01-21"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -548,8 +548,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.regalloc2]]
-version = "0.13.3"
-when = "2025-11-13"
+version = "0.13.5"
+when = "2026-01-09"
 user-id = 3726
 user-login = "cfallin"
 user-name = "Chris Fallin"
@@ -604,8 +604,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.ryu]]
-version = "1.0.21"
-when = "2025-12-20"
+version = "1.0.22"
+when = "2025-12-27"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -716,8 +716,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.thiserror]]
-version = "2.0.17"
-when = "2025-09-28"
+version = "2.0.18"
+when = "2026-01-18"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -730,8 +730,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.thiserror-impl]]
-version = "2.0.17"
-when = "2025-09-28"
+version = "2.0.18"
+when = "2026-01-18"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -751,8 +751,8 @@ user-login = "Darksonn"
 user-name = "Alice Ryhl"
 
 [[publisher.tokio-util]]
-version = "0.7.17"
-when = "2025-11-02"
+version = "0.7.18"
+when = "2026-01-04"
 user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
@@ -779,8 +779,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.tower]]
-version = "0.5.2"
-when = "2024-12-11"
+version = "0.5.3"
+when = "2026-01-12"
 user-id = 359
 user-login = "seanmonstar"
 user-name = "Sean McArthur"
@@ -827,6 +827,13 @@ user-id = 1139
 user-login = "Manishearth"
 user-name = "Manish Goregaokar"
 
+[[publisher.url]]
+version = "2.5.8"
+when = "2026-01-05"
+user-id = 1139
+user-login = "Manishearth"
+user-name = "Manish Goregaokar"
+
 [[publisher.utf8_iter]]
 version = "1.0.4"
 when = "2023-12-01"
@@ -849,8 +856,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasip2]]
-version = "1.0.1+wasi-0.2.4"
-when = "2025-09-15"
+version = "1.0.2+wasi-0.2.9"
+when = "2026-01-15"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1275,12 +1282,6 @@ when = "2024-12-04"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
-
-[[publisher.wit-bindgen]]
-version = "0.43.0"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen]]
 version = "0.51.0"
@@ -1715,18 +1716,6 @@ notes = "The Bytecode Alliance is the author of this crate"
 [[audits.bytecode-alliance.wildcard-audits.wit-bindgen]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 73222 # wasmtime-publish
-start = "2023-01-01"
-end = "2026-06-03"
-notes = """
-The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
-publication of this crate from CI. This repository requires all PRs are reviewed
-by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
-"""
-
-[[audits.bytecode-alliance.wildcard-audits.wit-bindgen]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 start = "2025-08-13"
 end = "2027-01-08"
@@ -2046,12 +2035,6 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.1.2"
 
-[[audits.bytecode-alliance.audits.id-arena]]
-who = "Nick Fitzgerald <fitzgen@gmail.com>"
-criteria = "safe-to-deploy"
-version = "2.2.1"
-notes = "I am the author of this crate."
-
 [[audits.bytecode-alliance.audits.leb128]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -2318,15 +2301,6 @@ criteria = "safe-to-deploy"
 version = "0.2.4"
 notes = "Implements a concurrency primitive with atomics, and is not obviously incorrect"
 
-[[audits.bytecode-alliance.audits.unicase]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-version = "2.6.0"
-notes = """
-This crate contains no `unsafe` code and no unnecessary use of the standard
-library.
-"""
-
 [[audits.bytecode-alliance.audits.vcpkg]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2517,24 +2491,6 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "35.0.2"
 notes = "The Bytecode Alliance is the author of this crate."
-
-[[audits.bytecode-alliance.audits.wit-bindgen]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-delta = "0.43.0 -> 0.45.0"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.audits.wit-bindgen]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-delta = "0.45.0 -> 0.45.1"
-notes = "The Bytecode Alliance is the author of this crate"
-
-[[audits.bytecode-alliance.audits.wit-bindgen]]
-who = "Alex Crichton <alex@alexcrichton.com>"
-criteria = "safe-to-deploy"
-delta = "0.45.1 -> 0.46.0"
-notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.bytecode-alliance.audits.wit-parser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3237,20 +3193,6 @@ version = "0.2.2"
 notes = "Reviewed on https://fxrev.dev/883543"
 aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
 
-[[audits.google.audits.tokio-stream]]
-who = "David Koloski <dkoloski@google.com>"
-criteria = "safe-to-deploy"
-version = "0.1.11"
-notes = "Reviewed on https://fxrev.dev/804724"
-aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
-
-[[audits.google.audits.tokio-stream]]
-who = "David Koloski <dkoloski@google.com>"
-criteria = "safe-to-deploy"
-delta = "0.1.11 -> 0.1.14"
-notes = "Reviewed on https://fxrev.dev/907732."
-aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
-
 [[audits.google.audits.unicode-bidi]]
 who = "Manish Goregaokar <manishearth@google.com>"
 criteria = "safe-to-deploy"
@@ -3448,6 +3390,11 @@ delta = "0.3.1 -> 0.9.0"
 who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 delta = "0.6.4 -> 0.9.3"
+
+[[audits.isrg.audits.rand_core]]
+who = "J.C. Jones <jc@divviup.org>"
+criteria = "safe-to-deploy"
+delta = "0.9.3 -> 0.9.5"
 
 [[audits.isrg.audits.rayon]]
 who = "Brandon Pitman <bran@bran.land>"
@@ -4280,49 +4227,6 @@ criteria = "safe-to-deploy"
 delta = "0.1.0 -> 0.1.1"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
-[[audits.mozilla.audits.unicase]]
-who = "Jan-Erik Rediger <jrediger@mozilla.com>"
-criteria = "safe-to-deploy"
-delta = "2.6.0 -> 2.8.1"
-notes = "Update to Unicode 15.0.0"
-aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.url]]
-who = "Valentin Gosu <valentin.gosu@gmail.com>"
-criteria = "safe-to-deploy"
-version = "2.4.0"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.url]]
-who = "Valentin Gosu <valentin.gosu@gmail.com>"
-criteria = "safe-to-deploy"
-delta = "2.4.0 -> 2.4.1"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.url]]
-who = "Valentin Gosu <valentin.gosu@gmail.com>"
-criteria = "safe-to-deploy"
-delta = "2.4.1 -> 2.5.0"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.url]]
-who = "Henri Sivonen <hsivonen@hsivonen.fi>"
-criteria = "safe-to-deploy"
-delta = "2.5.0 -> 2.5.1"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.url]]
-who = "Valentin Gosu <valentin.gosu@gmail.com>"
-criteria = "safe-to-deploy"
-delta = "2.5.1 -> 2.5.4"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.url]]
-who = "edgul <ed.guloien@gmail.com>"
-criteria = "safe-to-deploy"
-delta = "2.5.4 -> 2.5.7"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
 [[audits.mozilla.audits.utf8parse]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
@@ -4343,12 +4247,6 @@ notes = """
 This code DOES contain unsafe code required to internally call volatiles
 for deleting data. This is expected and documented behavior.
 """
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.zeroize_derive]]
-who = "Benjamin Beurdouche <beurdouche@mozilla.com>"
-criteria = "safe-to-deploy"
-version = "1.4.2"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.zerovec-derive]]
@@ -4541,12 +4439,6 @@ criteria = "safe-to-deploy"
 delta = "0.13.4 -> 0.13.5"
 aggregated-from = "https://raw.githubusercontent.com/zcash/wallet/main/supply-chain/audits.toml"
 
-[[audits.zcash.audits.prost]]
-who = "Jack Grigg <jack@electriccoin.co>"
-criteria = "safe-to-deploy"
-delta = "0.13.5 -> 0.14.1"
-aggregated-from = "https://raw.githubusercontent.com/zcash/librustzcash/main/supply-chain/audits.toml"
-
 [[audits.zcash.audits.prost-derive]]
 who = "Jack Grigg <jack@electriccoin.co>"
 criteria = "safe-to-deploy"
@@ -4558,12 +4450,6 @@ who = "Jack Grigg <jack@electriccoin.co>"
 criteria = "safe-to-deploy"
 delta = "0.13.4 -> 0.13.5"
 aggregated-from = "https://raw.githubusercontent.com/zcash/wallet/main/supply-chain/audits.toml"
-
-[[audits.zcash.audits.prost-derive]]
-who = "Jack Grigg <jack@electriccoin.co>"
-criteria = "safe-to-deploy"
-delta = "0.13.5 -> 0.14.1"
-aggregated-from = "https://raw.githubusercontent.com/zcash/librustzcash/main/supply-chain/audits.toml"
 
 [[audits.zcash.audits.prost-types]]
 who = "Jack Grigg <jack@electriccoin.co>"
@@ -4664,22 +4550,6 @@ who = "Jack Grigg <jack@electriccoin.co>"
 criteria = "safe-to-deploy"
 delta = "1.1.8 -> 1.1.9"
 aggregated-from = "https://raw.githubusercontent.com/zcash/zcash/master/qa/supply-chain/audits.toml"
-
-[[audits.zcash.audits.tokio-stream]]
-who = "Daira-Emma Hopwood <daira@jacaranda.org>"
-criteria = "safe-to-deploy"
-delta = "0.1.14 -> 0.1.15"
-aggregated-from = "https://raw.githubusercontent.com/zcash/librustzcash/main/supply-chain/audits.toml"
-
-[[audits.zcash.audits.tokio-stream]]
-who = "Jack Grigg <jack@electriccoin.co>"
-criteria = "safe-to-deploy"
-delta = "0.1.15 -> 0.1.17"
-notes = """
-No new `unsafe` code or powerful imports. The new async polling logic added as
-`StreamMap::poll_next_many` looks plausible.
-"""
-aggregated-from = "https://raw.githubusercontent.com/zcash/librustzcash/main/supply-chain/audits.toml"
 
 [[audits.zcash.audits.try-lock]]
 who = "Jack Grigg <jack@electriccoin.co>"
