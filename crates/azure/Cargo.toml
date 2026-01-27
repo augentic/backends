@@ -19,10 +19,10 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
-azure_core = "0.31.0"
-azure_identity = "0.31.0"
+azure_core.workspace = true
+azure_identity.workspace = true
 azure_security_keyvault_secrets = "0.10.0"
-base64ct = { version = "1.8.0", features = ["std"] }
+base64ct.workspace = true
 fromenv.workspace = true
 futures.workspace = true
 http.workspace = true
