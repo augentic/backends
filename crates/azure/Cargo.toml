@@ -1,5 +1,5 @@
 [package]
-name = "warp-azure"
+name = "qwasr-azure"
 description = "Azure resource provider"
 readme = "README.md"
 authors.workspace = true

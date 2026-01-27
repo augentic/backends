@@ -1,5 +1,5 @@
 [package]
-name = "warp-opentelemetry"
+name = "qwasr-opentelemetry"
 description = "OpenTelemetry gRPC resource provider"
 readme = "README.md"
 authors.workspace = true

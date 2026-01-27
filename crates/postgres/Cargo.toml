@@ -1,5 +1,5 @@
 [package]
-name = "warp-postgres"
+name = "qwasr-postgres"
 description = "Postgres resource provider"
 readme = "README.md"
 authors.workspace = true

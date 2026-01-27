@@ -1,5 +1,5 @@
 [package]
-name = "warp-kafka"
+name = "qwasr-kafka"
 description = "Kafka messaging resource"
 readme = "README.md"
 authors.workspace = true
