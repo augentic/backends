@@ -3613,6 +3613,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwasr-azure-id"
+version = "0.22.0"
+dependencies = [
+ "anyhow",
+ "azure_core",
+ "azure_identity",
+ "base64ct",
+ "fromenv",
+ "futures",
+ "http",
+ "qwasr",
+ "qwasr-wasi-identity",
+ "tracing",
+]
+
+[[package]]
 name = "qwasr-kafka"
 version = "0.22.0"
 dependencies = [
