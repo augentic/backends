@@ -2,7 +2,6 @@
 
 //! Azure Key Vault Secrets Client.
 
-mod identity;
 mod key_vault;
 
 use std::fmt::Debug;

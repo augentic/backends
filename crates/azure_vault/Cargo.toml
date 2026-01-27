@@ -1,6 +1,6 @@
 [package]
-name = "qwasr-azure"
-description = "Azure resource provider"
+name = "qwasr-azure-vault"
+description = "Azure backend secrets (vault) provider"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true

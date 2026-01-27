@@ -3595,7 +3595,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "qwasr-azure"
+name = "qwasr-azure-id"
+version = "0.22.0"
+dependencies = [
+ "anyhow",
+ "azure_core",
+ "azure_identity",
+ "base64ct",
+ "fromenv",
+ "futures",
+ "http",
+ "qwasr",
+ "qwasr-wasi-identity",
+ "tracing",
+]
+
+[[package]]
+name = "qwasr-azure-vault"
 version = "0.22.0"
 dependencies = [
  "anyhow",
@@ -3609,22 +3625,6 @@ dependencies = [
  "qwasr",
  "qwasr-wasi-identity",
  "qwasr-wasi-vault",
- "tracing",
-]
-
-[[package]]
-name = "qwasr-azure-id"
-version = "0.22.0"
-dependencies = [
- "anyhow",
- "azure_core",
- "azure_identity",
- "base64ct",
- "fromenv",
- "futures",
- "http",
- "qwasr",
- "qwasr-wasi-identity",
  "tracing",
 ]
 
