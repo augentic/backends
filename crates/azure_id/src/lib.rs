@@ -35,7 +35,7 @@ impl Backend for Client {
 }
 
 #[derive(Debug, Clone, Default, FromEnv)]
-pub struct ConnectOptions{
+pub struct ConnectOptions {
     /// Future override credential type. Current implementation only supports
     /// Managed Identity.
     #[env(from = "CREDENTIAL_TYPE", default = "ManagedIdentity")]
@@ -83,10 +83,12 @@ impl std::str::FromStr for CredentialType {
     fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
         let normalized = value.trim().to_ascii_lowercase();
         match normalized.as_str() {
-            "" | "managedidentity" | "managed_identity" | "managed-identity" => Ok(Self::ManagedIdentity),
-            _ => Err(CredentialTypeParseError::new(format!(
-                "unsupported credential type '{value}'"
-            ))),
+            "" | "managedidentity" | "managed_identity" | "managed-identity" => {
+                Ok(Self::ManagedIdentity)
+            }
+            _ => {
+                Err(CredentialTypeParseError::new(format!("unsupported credential type '{value}'")))
+            }
         }
     }
 }
