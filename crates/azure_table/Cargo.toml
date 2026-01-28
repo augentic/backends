@@ -1,0 +1,30 @@
+[package]
+name = "qwasr-azure-table"
+description = "Azure backend table storage provider (not a full featured SQL database)"
+readme = "README.md"
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lib]
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+azure_core.workspace = true
+azure_data_tables = "0.21.0"
+azure_identity.workspace = true
+azure_storage = "0.21.0"
+fromenv.workspace = true
+futures.workspace = true
+qwasr.workspace = true
+qwasr-wasi-sql.workspace = true
+tracing.workspace = true

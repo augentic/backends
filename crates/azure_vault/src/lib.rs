@@ -22,7 +22,7 @@ pub struct Client {
 
 impl Debug for Client {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AzClient").finish()
+        f.debug_struct("AzSecretClient").finish()
     }
 }
 
