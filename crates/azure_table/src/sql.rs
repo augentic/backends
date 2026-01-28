@@ -20,12 +20,13 @@ impl WasiSqlCtx for Client {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct AzTableConnection(Arc<TableClient>);
 
 impl Connection for AzTableConnection {
     fn query(&self, query: String, params: Vec<DataType>) -> FutureResult<Vec<Row>> {
         tracing::debug!("query: {query}, params: {params:?}");
-        let cnn = Arc::clone(&self.0);
+        // let cnn = Arc::clone(&self.0);
         todo!()
     }
 
