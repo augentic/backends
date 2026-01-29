@@ -7,15 +7,13 @@ mod sql;
 use std::fmt::Debug;
 
 use anyhow::Context;
-use azure_data_tables::prelude::TableServiceClient;
-use azure_storage::StorageCredentials;
 use fromenv::FromEnv;
 use qwasr::Backend;
 
 /// Backend client for Azure Table storage
 #[derive(Clone)]
 pub struct Client {
-    client: TableServiceClient
+    options: ConnectOptions
 }
 
 impl Debug for Client {
@@ -29,13 +27,7 @@ impl Backend for Client {
 
     #[tracing::instrument]
     async fn connect_with(options: Self::ConnectOptions) -> anyhow::Result<Self> {
-        let credentials = StorageCredentials::access_key(
-            options.name.clone(),
-            options.key.clone(),
-        );
-        let client = TableServiceClient::new(options.name.clone(), credentials);
-
-        Ok(Self { client })
+        Ok(Self { options: options.clone() } )
     }
 }
 
