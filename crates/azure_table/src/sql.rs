@@ -6,8 +6,9 @@ use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use futures::future::FutureExt;
 use hmac::{Hmac, Mac};
+use qwasr_wasi_sql::{Connection, DataType, Field, FutureResult, Row, WasiSqlCtx};
 use reqwest::Client as HttpClient;
-use qwasr_wasi_sql::{Connection, DataType, FutureResult, Row, WasiSqlCtx};
+use serde_json::Value;
 use sha2::Sha256;
 
 use crate::{Client, ConnectOptions};
@@ -21,14 +22,12 @@ impl WasiSqlCtx for Client {
             config: self.options.clone(),
             table: name,
         };
-        async move {
-            Ok(Arc::new(connection) as Arc<dyn Connection>)
-        }.boxed()
+        async move { Ok(Arc::new(connection) as Arc<dyn Connection>) }.boxed()
     }
 }
 
 #[derive(Debug)]
-pub struct AzTableConnection{
+pub struct AzTableConnection {
     pub http_client: HttpClient,
     pub config: ConnectOptions,
     pub table: String,
@@ -37,16 +36,34 @@ pub struct AzTableConnection{
 impl Connection for AzTableConnection {
     fn query(&self, query: String, params: Vec<DataType>) -> FutureResult<Vec<Row>> {
         tracing::debug!("query: {query}, params: {params:?}");
-            let uri = format!("https://{}.table.core.windows.net/{}()", 
-                self.config.name, 
-                self.table);
-            let now = chrono::Utc::now().to_rfc2822();
-            let auth = format!("SharedKey {}:{}", self.config.name, self.config.key);
+        let uri = format!("https://{}.table.core.windows.net/{}()", self.config.name, self.table);
+        let now = chrono::Utc::now().to_rfc2822();
+        let resource_path = format!("/{}/{}", self.config.name, self.table);
+        let client = self.http_client.clone();
+        let account_name = self.config.name.clone();
+        let account_key = self.config.key.clone();
         async move {
-            let odata_query = QueryPhrases::from_query(&query, &params)?.to_odata();
-
-            todo!()
-        }.boxed()
+            let auth = auth_header(&account_name, &account_key, &now, &resource_path)?;
+            let odata_query = QueryPhrases::query(&query, &params)?.odata();
+            let full_uri =
+                if odata_query.is_empty() { uri } else { format!("{uri}?{odata_query}") };
+            let response = client
+                .get(&full_uri)
+                .header("x-ms-date", now)
+                .header("x-ms-version", "2026-02-06")
+                .header("Authorization", auth)
+                .header("Accept", "application/json;odata=fullmetadata")
+                .send()
+                .await
+                .map_err(|e| anyhow!("HTTP request error: {e}"))?;
+            if !response.status().is_success() {
+                bail!("Azure Table query failed with status: {}", response.status());
+            }
+            let body: Value =
+                response.json().await.map_err(|e| anyhow!("Failed to parse response JSON: {e}"))?;
+            parse(&body)
+        }
+        .boxed()
     }
 
     fn exec(&self, query: String, params: Vec<DataType>) -> FutureResult<u32> {
@@ -55,7 +72,9 @@ impl Connection for AzTableConnection {
     }
 }
 
-fn auth_header(account_name: &str, account_key: &str, date_time: &str, resource_path: &str) -> anyhow::Result<String> {
+fn auth_header(
+    account_name: &str, account_key: &str, date_time: &str, resource_path: &str,
+) -> anyhow::Result<String> {
     // String to sign for SharedKey Lite:
     // Date + "\n" + CanonicalizedResource
     let string_to_sign = format!("{date_time}\n{resource_path}");
@@ -69,6 +88,90 @@ fn auth_header(account_name: &str, account_key: &str, date_time: &str, resource_
     Ok(format!("SharedKeyLite {account_name}:{encoded}"))
 }
 
+fn parse(val: &Value) -> anyhow::Result<Vec<Row>> {
+    let mut rows = Vec::new();
+    if let Some(entries) = val.get("value").and_then(|v| v.as_array()) {
+        for entry in entries {
+            let mut index = String::new();
+            let mut fields = Vec::new();
+            if let Some(obj) = entry.as_object() {
+                for (k, v) in obj {
+                    // If the key is "odata.etag" use the value as the row index.
+                    if k == "odata.etag"
+                        && let Some(s) = v.as_str()
+                    {
+                        index = s.to_string();
+                    }
+                    // If the key is any other odata property, skip it.
+                    if k.starts_with("odata.") {
+                        continue;
+                    }
+                    // If the key is a system one, skip it.
+                    if k == "PartitionKey" || k == "RowKey" || k == "Timestamp" {
+                        continue;
+                    }
+                    // If the key contains "@odata.type", skip it (but we will
+                    // use it to determine the data type of the corresponding
+                    // value).
+                    if k.ends_with("@odata.type") {
+                        continue;
+                    }
+                    // Find the corresponding "@odata.type" key if it exists.
+                    let type_key = format!("{k}@odata.type");
+                    let Some(data_type) = obj.get(&type_key).and_then(|t| t.as_str()) else {
+                        bail!("missing @odata.type for key {k}");
+                    };
+                    let value = convert(v, data_type)?;
+                    fields.push(Field {
+                        name: k.clone(),
+                        value,
+                    });
+                }
+            }
+            rows.push(Row { index, fields });
+        }
+    }
+    Ok(rows)
+}
+
+fn convert(value: &Value, data_type: &str) -> anyhow::Result<DataType> {
+    match data_type {
+        "Edm.Binary" => {
+            if let Some(s) = value.as_str() {
+                let decoded = Base64::decode_vec(s)?;
+                Ok(DataType::Binary(Some(decoded)))
+            } else {
+                Ok(DataType::Binary(None))
+            }
+        }
+        "Edm.Boolean" => value
+            .as_bool()
+            .map_or_else(|| Ok(DataType::Boolean(None)), |b| Ok(DataType::Boolean(Some(b)))),
+        "Edm.DateTime" => value.as_str().map_or_else(
+            || Ok(DataType::Timestamp(None)),
+            |s| Ok(DataType::Timestamp(Some(s.to_string()))),
+        ),
+        "Edm.Double" => value
+            .as_f64()
+            .map_or_else(|| Ok(DataType::Double(None)), |f| Ok(DataType::Double(Some(f)))),
+        "Edm.String" | "Edm.Guid" => value
+            .as_str()
+            .map_or_else(|| Ok(DataType::Str(None)), |s| Ok(DataType::Str(Some(s.to_string())))),
+        "Edm.Int32" => value.as_i64().map_or_else(
+            || Ok(DataType::Int32(None)),
+            |n| {
+                i32::try_from(n)
+                    .map(|v| DataType::Int32(Some(v)))
+                    .map_err(|_e| anyhow!("Value {n} out of range for Int32"))
+            },
+        ),
+        "Edm.Int64" => value
+            .as_i64()
+            .map_or_else(|| Ok(DataType::Int64(None)), |n| Ok(DataType::Int64(Some(n)))),
+        _ => Err(anyhow!("unsupported data type: {data_type}")),
+    }
+}
+
 #[derive(Debug)]
 pub struct QueryPhrases {
     select: Option<String>,
@@ -77,7 +180,7 @@ pub struct QueryPhrases {
 }
 
 impl QueryPhrases {
-    pub fn from_query(query: &str, params: &[DataType]) -> anyhow::Result<Self> {
+    pub fn query(query: &str, params: &[DataType]) -> anyhow::Result<Self> {
         // Check for unsupported features
         let query_upper = query.to_uppercase();
         if query_upper.contains("JOIN") {
@@ -100,12 +203,12 @@ impl QueryPhrases {
 
         while i < parts.len() {
             let part_upper = parts[i].to_uppercase();
-            
+
             match part_upper.as_str() {
                 "SELECT" => {
                     i += 1;
                     let mut select_items = Vec::new();
-                    
+
                     // Check for TOP clause
                     if i < parts.len() && parts[i].to_uppercase() == "TOP" {
                         i += 1;
@@ -114,13 +217,13 @@ impl QueryPhrases {
                             i += 1;
                         }
                     }
-                    
+
                     // Collect select items until we hit FROM or end
                     while i < parts.len() && parts[i].to_uppercase() != "FROM" {
                         select_items.push(parts[i]);
                         i += 1;
                     }
-                    
+
                     if !select_items.is_empty() {
                         select = Some(select_items.join(" ").trim_end_matches(',').to_string());
                     }
@@ -135,7 +238,7 @@ impl QueryPhrases {
                 "WHERE" => {
                     i += 1;
                     let mut filter_parts = Vec::new();
-                    
+
                     // Collect all parts until end of query
                     while i < parts.len() {
                         let part_upper_check = parts[i].to_uppercase();
@@ -145,7 +248,7 @@ impl QueryPhrases {
                         filter_parts.push(parts[i]);
                         i += 1;
                     }
-                    
+
                     if !filter_parts.is_empty() {
                         filter = Some(filter_parts.join(" "));
                     }
@@ -156,16 +259,12 @@ impl QueryPhrases {
             }
         }
 
-        Ok(Self {
-            select,
-            filter,
-            top,
-        })
+        Ok(Self { select, filter, top })
     }
 
-    pub fn to_odata(&self) -> String {
+    pub fn odata(&self) -> String {
         let mut clauses = Vec::new();
-        
+
         if let Some(select) = &self.select {
             // Don't include $select for SELECT *
             if select != "*" {
@@ -173,7 +272,7 @@ impl QueryPhrases {
                 clauses.push(format!("$select={encoded}"));
             }
         }
-        
+
         if let Some(filter) = &self.filter {
             // Convert SQL operators to OData operators
             let odata_filter = filter
@@ -187,15 +286,15 @@ impl QueryPhrases {
                 .replace(" AND ", " and ")
                 .replace(" OR ", " or ")
                 .replace(" NOT ", " not ");
-            
+
             let encoded = urlencoding::encode(&odata_filter);
             clauses.push(format!("$filter={encoded}"));
         }
-        
+
         if let Some(top) = self.top {
             clauses.push(format!("$top={top}"));
         }
-        
+
         clauses.join("&")
     }
 
@@ -204,18 +303,42 @@ impl QueryPhrases {
         for (i, param) in params.iter().enumerate() {
             let placeholder = format!("${}", i + 1);
             let value = match param {
-                DataType::Int32(v) => v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string()),
-                DataType::Int64(v) => v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string()),
-                DataType::Uint32(v) => v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string()),
-                DataType::Uint64(v) => v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string()),
-                DataType::Float(v) => v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string()),
-                DataType::Double(v) => v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string()),
-                DataType::Str(v) => v.as_ref().map_or_else(|| "NULL".to_string(), |s| format!("'{}'", s.replace('\'', "''"))),
-                DataType::Boolean(v) => v.map(|b| b.to_string()).unwrap_or_else(|| "NULL".to_string()),
-                DataType::Date(v) => v.as_ref().map_or_else(|| "NULL".to_string(), |s| format!("'{s}'")),
-                DataType::Time(v) => v.as_ref().map_or_else(|| "NULL".to_string(), |s| format!("'{s}'")),
-                DataType::Timestamp(v) => v.as_ref().map_or_else(|| "NULL".to_string(), |s| format!("'{s}'")),
-                DataType::Binary(_) => bail!("Binary parameters are not supported in query strings"),
+                DataType::Int32(v) => {
+                    v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string())
+                }
+                DataType::Int64(v) => {
+                    v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string())
+                }
+                DataType::Uint32(v) => {
+                    v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string())
+                }
+                DataType::Uint64(v) => {
+                    v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string())
+                }
+                DataType::Float(v) => {
+                    v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string())
+                }
+                DataType::Double(v) => {
+                    v.map(|n| n.to_string()).unwrap_or_else(|| "NULL".to_string())
+                }
+                DataType::Str(v) => v
+                    .as_ref()
+                    .map_or_else(|| "NULL".to_string(), |s| format!("'{}'", s.replace('\'', "''"))),
+                DataType::Boolean(v) => {
+                    v.map(|b| b.to_string()).unwrap_or_else(|| "NULL".to_string())
+                }
+                DataType::Date(v) => {
+                    v.as_ref().map_or_else(|| "NULL".to_string(), |s| format!("'{s}'"))
+                }
+                DataType::Time(v) => {
+                    v.as_ref().map_or_else(|| "NULL".to_string(), |s| format!("'{s}'"))
+                }
+                DataType::Timestamp(v) => {
+                    v.as_ref().map_or_else(|| "NULL".to_string(), |s| format!("'{s}'"))
+                }
+                DataType::Binary(_) => {
+                    bail!("Binary parameters are not supported in query strings")
+                }
             };
             processed_query = processed_query.replace(&placeholder, &value);
         }
@@ -230,8 +353,8 @@ mod tests {
     #[test]
     fn test_simple_select() {
         let query = "SELECT * FROM users";
-        let result = QueryPhrases::from_query(query, &[]).unwrap();
-        
+        let result = QueryPhrases::query(query, &[]).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, None);
         assert_eq!(result.top, None);
@@ -240,8 +363,8 @@ mod tests {
     #[test]
     fn test_select_with_columns() {
         let query = "SELECT id, name, email FROM users";
-        let result = QueryPhrases::from_query(query, &[]).unwrap();
-        
+        let result = QueryPhrases::query(query, &[]).unwrap();
+
         assert_eq!(result.select, Some("id, name, email".to_string()));
         assert_eq!(result.filter, None);
         assert_eq!(result.top, None);
@@ -250,8 +373,8 @@ mod tests {
     #[test]
     fn test_select_with_where() {
         let query = "SELECT * FROM users WHERE age > 18";
-        let result = QueryPhrases::from_query(query, &[]).unwrap();
-        
+        let result = QueryPhrases::query(query, &[]).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("age > 18".to_string()));
         assert_eq!(result.top, None);
@@ -260,8 +383,8 @@ mod tests {
     #[test]
     fn test_select_with_top() {
         let query = "SELECT TOP 10 * FROM users";
-        let result = QueryPhrases::from_query(query, &[]).unwrap();
-        
+        let result = QueryPhrases::query(query, &[]).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, None);
         assert_eq!(result.top, Some(10));
@@ -270,8 +393,8 @@ mod tests {
     #[test]
     fn test_select_with_top_and_where() {
         let query = "SELECT TOP 5 name, email FROM users WHERE active = true";
-        let result = QueryPhrases::from_query(query, &[]).unwrap();
-        
+        let result = QueryPhrases::query(query, &[]).unwrap();
+
         assert_eq!(result.select, Some("name, email".to_string()));
         assert_eq!(result.filter, Some("active = true".to_string()));
         assert_eq!(result.top, Some(5));
@@ -281,8 +404,8 @@ mod tests {
     fn test_parameterized_query_with_int() {
         let query = "SELECT * FROM users WHERE id = $1";
         let params = vec![DataType::Int32(Some(42))];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("id = 42".to_string()));
         assert_eq!(result.top, None);
@@ -292,8 +415,8 @@ mod tests {
     fn test_parameterized_query_with_string() {
         let query = "SELECT * FROM users WHERE name = $1";
         let params = vec![DataType::Str(Some("John O'Brien".to_string()))];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("name = 'John O''Brien'".to_string()));
         assert_eq!(result.top, None);
@@ -302,12 +425,9 @@ mod tests {
     #[test]
     fn test_parameterized_query_multiple_params() {
         let query = "SELECT * FROM users WHERE age > $1 AND name = $2";
-        let params = vec![
-            DataType::Int32(Some(18)),
-            DataType::Str(Some("Alice".to_string())),
-        ];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let params = vec![DataType::Int32(Some(18)), DataType::Str(Some("Alice".to_string()))];
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("age > 18 AND name = 'Alice'".to_string()));
         assert_eq!(result.top, None);
@@ -317,8 +437,8 @@ mod tests {
     fn test_parameterized_query_with_null() {
         let query = "SELECT * FROM users WHERE email = $1";
         let params = vec![DataType::Str(None)];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("email = NULL".to_string()));
         assert_eq!(result.top, None);
@@ -328,8 +448,8 @@ mod tests {
     fn test_parameterized_query_with_boolean() {
         let query = "SELECT * FROM users WHERE active = $1";
         let params = vec![DataType::Boolean(Some(true))];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("active = true".to_string()));
         assert_eq!(result.top, None);
@@ -339,8 +459,8 @@ mod tests {
     fn test_parameterized_query_with_float() {
         let query = "SELECT * FROM products WHERE price > $1";
         let params = vec![DataType::Double(Some(99.99))];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("price > 99.99".to_string()));
         assert_eq!(result.top, None);
@@ -350,8 +470,8 @@ mod tests {
     fn test_parameterized_query_with_date() {
         let query = "SELECT * FROM events WHERE created_at > $1";
         let params = vec![DataType::Date(Some("2026-01-29".to_string()))];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("created_at > '2026-01-29'".to_string()));
         assert_eq!(result.top, None);
@@ -360,8 +480,8 @@ mod tests {
     #[test]
     fn test_join_returns_error() {
         let query = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
-        let result = QueryPhrases::from_query(query, &[]);
-        
+        let result = QueryPhrases::query(query, &[]);
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "JOIN clauses are not supported");
     }
@@ -369,8 +489,8 @@ mod tests {
     #[test]
     fn test_order_by_returns_error() {
         let query = "SELECT * FROM users ORDER BY name";
-        let result = QueryPhrases::from_query(query, &[]);
-        
+        let result = QueryPhrases::query(query, &[]);
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "ORDER BY clauses are not supported");
     }
@@ -379,10 +499,13 @@ mod tests {
     fn test_binary_parameter_returns_error() {
         let query = "SELECT * FROM files WHERE data = $1";
         let params = vec![DataType::Binary(Some(vec![1, 2, 3]))];
-        let result = QueryPhrases::from_query(query, &params);
-        
+        let result = QueryPhrases::query(query, &params);
+
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "Binary parameters are not supported in query strings");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Binary parameters are not supported in query strings"
+        );
     }
 
     #[test]
@@ -393,10 +516,13 @@ mod tests {
             DataType::Str(Some("active".to_string())),
             DataType::Str(Some("admin".to_string())),
         ];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("name, age".to_string()));
-        assert_eq!(result.filter, Some("age >= 21 AND (status = 'active' OR role = 'admin')".to_string()));
+        assert_eq!(
+            result.filter,
+            Some("age >= 21 AND (status = 'active' OR role = 'admin')".to_string())
+        );
         assert_eq!(result.top, None);
     }
 
@@ -404,8 +530,8 @@ mod tests {
     fn test_case_insensitive_keywords() {
         let query = "select * from users where id = $1";
         let params = vec![DataType::Int32(Some(1))];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.select, Some("*".to_string()));
         assert_eq!(result.filter, Some("id = 1".to_string()));
         assert_eq!(result.top, None);
@@ -422,8 +548,8 @@ mod tests {
             DataType::Float(Some(1.5)),
             DataType::Double(Some(99.99)),
         ];
-        let result = QueryPhrases::from_query(query, &params).unwrap();
-        
+        let result = QueryPhrases::query(query, &params).unwrap();
+
         assert_eq!(result.filter, Some("i32 = 100 AND i64 = 1000 AND u32 = 200 AND u64 = 2000 AND f32 = 1.5 AND f64 = 99.99".to_string()));
     }
 
@@ -434,8 +560,8 @@ mod tests {
             filter: Some("age > 18".to_string()),
             top: Some(10),
         };
-        
-        let odata = phrases.to_odata();
+
+        let odata = phrases.odata();
         // SELECT * should not be included in OData
         // Operators should be converted and URL-encoded
         assert_eq!(odata, "$filter=age%20gt%2018&$top=10");
@@ -448,8 +574,8 @@ mod tests {
             filter: None,
             top: None,
         };
-        
-        let odata = phrases.to_odata();
+
+        let odata = phrases.odata();
         assert_eq!(odata, "$select=name%2C%20email%2C%20age");
     }
 
@@ -460,9 +586,12 @@ mod tests {
             filter: Some("age >= 21 AND (status = 'active' OR role = 'admin')".to_string()),
             top: Some(5),
         };
-        
-        let odata = phrases.to_odata();
-        assert_eq!(odata, "$select=name%2C%20age&$filter=age%20ge%2021%20and%20%28status%20eq%20%27active%27%20or%20role%20eq%20%27admin%27%29&$top=5");
+
+        let odata = phrases.odata();
+        assert_eq!(
+            odata,
+            "$select=name%2C%20age&$filter=age%20ge%2021%20and%20%28status%20eq%20%27active%27%20or%20role%20eq%20%27admin%27%29&$top=5"
+        );
     }
 
     #[test]
@@ -472,9 +601,12 @@ mod tests {
             filter: Some("a = 1 AND b != 2 AND c > 3 AND d >= 4 AND e < 5 AND f <= 6".to_string()),
             top: None,
         };
-        
-        let odata = phrases.to_odata();
-        assert_eq!(odata, "$filter=a%20eq%201%20and%20b%20ne%202%20and%20c%20gt%203%20and%20d%20ge%204%20and%20e%20lt%205%20and%20f%20le%206");
+
+        let odata = phrases.odata();
+        assert_eq!(
+            odata,
+            "$filter=a%20eq%201%20and%20b%20ne%202%20and%20c%20gt%203%20and%20d%20ge%204%20and%20e%20lt%205%20and%20f%20le%206"
+        );
     }
 
     #[test]
@@ -484,9 +616,8 @@ mod tests {
             filter: Some("name = 'John O''Brien'".to_string()),
             top: None,
         };
-        
-        let odata = phrases.to_odata();
+
+        let odata = phrases.odata();
         assert_eq!(odata, "$filter=name%20eq%20%27John%20O%27%27Brien%27");
     }
 }
-
