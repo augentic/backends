@@ -13,7 +13,7 @@ use qwasr::Backend;
 /// Backend client for Azure Table storage
 #[derive(Clone)]
 pub struct Client {
-    options: ConnectOptions
+    options: ConnectOptions,
 }
 
 impl Debug for Client {
@@ -27,7 +27,9 @@ impl Backend for Client {
 
     #[tracing::instrument]
     async fn connect_with(options: Self::ConnectOptions) -> anyhow::Result<Self> {
-        Ok(Self { options: options.clone() } )
+        Ok(Self {
+            options: options.clone(),
+        })
     }
 }
 

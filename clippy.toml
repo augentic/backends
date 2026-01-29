@@ -40,6 +40,7 @@ allowed-duplicate-crates = [
   "jsonschema",
   "referencing",
   "redox_syscall",
+  "reqwest",
   "rustix",
   "rustls",
   "rustls-native-certs",

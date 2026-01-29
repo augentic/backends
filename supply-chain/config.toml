@@ -58,6 +58,14 @@ criteria = "safe-to-deploy"
 version = "1.1.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.aws-lc-rs]]
+version = "1.15.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.aws-lc-sys]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.axum]]
 version = "0.8.8"
 criteria = "safe-to-deploy"
@@ -132,6 +140,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
 version = "1.2.53"
+criteria = "safe-to-deploy"
+
+[[exemptions.cesu8]]
+version = "1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.chrono]]
@@ -370,6 +382,10 @@ criteria = "safe-to-deploy"
 version = "0.1.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.fs_extra]]
+version = "1.3.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.funty]]
 version = "2.0.0"
 criteria = "safe-to-deploy"
@@ -456,6 +472,14 @@ criteria = "safe-to-deploy"
 
 [[exemptions.itoa]]
 version = "1.0.17"
+criteria = "safe-to-deploy"
+
+[[exemptions.jni-sys]]
+version = "0.3.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.jobserver]]
+version = "0.1.34"
 criteria = "safe-to-deploy"
 
 [[exemptions.js-sys]]
@@ -826,6 +850,14 @@ criteria = "safe-to-deploy"
 version = "1.14.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.rustls-platform-verifier]]
+version = "0.6.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.rustls-platform-verifier-android]]
+version = "0.1.1"
+criteria = "safe-to-deploy"
+
 [[exemptions.rustls-webpki]]
 version = "0.102.8"
 criteria = "safe-to-deploy"
@@ -1086,6 +1118,10 @@ criteria = "safe-to-deploy"
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.urlencoding]]
+version = "2.1.3"
+criteria = "safe-to-deploy"
+
 [[exemptions.uuid]]
 version = "1.19.0"
 criteria = "safe-to-deploy"
@@ -1140,6 +1176,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.web-time]]
 version = "1.1.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.webpki-root-certs]]
+version = "1.0.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.webpki-roots]]
