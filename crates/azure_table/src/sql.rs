@@ -620,4 +620,298 @@ mod tests {
         let odata = phrases.odata();
         assert_eq!(odata, "$filter=name%20eq%20%27John%20O%27%27Brien%27");
     }
+
+    #[test]
+    fn test_parse_empty_response() {
+        let json = serde_json::json!({
+            "value": []
+        });
+        let result = parse(&json).unwrap();
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_single_row_with_string() {
+        let json = serde_json::json!({
+            "value": [
+                {
+                    "odata.etag": "W/\"0x5B168C7B6E589D2\"",
+                    "PartitionKey": "partition1",
+                    "RowKey": "row1",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "Name": "John Doe",
+                    "Name@odata.type": "Edm.String"
+                }
+            ]
+        });
+
+        let result = parse(&json).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].index, "W/\"0x5B168C7B6E589D2\"");
+        assert_eq!(result[0].fields.len(), 1);
+        assert_eq!(result[0].fields[0].name, "Name");
+        match &result[0].fields[0].value {
+            DataType::Str(Some(s)) => assert_eq!(s, "John Doe"),
+            _ => panic!("Expected Str(Some(\"John Doe\"))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_data_types() {
+        let json = serde_json::json!({
+            "value": [
+                {
+                    "odata.etag": "etag1",
+                    "PartitionKey": "p1",
+                    "RowKey": "r1",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "stringField": "test",
+                    "stringField@odata.type": "Edm.String",
+                    "intField": 42,
+                    "intField@odata.type": "Edm.Int32",
+                    "longField": 9_223_372_036_854_775_807_i64,
+                    "longField@odata.type": "Edm.Int64",
+                    "doubleField": 42.5,
+                    "doubleField@odata.type": "Edm.Double",
+                    "boolField": true,
+                    "boolField@odata.type": "Edm.Boolean",
+                    "dateField": "2026-01-30T12:00:00Z",
+                    "dateField@odata.type": "Edm.DateTime",
+                    "binaryField": "SGVsbG8gV29ybGQ=",
+                    "binaryField@odata.type": "Edm.Binary",
+                    "guidField": "123e4567-e89b-12d3-a456-426614174000",
+                    "guidField@odata.type": "Edm.Guid"
+                }
+            ]
+        });
+
+        let result = parse(&json).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].fields.len(), 8);
+
+        // Check each field by finding it by name (order not guaranteed)
+        let fields = &result[0].fields;
+        
+        let string_field = fields.iter().find(|f| f.name == "stringField").unwrap();
+        match &string_field.value {
+            DataType::Str(Some(s)) => assert_eq!(s, "test"),
+            _ => panic!("Expected Str(Some(\"test\"))"),
+        }
+
+        let int_field = fields.iter().find(|f| f.name == "intField").unwrap();
+        match &int_field.value {
+            DataType::Int32(Some(n)) => assert_eq!(*n, 42),
+            _ => panic!("Expected Int32(Some(42))"),
+        }
+
+        let long_field = fields.iter().find(|f| f.name == "longField").unwrap();
+        match &long_field.value {
+            DataType::Int64(Some(n)) => assert_eq!(*n, 9_223_372_036_854_775_807),
+            _ => panic!("Expected Int64(Some(9223372036854775807))"),
+        }
+
+        let double_field = fields.iter().find(|f| f.name == "doubleField").unwrap();
+        match &double_field.value {
+            DataType::Double(Some(f)) => assert!((*f - 42.5).abs() < f64::EPSILON),
+            _ => panic!("Expected Double(Some(42.5))"),
+        }
+
+        let bool_field = fields.iter().find(|f| f.name == "boolField").unwrap();
+        match &bool_field.value {
+            DataType::Boolean(Some(b)) => assert!(*b),
+            _ => panic!("Expected Boolean(Some(true))"),
+        }
+
+        let date_field = fields.iter().find(|f| f.name == "dateField").unwrap();
+        match &date_field.value {
+            DataType::Timestamp(Some(s)) => assert_eq!(s, "2026-01-30T12:00:00Z"),
+            _ => panic!("Expected Timestamp(Some(\"2026-01-30T12:00:00Z\"))"),
+        }
+
+        let binary_field = fields.iter().find(|f| f.name == "binaryField").unwrap();
+        match &binary_field.value {
+            DataType::Binary(Some(data)) => assert_eq!(data, b"Hello World"),
+            _ => panic!("Expected Binary(Some(b\"Hello World\"))"),
+        }
+
+        let guid_field = fields.iter().find(|f| f.name == "guidField").unwrap();
+        match &guid_field.value {
+            DataType::Str(Some(s)) => assert_eq!(s, "123e4567-e89b-12d3-a456-426614174000"),
+            _ => panic!("Expected Str(Some(\"123e4567-e89b-12d3-a456-426614174000\"))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_rows() {
+        let json = serde_json::json!({
+            "value": [
+                {
+                    "odata.etag": "etag1",
+                    "PartitionKey": "p1",
+                    "RowKey": "r1",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "name": "Alice",
+                    "name@odata.type": "Edm.String",
+                    "age": 30,
+                    "age@odata.type": "Edm.Int32"
+                },
+                {
+                    "odata.etag": "etag2",
+                    "PartitionKey": "p1",
+                    "RowKey": "r2",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "name": "Bob",
+                    "name@odata.type": "Edm.String",
+                    "age": 25,
+                    "age@odata.type": "Edm.Int32"
+                }
+            ]
+        });
+
+        let result = parse(&json).unwrap();
+        assert_eq!(result.len(), 2);
+        
+        assert_eq!(result[0].index, "etag1");
+        assert_eq!(result[0].fields.len(), 2);
+        let name_field = result[0].fields.iter().find(|f| f.name == "name").unwrap();
+        match &name_field.value {
+            DataType::Str(Some(s)) => assert_eq!(s, "Alice"),
+            _ => panic!("Expected Str(Some(\"Alice\"))"),
+        }
+        let age_field = result[0].fields.iter().find(|f| f.name == "age").unwrap();
+        match &age_field.value {
+            DataType::Int32(Some(n)) => assert_eq!(*n, 30),
+            _ => panic!("Expected Int32(Some(30))"),
+        }
+
+        assert_eq!(result[1].index, "etag2");
+        assert_eq!(result[1].fields.len(), 2);
+        let name_field = result[1].fields.iter().find(|f| f.name == "name").unwrap();
+        match &name_field.value {
+            DataType::Str(Some(s)) => assert_eq!(s, "Bob"),
+            _ => panic!("Expected Str(Some(\"Bob\"))"),
+        }
+        let age_field = result[1].fields.iter().find(|f| f.name == "age").unwrap();
+        match &age_field.value {
+            DataType::Int32(Some(n)) => assert_eq!(*n, 25),
+            _ => panic!("Expected Int32(Some(25))"),
+        }
+    }
+
+    #[test]
+    fn test_parse_missing_odata_type() {
+        let json = serde_json::json!({
+            "value": [
+                {
+                    "odata.etag": "etag1",
+                    "PartitionKey": "p1",
+                    "RowKey": "r1",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "name": "John Doe"
+                    // Missing name@odata.type
+                }
+            ]
+        });
+
+        let result = parse(&json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("missing @odata.type"));
+    }
+
+    #[test]
+    fn test_parse_skips_system_fields() {
+        let json = serde_json::json!({
+            "value": [
+                {
+                    "odata.etag": "etag1",
+                    "odata.metadata": "https://example.table.core.windows.net/$metadata#table",
+                    "PartitionKey": "partition1",
+                    "RowKey": "row1",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "customField": "value",
+                    "customField@odata.type": "Edm.String"
+                }
+            ]
+        });
+
+        let result = parse(&json).unwrap();
+        assert_eq!(result.len(), 1);
+        // Should only have customField, not PartitionKey, RowKey, Timestamp, or other odata fields
+        assert_eq!(result[0].fields.len(), 1);
+        assert_eq!(result[0].fields[0].name, "customField");
+    }
+
+    #[test]
+    fn test_parse_int32_out_of_range() {
+        let json = serde_json::json!({
+            "value": [
+                {
+                    "odata.etag": "etag1",
+                    "PartitionKey": "p1",
+                    "RowKey": "r1",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "largeInt": 9_223_372_036_854_775_807_i64,
+                    "largeInt@odata.type": "Edm.Int32"
+                }
+            ]
+        });
+
+        let result = parse(&json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of range"));
+    }
+
+    #[test]
+    fn test_parse_unsupported_data_type() {
+        let json = serde_json::json!({
+            "value": [
+                {
+                    "odata.etag": "etag1",
+                    "PartitionKey": "p1",
+                    "RowKey": "r1",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "unknownField": "value",
+                    "unknownField@odata.type": "Edm.Unsupported"
+                }
+            ]
+        });
+
+        let result = parse(&json);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unsupported data type"));
+    }
+
+    #[test]
+    fn test_parse_null_values() {
+        let json = serde_json::json!({
+            "value": [
+                {
+                    "odata.etag": "etag1",
+                    "PartitionKey": "p1",
+                    "RowKey": "r1",
+                    "Timestamp": "2026-01-30T12:00:00Z",
+                    "nullString": null,
+                    "nullString@odata.type": "Edm.String",
+                    "nullInt": null,
+                    "nullInt@odata.type": "Edm.Int32"
+                }
+            ]
+        });
+
+        let result = parse(&json).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].fields.len(), 2);
+        
+        let null_string = result[0].fields.iter().find(|f| f.name == "nullString").unwrap();
+        match &null_string.value {
+            DataType::Str(None) => {},
+            _ => panic!("Expected Str(None), got: {:?}", null_string.value),
+        }
+        
+        let null_int = result[0].fields.iter().find(|f| f.name == "nullInt").unwrap();
+        match &null_int.value {
+            DataType::Int32(None) => {},
+            _ => panic!("Expected Int32(None), got: {:?}", null_int.value),
+        }
+    }
 }
