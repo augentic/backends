@@ -2,7 +2,7 @@
 
 //! Azure Table client for Qwasr WASM runtime.
 
-mod sql;
+pub mod sql;
 
 use std::fmt::Debug;
 

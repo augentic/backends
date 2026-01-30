@@ -1378,6 +1378,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1503,6 +1509,19 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
  "pin-project-lite",
+]
+
+[[package]]
+name = "examples"
+version = "0.22.0"
+dependencies = [
+ "dotenvy",
+ "qwasr",
+ "qwasr-azure-table",
+ "qwasr-wasi-sql",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

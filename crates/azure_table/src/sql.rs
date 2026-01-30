@@ -57,7 +57,8 @@ impl Connection for AzTableConnection {
                 .await
                 .map_err(|e| anyhow!("HTTP request error: {e}"))?;
             if !response.status().is_success() {
-                bail!("Azure Table query failed with status: {}", response.status());
+                bail!("Azure Table query failed: {}", response.error_for_status()
+                    .err().map_or_else(|| "unknown error".to_string(), |e| e.to_string()));
             }
             let body: Value =
                 response.json().await.map_err(|e| anyhow!("Failed to parse response JSON: {e}"))?;
@@ -96,18 +97,19 @@ fn parse(val: &Value) -> anyhow::Result<Vec<Row>> {
             let mut fields = Vec::new();
             if let Some(obj) = entry.as_object() {
                 for (k, v) in obj {
-                    // If the key is "odata.etag" use the value as the row index.
-                    if k == "odata.etag"
-                        && let Some(s) = v.as_str()
-                    {
-                        index = s.to_string();
-                    }
-                    // If the key is any other odata property, skip it.
+                    // If the key is an odata property, skip it.
                     if k.starts_with("odata.") {
                         continue;
                     }
-                    // If the key is a system one, skip it.
-                    if k == "PartitionKey" || k == "RowKey" || k == "Timestamp" {
+                    // If the key is `RowKey`, use it as the row index.
+                    if k == "RowKey" {
+                        if let Some(s) = v.as_str() {
+                            index = s.to_string();
+                        }
+                        continue;
+                    }
+                    // If the key is another system one, skip it.
+                    if k == "PartitionKey" || k == "Timestamp" {
                         continue;
                     }
                     // If the key contains "@odata.type", skip it (but we will
@@ -173,7 +175,7 @@ fn convert(value: &Value, data_type: &str) -> anyhow::Result<DataType> {
 }
 
 #[derive(Debug)]
-pub struct QueryPhrases {
+struct QueryPhrases {
     select: Option<String>,
     filter: Option<String>,
     top: Option<u32>,
@@ -647,7 +649,7 @@ mod tests {
 
         let result = parse(&json).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].index, "W/\"0x5B168C7B6E589D2\"");
+        assert_eq!(result[0].index, "row1");
         assert_eq!(result[0].fields.len(), 1);
         assert_eq!(result[0].fields[0].name, "Name");
         match &result[0].fields[0].value {
@@ -771,7 +773,7 @@ mod tests {
         let result = parse(&json).unwrap();
         assert_eq!(result.len(), 2);
         
-        assert_eq!(result[0].index, "etag1");
+        assert_eq!(result[0].index, "r1");
         assert_eq!(result[0].fields.len(), 2);
         let name_field = result[0].fields.iter().find(|f| f.name == "name").unwrap();
         match &name_field.value {
@@ -784,7 +786,7 @@ mod tests {
             _ => panic!("Expected Int32(Some(30))"),
         }
 
-        assert_eq!(result[1].index, "etag2");
+        assert_eq!(result[1].index, "r2");
         assert_eq!(result[1].fields.len(), 2);
         let name_field = result[1].fields.iter().find(|f| f.name == "name").unwrap();
         match &name_field.value {

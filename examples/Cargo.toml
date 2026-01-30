@@ -1,0 +1,19 @@
+[package]
+name = "examples"
+publish = false
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[[example]]
+name = "azure_table"
+path = "azure_table/main.rs"
+
+[dependencies]
+dotenvy = "0.15.7"
+qwasr.workspace = true
+qwasr-azure-table = { path = "../crates/azure_table" }
+qwasr-wasi-sql.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = "0.3.22"
