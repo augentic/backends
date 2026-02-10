@@ -37,8 +37,8 @@ impl Connection for AzTableConnection {
     fn query(&self, query: String, params: Vec<DataType>) -> FutureResult<Vec<Row>> {
         tracing::debug!("query: {query}, params: {params:?}");
         let uri = format!("https://{}.table.core.windows.net/{}()", self.config.name, self.table);
-        let now = chrono::Utc::now().to_rfc2822();
-        let resource_path = format!("/{}/{}", self.config.name, self.table);
+        let now = chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
+        let resource_path = format!("/{}/{}()", self.config.name, self.table);
         let client = self.http_client.clone();
         let account_name = self.config.name.clone();
         let account_key = self.config.key.clone();
@@ -89,6 +89,20 @@ fn auth_header(
     Ok(format!("SharedKeyLite {account_name}:{encoded}"))
 }
 
+fn infer_data_type(value: &Value) -> &'static str {
+    match value {
+        Value::Bool(_) => "Edm.Boolean",
+        Value::Number(n) => {
+            if n.is_f64() {
+                "Edm.Double"
+            } else {
+                "Edm.Int32"
+            }
+        }
+        _ => "Edm.String", // fallback for null, array, object, etc.
+    }
+}
+
 fn parse(val: &Value) -> anyhow::Result<Vec<Row>> {
     let mut rows = Vec::new();
     if let Some(entries) = val.get("value").and_then(|v| v.as_array()) {
@@ -120,9 +134,10 @@ fn parse(val: &Value) -> anyhow::Result<Vec<Row>> {
                     }
                     // Find the corresponding "@odata.type" key if it exists.
                     let type_key = format!("{k}@odata.type");
-                    let Some(data_type) = obj.get(&type_key).and_then(|t| t.as_str()) else {
-                        bail!("missing @odata.type for key {k}");
-                    };
+                    let data_type = obj
+                        .get(&type_key)
+                        .and_then(|t| t.as_str())
+                        .unwrap_or_else(|| infer_data_type(v));
                     let value = convert(v, data_type)?;
                     fields.push(Field {
                         name: k.clone(),

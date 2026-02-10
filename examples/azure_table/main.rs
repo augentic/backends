@@ -14,7 +14,7 @@ pub async fn main() {
     dotenv().expect("Failed to load .env file");
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
-    println!("Sample Azure Table Storage backend.");
+    tracing::debug!("Sample Azure Table Storage backend.");
 
     let account_name =
         env::var("AZURE_STORAGE_ACCOUNT").expect("Set AZURE_STORAGE_ACCOUNT env variable");
@@ -31,6 +31,6 @@ pub async fn main() {
     let query = "SELECT * from testAugenticBE".to_string();
     let rows = cnn.query(query, Vec::new()).await.expect("Query execution failed");
     for row in rows {
-        println!("{row:?}");
+        tracing::debug!("{row:?}");
     }
 }
