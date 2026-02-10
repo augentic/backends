@@ -3,7 +3,7 @@ use std::env;
 use dotenvy::dotenv;
 use qwasr::Backend;
 use qwasr_azure_table::{Client, ConnectOptions};
-use qwasr_wasi_sql::WasiSqlCtx;
+use qwasr_wasi_sql::{DataType, WasiSqlCtx};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
@@ -30,6 +30,15 @@ pub async fn main() {
     let cnn = client.open("testAugenticBE".to_string()).await.expect("Failed configure connection");
     let query = "SELECT * from testAugenticBE".to_string();
     let rows = cnn.query(query, Vec::new()).await.expect("Query execution failed");
+    tracing::debug!("All rows:");
+    for row in rows {
+        tracing::debug!("{row:?}");
+    }
+
+    let query = "SELECT TOP 1 * FROM testAugenticBE WHERE IsActive = $1".to_string();
+    let params = vec![DataType::Boolean(Some(true))];
+    let rows = cnn.query(query, params).await.expect("Query execution failed");
+    tracing::debug!("First active row:");
     for row in rows {
         tracing::debug!("{row:?}");
     }
