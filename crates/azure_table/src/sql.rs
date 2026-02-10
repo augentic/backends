@@ -57,8 +57,13 @@ impl Connection for AzTableConnection {
                 .await
                 .map_err(|e| anyhow!("HTTP request error: {e}"))?;
             if !response.status().is_success() {
-                bail!("Azure Table query failed: {}", response.error_for_status()
-                    .err().map_or_else(|| "unknown error".to_string(), |e| e.to_string()));
+                bail!(
+                    "Azure Table query failed: {}",
+                    response
+                        .error_for_status()
+                        .err()
+                        .map_or_else(|| "unknown error".to_string(), |e| e.to_string())
+                );
             }
             let body: Value =
                 response.json().await.map_err(|e| anyhow!("Failed to parse response JSON: {e}"))?;
@@ -708,7 +713,7 @@ mod tests {
 
         // Check each field by finding it by name (order not guaranteed)
         let fields = &result[0].fields;
-        
+
         let string_field = fields.iter().find(|f| f.name == "stringField").unwrap();
         match &string_field.value {
             DataType::Str(Some(s)) => assert_eq!(s, "test"),
@@ -787,7 +792,7 @@ mod tests {
 
         let result = parse(&json).unwrap();
         assert_eq!(result.len(), 2);
-        
+
         assert_eq!(result[0].index, "r1");
         assert_eq!(result[0].fields.len(), 2);
         let name_field = result[0].fields.iter().find(|f| f.name == "name").unwrap();
@@ -824,15 +829,44 @@ mod tests {
                     "PartitionKey": "p1",
                     "RowKey": "r1",
                     "Timestamp": "2026-01-30T12:00:00Z",
-                    "name": "John Doe"
-                    // Missing name@odata.type
+                    "stringField": "John Doe",
+                    "intField": 42,
+                    "doubleField": 3.94,
+                    "boolField": true
+                    // All missing @odata.type - should be inferred
                 }
             ]
         });
 
-        let result = parse(&json);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("missing @odata.type"));
+        let result = parse(&json).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].fields.len(), 4);
+
+        let fields = &result[0].fields;
+
+        let string_field = fields.iter().find(|f| f.name == "stringField").unwrap();
+        match &string_field.value {
+            DataType::Str(Some(s)) => assert_eq!(s, "John Doe"),
+            _ => panic!("Expected Str(Some(\"John Doe\"))"),
+        }
+
+        let int_field = fields.iter().find(|f| f.name == "intField").unwrap();
+        match &int_field.value {
+            DataType::Int32(Some(n)) => assert_eq!(*n, 42),
+            _ => panic!("Expected Int32(Some(42))"),
+        }
+
+        let double_field = fields.iter().find(|f| f.name == "doubleField").unwrap();
+        match &double_field.value {
+            DataType::Double(Some(f)) => assert!((*f - 3.94).abs() < f64::EPSILON),
+            _ => panic!("Expected Double(Some(3.14))"),
+        }
+
+        let bool_field = fields.iter().find(|f| f.name == "boolField").unwrap();
+        match &bool_field.value {
+            DataType::Boolean(Some(b)) => assert!(*b),
+            _ => panic!("Expected Boolean(Some(true))"),
+        }
     }
 
     #[test]
@@ -918,16 +952,16 @@ mod tests {
         let result = parse(&json).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].fields.len(), 2);
-        
+
         let null_string = result[0].fields.iter().find(|f| f.name == "nullString").unwrap();
         match &null_string.value {
-            DataType::Str(None) => {},
+            DataType::Str(None) => {}
             _ => panic!("Expected Str(None), got: {:?}", null_string.value),
         }
-        
+
         let null_int = result[0].fields.iter().find(|f| f.name == "nullInt").unwrap();
         match &null_int.value {
-            DataType::Int32(None) => {},
+            DataType::Int32(None) => {}
             _ => panic!("Expected Int32(None), got: {:?}", null_int.value),
         }
     }
