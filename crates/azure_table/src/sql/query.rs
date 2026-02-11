@@ -1,11 +1,11 @@
 //! Functions and types to support read queries against Azure Table Storage.
 
 use anyhow::{anyhow, bail};
-
-use super::sql_to_odata_filter;
 use base64ct::{Base64, Encoding};
 use qwasr_wasi_sql::{DataType, Field, Row};
 use serde_json::Value;
+
+use super::sql_to_odata_filter;
 
 fn infer_data_type(value: &Value) -> &'static str {
     match value {
@@ -297,7 +297,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simple_select() {
+    fn simple_select() {
         let query = "SELECT * FROM users";
         let result = QueryPhrases::query(query, &[]).unwrap();
 
@@ -307,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_with_columns() {
+    fn select_with_columns() {
         let query = "SELECT id, name, email FROM users";
         let result = QueryPhrases::query(query, &[]).unwrap();
 
@@ -317,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_with_where() {
+    fn select_with_where() {
         let query = "SELECT * FROM users WHERE age > 18";
         let result = QueryPhrases::query(query, &[]).unwrap();
 
@@ -327,7 +327,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_with_top() {
+    fn select_with_top() {
         let query = "SELECT TOP 10 * FROM users";
         let result = QueryPhrases::query(query, &[]).unwrap();
 
@@ -337,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_with_top_and_where() {
+    fn select_with_top_and_where() {
         let query = "SELECT TOP 5 name, email FROM users WHERE active = true";
         let result = QueryPhrases::query(query, &[]).unwrap();
 
@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parameterized_query_with_int() {
+    fn parameterized_query_with_int() {
         let query = "SELECT * FROM users WHERE id = $1";
         let params = vec![DataType::Int32(Some(42))];
         let result = QueryPhrases::query(query, &params).unwrap();
@@ -358,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parameterized_query_with_string() {
+    fn parameterized_query_with_string() {
         let query = "SELECT * FROM users WHERE name = $1";
         let params = vec![DataType::Str(Some("John O'Brien".to_string()))];
         let result = QueryPhrases::query(query, &params).unwrap();
@@ -369,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parameterized_query_multiple_params() {
+    fn parameterized_query_multiple_params() {
         let query = "SELECT * FROM users WHERE age > $1 AND name = $2";
         let params = vec![DataType::Int32(Some(18)), DataType::Str(Some("Alice".to_string()))];
         let result = QueryPhrases::query(query, &params).unwrap();
@@ -380,7 +380,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parameterized_query_with_null() {
+    fn parameterized_query_with_null() {
         let query = "SELECT * FROM users WHERE email = $1";
         let params = vec![DataType::Str(None)];
         let result = QueryPhrases::query(query, &params).unwrap();
@@ -391,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parameterized_query_with_boolean() {
+    fn parameterized_query_with_boolean() {
         let query = "SELECT * FROM users WHERE active = $1";
         let params = vec![DataType::Boolean(Some(true))];
         let result = QueryPhrases::query(query, &params).unwrap();
@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parameterized_query_with_float() {
+    fn parameterized_query_with_float() {
         let query = "SELECT * FROM products WHERE price > $1";
         let params = vec![DataType::Double(Some(99.99))];
         let result = QueryPhrases::query(query, &params).unwrap();
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parameterized_query_with_date() {
+    fn parameterized_query_with_date() {
         let query = "SELECT * FROM events WHERE created_at > $1";
         let params = vec![DataType::Date(Some("2026-01-29".to_string()))];
         let result = QueryPhrases::query(query, &params).unwrap();
@@ -424,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn test_join_returns_error() {
+    fn join_returns_error() {
         let query = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
         let result = QueryPhrases::query(query, &[]);
 
@@ -433,7 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn test_order_by_returns_error() {
+    fn order_by_returns_error() {
         let query = "SELECT * FROM users ORDER BY name";
         let result = QueryPhrases::query(query, &[]);
 
@@ -442,7 +442,7 @@ mod tests {
     }
 
     #[test]
-    fn test_binary_parameter_returns_error() {
+    fn binary_parameter_returns_error() {
         let query = "SELECT * FROM files WHERE data = $1";
         let params = vec![DataType::Binary(Some(vec![1, 2, 3]))];
         let result = QueryPhrases::query(query, &params);
@@ -455,7 +455,7 @@ mod tests {
     }
 
     #[test]
-    fn test_complex_where_clause() {
+    fn complex_where_clause() {
         let query = "SELECT name, age FROM users WHERE age >= $1 AND (status = $2 OR role = $3)";
         let params = vec![
             DataType::Int32(Some(21)),
@@ -473,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn test_case_insensitive_keywords() {
+    fn case_insensitive_keywords() {
         let query = "select * from users where id = $1";
         let params = vec![DataType::Int32(Some(1))];
         let result = QueryPhrases::query(query, &params).unwrap();
@@ -484,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn test_all_numeric_types() {
+    fn all_numeric_types() {
         let query = "SELECT * FROM data WHERE i32 = $1 AND i64 = $2 AND u32 = $3 AND u64 = $4 AND f32 = $5 AND f64 = $6";
         let params = vec![
             DataType::Int32(Some(100)),
@@ -500,7 +500,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_odata_simple() {
+    fn to_odata_simple() {
         let phrases = QueryPhrases {
             select: Some("*".to_string()),
             filter: Some("age > 18".to_string()),
@@ -514,7 +514,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_odata_with_select() {
+    fn to_odata_with_select() {
         let phrases = QueryPhrases {
             select: Some("name, email, age".to_string()),
             filter: None,
@@ -526,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_odata_complex_filter() {
+    fn to_odata_complex_filter() {
         let phrases = QueryPhrases {
             select: Some("name, age".to_string()),
             filter: Some("age >= 21 AND (status = 'active' OR role = 'admin')".to_string()),
@@ -541,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_odata_all_operators() {
+    fn to_odata_all_operators() {
         let phrases = QueryPhrases {
             select: None,
             filter: Some("a = 1 AND b != 2 AND c > 3 AND d >= 4 AND e < 5 AND f <= 6".to_string()),
@@ -556,7 +556,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_odata_url_encoding() {
+    fn to_odata_url_encoding() {
         let phrases = QueryPhrases {
             select: None,
             filter: Some("name = 'John O''Brien'".to_string()),
@@ -568,7 +568,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_empty_response() {
+    fn parse_empty_response() {
         let json = serde_json::json!({
             "value": []
         });
@@ -577,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_single_row_with_string() {
+    fn parse_single_row_with_string() {
         let json = serde_json::json!({
             "value": [
                 {
@@ -603,7 +603,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_multiple_data_types() {
+    fn parse_multiple_data_types() {
         let json = serde_json::json!({
             "value": [
                 {
@@ -688,7 +688,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_multiple_rows() {
+    fn parse_multiple_rows() {
         let json = serde_json::json!({
             "value": [
                 {
@@ -745,7 +745,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_missing_odata_type() {
+    fn parse_missing_odata_type() {
         let json = serde_json::json!({
             "value": [
                 {
@@ -794,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_skips_system_fields() {
+    fn parse_skips_system_fields() {
         let json = serde_json::json!({
             "value": [
                 {
@@ -817,7 +817,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_int32_out_of_range() {
+    fn parse_int32_out_of_range() {
         let json = serde_json::json!({
             "value": [
                 {
@@ -837,7 +837,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_unsupported_data_type() {
+    fn parse_unsupported_data_type() {
         let json = serde_json::json!({
             "value": [
                 {
@@ -857,7 +857,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_null_values() {
+    fn parse_null_values() {
         let json = serde_json::json!({
             "value": [
                 {

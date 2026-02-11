@@ -2,23 +2,21 @@
 
 mod exec;
 mod query;
-use query::QueryPhrases;
-
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use futures::future::FutureExt;
 use hmac::{Hmac, Mac};
+use query::QueryPhrases;
 use qwasr_wasi_sql::{Connection, DataType, FutureResult, Row, WasiSqlCtx};
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 use sha2::Sha256;
 
-use crate::{
-    Client, ConnectOptions,
-    sql::{exec::{ExecAction, ExecPhrase}, query::{parse, parse_keys}},
-};
+use crate::sql::exec::{ExecAction, ExecPhrase};
+use crate::sql::query::{parse, parse_keys};
+use crate::{Client, ConnectOptions};
 
 impl WasiSqlCtx for Client {
     fn open(&self, name: String) -> FutureResult<Arc<dyn Connection>> {
@@ -85,24 +83,24 @@ impl Connection for AzTableConnection {
         let account_name = self.config.name.clone();
         let account_key = self.config.key.clone();
         let table = self.table.clone();
+        let resource_path = format!("/{account_name}/{table}()");
         let client = self.http_client.clone();
         async move {
             let phrase = ExecPhrase::parse(&query, &params)?;
 
-            let resource_path = match phrase.action {
-                ExecAction::Insert => format!("/{account_name}/{table}"),
+            let (_uri, partition, row) = match &phrase.action {
+                ExecAction::Insert => (format!("https://{account_name}.table.core.windows.net/{table}"), String::new(), String::new()),
                 ExecAction::Update | ExecAction::Delete => {
                     // Use the filter to get the entity to operate on.
-                    let filter = phrase.filter.ok_or_else(|| {
+                    let filter = phrase.filter.clone().ok_or_else(|| {
                         anyhow!("only queries with a WHERE clause are supported for exec")
                     })?;
                     let odata_filter= format!("$filter={filter}");
-                    let uri = format!("https://{account_name}.table.core.windows.net/{table}()?{odata_filter}");
+                    let fetch_uri = format!("https://{account_name}.table.core.windows.net/{table}()?{odata_filter}");
                     let now = chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
-                    let get_resource_path = format!("/{account_name}/{table}()");
-                    let auth = auth_header(&account_name, &account_key, &now, &get_resource_path)?;
+                    let auth = auth_header(&account_name, &account_key, &now, &resource_path)?;
                     let response = client
-                        .get(&uri)
+                        .get(&fetch_uri)
                         .header("x-ms-date", now)
                         .header("x-ms-version", "2026-02-06")
                         .header("Authorization", auth)
@@ -126,8 +124,16 @@ impl Connection for AzTableConnection {
                         bail!("only single-entity operations are supported for exec");
                     }
                     let (partition, row) = &keys[0];
-                    format!("/{account_name}/{table}(PartitionKey='{partition}',RowKey='{row}')")
+                    let uri = format!("https://{account_name}.table.core.windows.net/{table}(PartitionKey='{partition}',RowKey='{row}')");
+                    (uri, partition.clone(), row.clone())
                 }
+            };
+
+            let _body = match &phrase.action {
+                ExecAction::Insert | ExecAction::Update => {
+                    phrase.entity_to_json(&partition, &row)?
+                }
+                ExecAction::Delete => None,
             };
 
             // Only single-entity operations are supported, so we return 1 if
