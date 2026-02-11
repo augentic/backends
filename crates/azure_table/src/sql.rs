@@ -1,5 +1,6 @@
 //! wasi-sql implementation for Azure Table storage
 
+mod exec;
 mod query;
 use query::QueryPhrases;
 
@@ -14,7 +15,10 @@ use reqwest::Client as HttpClient;
 use serde_json::Value;
 use sha2::Sha256;
 
-use crate::{Client, ConnectOptions, sql::query::parse};
+use crate::{
+    Client, ConnectOptions,
+    sql::{exec::{ExecAction, ExecPhrase}, query::{parse, parse_keys}},
+};
 
 impl WasiSqlCtx for Client {
     fn open(&self, name: String) -> FutureResult<Arc<dyn Connection>> {
@@ -77,7 +81,60 @@ impl Connection for AzTableConnection {
 
     fn exec(&self, query: String, params: Vec<DataType>) -> FutureResult<u32> {
         tracing::debug!("exec: {query}, params: {params:?}");
-        todo!()
+        // Copy self fields for use in async block
+        let account_name = self.config.name.clone();
+        let account_key = self.config.key.clone();
+        let table = self.table.clone();
+        let client = self.http_client.clone();
+        async move {
+            let phrase = ExecPhrase::parse(&query, &params)?;
+
+            let resource_path = match phrase.action {
+                ExecAction::Insert => format!("/{account_name}/{table}"),
+                ExecAction::Update | ExecAction::Delete => {
+                    // Use the filter to get the entity to operate on.
+                    let filter = phrase.filter.ok_or_else(|| {
+                        anyhow!("only queries with a WHERE clause are supported for exec")
+                    })?;
+                    let odata_filter= format!("$filter={filter}");
+                    let uri = format!("https://{account_name}.table.core.windows.net/{table}()?{odata_filter}");
+                    let now = chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
+                    let get_resource_path = format!("/{account_name}/{table}()");
+                    let auth = auth_header(&account_name, &account_key, &now, &get_resource_path)?;
+                    let response = client
+                        .get(&uri)
+                        .header("x-ms-date", now)
+                        .header("x-ms-version", "2026-02-06")
+                        .header("Authorization", auth)
+                        .header("Accept", "application/json;odata=fullmetadata")
+                        .send()
+                        .await
+                        .map_err(|e| anyhow!("HTTP request error: {e}"))?;
+                    if !response.status().is_success() {
+                        bail!(
+                            "Azure Table query failed: {}",
+                            response
+                                .error_for_status()
+                                .err()
+                                .map_or_else(|| "unknown error".to_string(), |e| e.to_string())
+                        );
+                    }
+                    let body: Value =
+                        response.json().await.map_err(|e| anyhow!("Failed to parse response JSON: {e}"))?;
+                    let keys = parse_keys(&body)?;
+                    if keys.len() != 1 {
+                        bail!("only single-entity operations are supported for exec");
+                    }
+                    let (partition, row) = &keys[0];
+                    format!("/{account_name}/{table}(PartitionKey='{partition}',RowKey='{row}')")
+                }
+            };
+
+            // Only single-entity operations are supported, so we return 1 if
+            // the query is valid.
+            Ok(1)
+        }
+        .boxed()
     }
 }
 
@@ -97,3 +154,19 @@ fn auth_header(
     Ok(format!("SharedKeyLite {account_name}:{encoded}"))
 }
 
+/// Convert SQL filter operators to `OData` operators.
+fn sql_to_odata_filter(sql_filter: &str) -> String {
+    let filter = sql_filter
+        .replace(" = ", " eq ")
+        .replace(" != ", " ne ")
+        .replace(" <> ", " ne ")
+        .replace(" > ", " gt ")
+        .replace(" >= ", " ge ")
+        .replace(" < ", " lt ")
+        .replace(" <= ", " le ")
+        .replace(" AND ", " and ")
+        .replace(" OR ", " or ")
+        .replace(" NOT ", " not ");
+    let encoded = urlencoding::encode(&filter);
+    encoded.into_owned()
+}

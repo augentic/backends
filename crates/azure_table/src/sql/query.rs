@@ -1,6 +1,8 @@
 //! Functions and types to support read queries against Azure Table Storage.
 
 use anyhow::{anyhow, bail};
+
+use super::sql_to_odata_filter;
 use base64ct::{Base64, Encoding};
 use qwasr_wasi_sql::{DataType, Field, Row};
 use serde_json::Value;
@@ -67,6 +69,26 @@ pub fn parse(val: &Value) -> anyhow::Result<Vec<Row>> {
     Ok(rows)
 }
 
+pub fn parse_keys(val: &Value) -> anyhow::Result<Vec<(String, String)>> {
+    let mut keys = Vec::new();
+    if let Some(entries) = val.get("value").and_then(|v| v.as_array()) {
+        for entry in entries {
+            if let Some(obj) = entry.as_object() {
+                let partition_key = obj
+                    .get("PartitionKey")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing PartitionKey in response"))?;
+                let row_key = obj
+                    .get("RowKey")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("Missing RowKey in response"))?;
+                keys.push((partition_key.to_string(), row_key.to_string()));
+            }
+        }
+    }
+    Ok(keys)
+}
+
 fn from_odata_type(value: &Value, data_type: &str) -> anyhow::Result<DataType> {
     match data_type {
         "Edm.Binary" => {
@@ -123,7 +145,7 @@ impl QueryPhrases {
             bail!("ORDER BY clauses are not supported");
         }
         if !query_upper.contains("SELECT") {
-            bail!("Only SELECT queries are supported");
+            bail!("only SELECT queries are supported");
         }
 
         let mut select = None;
@@ -211,20 +233,8 @@ impl QueryPhrases {
 
         if let Some(filter) = &self.filter {
             // Convert SQL operators to OData operators
-            let odata_filter = filter
-                .replace(" = ", " eq ")
-                .replace(" != ", " ne ")
-                .replace(" <> ", " ne ")
-                .replace(" > ", " gt ")
-                .replace(" >= ", " ge ")
-                .replace(" < ", " lt ")
-                .replace(" <= ", " le ")
-                .replace(" AND ", " and ")
-                .replace(" OR ", " or ")
-                .replace(" NOT ", " not ");
-
-            let encoded = urlencoding::encode(&odata_filter);
-            clauses.push(format!("$filter={encoded}"));
+            let odata_filter = sql_to_odata_filter(filter);
+            clauses.push(format!("$filter={odata_filter}"));
         }
 
         if let Some(top) = self.top {
