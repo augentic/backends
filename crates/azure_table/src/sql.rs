@@ -88,7 +88,7 @@ impl Connection for AzTableConnection {
         async move {
             let phrase = ExecPhrase::parse(&query, &params)?;
 
-            let (_uri, partition, row) = match &phrase.action {
+            let (uri, partition, row) = match &phrase.action {
                 ExecAction::Insert => (format!("https://{account_name}.table.core.windows.net/{table}"), String::new(), String::new()),
                 ExecAction::Update | ExecAction::Delete => {
                     // Use the filter to get the entity to operate on.
@@ -107,10 +107,10 @@ impl Connection for AzTableConnection {
                         .header("Accept", "application/json;odata=fullmetadata")
                         .send()
                         .await
-                        .map_err(|e| anyhow!("HTTP request error: {e}"))?;
+                        .map_err(|e| anyhow!("HTTP request error on pre-fetch: {e}"))?;
                     if !response.status().is_success() {
                         bail!(
-                            "Azure Table query failed: {}",
+                            "Azure Table query failed on pre-fetch: {}",
                             response
                                 .error_for_status()
                                 .err()
@@ -129,13 +129,50 @@ impl Connection for AzTableConnection {
                 }
             };
 
-            let _body = match &phrase.action {
-                ExecAction::Insert | ExecAction::Update => {
-                    phrase.entity_to_json(&partition, &row)?
+            let now = chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
+            let response = match &phrase.action {
+                ExecAction::Insert => {
+                    client.post(&uri)
+                        .header("x-ms-date", &now)
+                        .header("x-ms-version", "2026-02-06")
+                        .header("Authorization", auth_header(&account_name, &account_key, &now, &resource_path)?)
+                        .header("Accept", "application/json;odata=fullmetadata")
+                        .json(&phrase.entity_to_json(&partition, &row)?)
+                        .send()
+                        .await
+                        .map_err(|e| anyhow!("HTTP request error: {e}"))?
                 }
-                ExecAction::Delete => None,
+                ExecAction::Update => {
+                    client.put(&uri)
+                        .header("x-ms-date", &now)
+                        .header("x-ms-version", "2026-02-06")
+                        .header("Authorization", auth_header(&account_name, &account_key, &now, &resource_path)?)
+                        .header("Accept", "application/json;odata=fullmetadata")
+                        .json(&phrase.entity_to_json(&partition, &row)?)
+                        .send()
+                        .await
+                        .map_err(|e| anyhow!("HTTP request error: {e}"))?
+                }
+                ExecAction::Delete => {
+                    client.delete(&uri)
+                        .header("x-ms-date", &now)
+                        .header("x-ms-version", "2026-02-06")
+                        .header("Authorization", auth_header(&account_name, &account_key, &now, &resource_path)?)
+                        .header("Accept", "application/json;odata=fullmetadata")
+                        .send()
+                        .await
+                        .map_err(|e| anyhow!("HTTP request error: {e}"))?
+                }
             };
-
+            if !response.status().is_success() {
+                bail!(
+                    "Azure Table exec failed: {}",
+                    response
+                        .error_for_status()
+                        .err()
+                        .map_or_else(|| "unknown error".to_string(), |e| e.to_string())
+                );
+            }
             // Only single-entity operations are supported, so we return 1 if
             // the query is valid.
             Ok(1)
