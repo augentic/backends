@@ -37,28 +37,10 @@ impl ExecPhrase {
         };
 
         // Parse fields based on action, using original parameter types
-        let entity = match action {
+        let (entity, partition, row) = match action {
             ExecAction::Insert => Self::parse_insert(query, params)?,
             ExecAction::Update => Self::parse_update(query, params)?,
             ExecAction::Delete => Self::parse_delete(query, params)?,
-        };
-
-        // We only support queries that operate on a single entity defined by
-        // PartitionKey and RowKey, so extract those from the fields.
-        let partition = entity.iter().find(|f| f.name == "PartitionKey").ok_or_else(|| {
-            anyhow!("query must include a PartitionKey field for Azure Table Storage")
-        })?;
-        let partition = match &partition.value {
-            DataType::Str(Some(s)) => s.clone(),
-            _ => bail!("PartitionKey field must be a non-null string"),
-        };
-        let row = entity
-            .iter()
-            .find(|f| f.name == "RowKey")
-            .ok_or_else(|| anyhow!("query must include a RowKey field for Azure Table Storage"))?;
-        let row = match &row.value {
-            DataType::Str(Some(s)) => s.clone(),
-            _ => bail!("RowKey field must be a non-null string"),
         };
 
         Ok(Self {
@@ -69,7 +51,9 @@ impl ExecPhrase {
         })
     }
 
-    fn parse_insert(query: &str, params: &[DataType]) -> anyhow::Result<Vec<Field>> {
+    fn parse_insert(
+        query: &str, params: &[DataType],
+    ) -> anyhow::Result<(Vec<Field>, String, String)> {
         // Parse INSERT INTO table (col1, col2) VALUES ($1, $2)
         let query_upper = query.to_uppercase();
 
@@ -111,10 +95,15 @@ impl ExecPhrase {
             });
         }
 
-        Ok(fields)
+        // Extract PartitionKey and RowKey
+        let (partition, row) = Self::extract_partition_and_row_keys(&fields, "INSERT")?;
+
+        Ok((fields, partition, row))
     }
 
-    fn parse_update(query: &str, params: &[DataType]) -> anyhow::Result<Vec<Field>> {
+    fn parse_update(
+        query: &str, params: &[DataType],
+    ) -> anyhow::Result<(Vec<Field>, String, String)> {
         // Parse UPDATE table SET col1 = $1, col2 = $2 WHERE ...
         let query_upper = query.to_uppercase();
 
@@ -158,66 +147,51 @@ impl ExecPhrase {
             }
         }
 
-        Ok(fields)
+        // Parse WHERE clause to extract PartitionKey and RowKey
+        if !query_upper.contains(" WHERE ") {
+            bail!("UPDATE query must have a WHERE clause to specify the entity to update");
+        }
+        let where_fields = Self::parse_where_clause(query, &query_upper, params)?;
+        if where_fields.is_empty() {
+            bail!(
+                "UPDATE query must have a non-empty WHERE clause to specify the entity to update"
+            );
+        }
+
+        // Validate WHERE clause only contains PartitionKey and RowKey
+        Self::validate_where_clause_simple(&where_fields, "UPDATE")?;
+
+        // Extract PartitionKey and RowKey
+        let (partition, row) = Self::extract_partition_and_row_keys(&where_fields, "UPDATE")?;
+
+        Ok((fields, partition, row))
     }
 
-    fn parse_delete(query: &str, params: &[DataType]) -> anyhow::Result<Vec<Field>> {
+    fn parse_delete(
+        query: &str, params: &[DataType],
+    ) -> anyhow::Result<(Vec<Field>, String, String)> {
         // DELETE queries don't really need entity fields but we parse the
         // WHERE clause to extract the PartitionKey and RowKey.
         let query_upper = query.to_uppercase();
-        let mut fields = Vec::new();
 
-        if let Some(where_pos) = query_upper.find(" WHERE ") {
-            let filter_str = query_upper[where_pos + 7..].trim();
-            if filter_str.is_empty() {
-                bail!(
-                    "DELETE query must have a non-empty WHERE clause to specify the entity to delete"
-                );
-            }
-            // Parse the WHERE clause for column = $N conditions
-            for part in filter_str.split(" AND ") {
-                let part = part.trim();
-                // Parse column = $N
-                let eq_parts: Vec<&str> = part.split('=').map(str::trim).collect();
-                if eq_parts.len() == 2 {
-                    let col_name = eq_parts[0].to_string();
-                    let value_part = eq_parts[1];
-
-                    // Check if it's a parameter placeholder
-                    if let Some(param_idx) = Self::parse_param_placeholder(value_part) {
-                        if param_idx >= params.len() {
-                            bail!(
-                                "Parameter ${} referenced but only {} parameters provided",
-                                param_idx + 1,
-                                params.len()
-                            );
-                        }
-                        fields.push(Field {
-                            name: col_name,
-                            value: params[param_idx].clone(),
-                        });
-                    }
-                }
-            }
+        // Parse WHERE clause to extract PartitionKey and RowKey
+        if !query_upper.contains(" WHERE ") {
+            bail!("DELETE query must have a WHERE clause to specify the entity to delete");
         }
-
-        // It's possible the WHERE clause contains other conditions besides
-        // PartitionKey and RowKey we could just ignore those, but this might
-        // lead to unexpected behaviour by the guest. So we impose the check:
-        let has_partition = fields.iter().any(|f| f.name == "PartitionKey");
-        let has_row = fields.iter().any(|f| f.name == "RowKey");
-        if !has_partition || !has_row {
+        let where_fields = Self::parse_where_clause(query, &query_upper, params)?;
+        if where_fields.is_empty() {
             bail!(
-                "DELETE query must specify PartitionKey and RowKey in the WHERE clause to identify the entity to delete"
-            );
-        }
-        if fields.len() > 2 {
-            bail!(
-                "DELETE query has unsupported conditions in WHERE clause - only PartitionKey and RowKey equality conditions are supported"
+                "DELETE query must have a non-empty WHERE clause to specify the entity to delete"
             );
         }
 
-        Ok(fields)
+        // Validate WHERE clause only contains PartitionKey and RowKey
+        Self::validate_where_clause_simple(&where_fields, "DELETE")?;
+
+        // Extract PartitionKey and RowKey
+        let (partition, row) = Self::extract_partition_and_row_keys(&where_fields, "DELETE")?;
+
+        Ok((Vec::new(), partition, row))
     }
 
     fn extract_columns(insert_part: &str) -> anyhow::Result<Vec<String>> {
@@ -267,6 +241,84 @@ impl ExecPhrase {
         s.strip_prefix('$')
             .and_then(|num_str| num_str.parse::<usize>().ok())
             .and_then(|n| n.checked_sub(1))
+    }
+
+    /// Parse WHERE clause and extract fields from column = $N conditions
+    fn parse_where_clause(
+        query: &str, query_upper: &str, params: &[DataType],
+    ) -> anyhow::Result<Vec<Field>> {
+        let mut where_fields = Vec::new();
+
+        if let Some(where_pos) = query_upper.find(" WHERE ") {
+            let filter_str = &query[where_pos + 7..].trim();
+            if filter_str.is_empty() {
+                bail!("WHERE clause cannot be empty");
+            }
+            // Parse the WHERE clause for column = $N conditions
+            for part in filter_str.split(" AND ") {
+                let part = part.trim();
+                // Parse column = $N
+                let eq_parts: Vec<&str> = part.split('=').map(str::trim).collect();
+                if eq_parts.len() == 2 {
+                    let col_name = eq_parts[0].to_string();
+                    let value_part = eq_parts[1];
+
+                    // Check if it's a parameter placeholder
+                    if let Some(param_idx) = Self::parse_param_placeholder(value_part) {
+                        if param_idx >= params.len() {
+                            bail!(
+                                "Parameter ${} referenced but only {} parameters provided",
+                                param_idx + 1,
+                                params.len()
+                            );
+                        }
+                        where_fields.push(Field {
+                            name: col_name,
+                            value: params[param_idx].clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(where_fields)
+    }
+
+    /// Extract and validate `PartitionKey` and `RowKey` from a fields vector
+    fn extract_partition_and_row_keys(
+        fields: &[Field], query_type: &str,
+    ) -> anyhow::Result<(String, String)> {
+        let partition_field = fields
+            .iter()
+            .find(|f| f.name == "PartitionKey")
+            .ok_or_else(|| anyhow!("{query_type} query must specify PartitionKey column"))?;
+        let partition = match &partition_field.value {
+            DataType::Str(Some(s)) => s.clone(),
+            _ => bail!("PartitionKey must be a non-null string"),
+        };
+
+        let row_field = fields
+            .iter()
+            .find(|f| f.name == "RowKey")
+            .ok_or_else(|| anyhow!("{query_type} query must specify RowKey column"))?;
+        let row = match &row_field.value {
+            DataType::Str(Some(s)) => s.clone(),
+            _ => bail!("RowKey must be a non-null string"),
+        };
+
+        Ok((partition, row))
+    }
+
+    /// Validate that WHERE clause only contains `PartitionKey` and `RowKey` conditions
+    fn validate_where_clause_simple(
+        where_fields: &[Field], query_type: &str,
+    ) -> anyhow::Result<()> {
+        if where_fields.len() > 2 {
+            bail!(
+                "{query_type} query has unsupported conditions in WHERE clause - only PartitionKey and RowKey equality conditions are supported"
+            );
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
@@ -618,5 +670,235 @@ mod tests {
         let result = exec_phrase.entity_to_json();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("exceeds maximum Int64 value"));
+    }
+
+    #[test]
+    fn parse_insert_valid() {
+        let query = "INSERT INTO table (PartitionKey, RowKey, Name, Age) VALUES ($1, $2, $3, $4)";
+        let params = vec![
+            DataType::Str(Some("part1".to_string())),
+            DataType::Str(Some("row1".to_string())),
+            DataType::Str(Some("Alice".to_string())),
+            DataType::Int32(Some(30)),
+        ];
+
+        let result = ExecPhrase::parse(query, &params).unwrap();
+
+        assert_eq!(result.partition, "part1");
+        assert_eq!(result.row, "row1");
+        assert_eq!(result.entity.len(), 4);
+        assert_eq!(result.entity[0].name, "PartitionKey");
+        assert_eq!(result.entity[2].name, "Name");
+    }
+
+    #[test]
+    fn parse_insert_missing_partition_key() {
+        let query = "INSERT INTO table (RowKey, Name) VALUES ($1, $2)";
+        let params =
+            vec![DataType::Str(Some("row1".to_string())), DataType::Str(Some("Alice".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("PartitionKey"));
+    }
+
+    #[test]
+    fn parse_insert_missing_row_key() {
+        let query = "INSERT INTO table (PartitionKey, Name) VALUES ($1, $2)";
+        let params = vec![
+            DataType::Str(Some("part1".to_string())),
+            DataType::Str(Some("Alice".to_string())),
+        ];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("RowKey"));
+    }
+
+    #[test]
+    fn parse_insert_mismatched_columns_values() {
+        let query = "INSERT INTO table (PartitionKey, RowKey, Name) VALUES ($1, $2)";
+        let params =
+            vec![DataType::Str(Some("part1".to_string())), DataType::Str(Some("row1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("does not match"));
+    }
+
+    #[test]
+    fn parse_insert_out_of_bounds_param() {
+        let query = "INSERT INTO table (PartitionKey, RowKey, Name) VALUES ($1, $2, $5)";
+        let params =
+            vec![DataType::Str(Some("part1".to_string())), DataType::Str(Some("row1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("parameter $5"));
+    }
+
+    #[test]
+    fn parse_update_valid() {
+        let query = "UPDATE table SET Name = $1, Age = $2 WHERE PartitionKey = $3 AND RowKey = $4";
+        let params = vec![
+            DataType::Str(Some("Bob".to_string())),
+            DataType::Int32(Some(25)),
+            DataType::Str(Some("part1".to_string())),
+            DataType::Str(Some("row1".to_string())),
+        ];
+
+        let result = ExecPhrase::parse(query, &params).unwrap();
+
+        assert_eq!(result.partition, "part1");
+        assert_eq!(result.row, "row1");
+        assert_eq!(result.entity.len(), 2);
+        assert_eq!(result.entity[0].name, "Name");
+        assert_eq!(result.entity[1].name, "Age");
+    }
+
+    #[test]
+    fn parse_update_missing_where_clause() {
+        let query = "UPDATE table SET Name = $1";
+        let params = vec![DataType::Str(Some("Bob".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("WHERE clause"));
+    }
+
+    #[test]
+    fn parse_update_empty_where_clause() {
+        let query = "UPDATE table SET Name = $1 WHERE ";
+        let params = vec![DataType::Str(Some("Bob".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("WHERE clause cannot be empty"));
+    }
+
+    #[test]
+    fn parse_update_missing_partition_key_in_where() {
+        let query = "UPDATE table SET Name = $1 WHERE RowKey = $2";
+        let params =
+            vec![DataType::Str(Some("Bob".to_string())), DataType::Str(Some("row1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("PartitionKey"));
+    }
+
+    #[test]
+    fn parse_update_missing_row_key_in_where() {
+        let query = "UPDATE table SET Name = $1 WHERE PartitionKey = $2";
+        let params =
+            vec![DataType::Str(Some("Bob".to_string())), DataType::Str(Some("part1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("RowKey"));
+    }
+
+    #[test]
+    fn parse_update_extra_where_conditions() {
+        let query =
+            "UPDATE table SET Name = $1 WHERE PartitionKey = $2 AND RowKey = $3 AND Age = $4";
+        let params = vec![
+            DataType::Str(Some("Bob".to_string())),
+            DataType::Str(Some("part1".to_string())),
+            DataType::Str(Some("row1".to_string())),
+            DataType::Int32(Some(30)),
+        ];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unsupported conditions"));
+    }
+
+    #[test]
+    fn parse_update_out_of_bounds_param() {
+        let query = "UPDATE table SET Name = $5 WHERE PartitionKey = $1 AND RowKey = $2";
+        let params =
+            vec![DataType::Str(Some("part1".to_string())), DataType::Str(Some("row1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Parameter $5"));
+    }
+
+    #[test]
+    fn parse_delete_valid() {
+        let query = "DELETE FROM table WHERE PartitionKey = $1 AND RowKey = $2";
+        let params =
+            vec![DataType::Str(Some("part1".to_string())), DataType::Str(Some("row1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params).unwrap();
+
+        assert_eq!(result.partition, "part1");
+        assert_eq!(result.row, "row1");
+        assert_eq!(result.entity.len(), 0); // DELETE doesn't have entity fields
+    }
+
+    #[test]
+    fn parse_delete_missing_where_clause() {
+        let query = "DELETE FROM table";
+        let params = vec![];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("WHERE clause"));
+    }
+
+    #[test]
+    fn parse_delete_empty_where_clause() {
+        let query = "DELETE FROM table WHERE ";
+        let params = vec![];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("WHERE clause cannot be empty"));
+    }
+
+    #[test]
+    fn parse_delete_missing_partition_key_in_where() {
+        let query = "DELETE FROM table WHERE RowKey = $1";
+        let params = vec![DataType::Str(Some("row1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("PartitionKey"));
+    }
+
+    #[test]
+    fn parse_delete_missing_row_key_in_where() {
+        let query = "DELETE FROM table WHERE PartitionKey = $1";
+        let params = vec![DataType::Str(Some("part1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("RowKey"));
+    }
+
+    #[test]
+    fn parse_delete_extra_where_conditions() {
+        let query = "DELETE FROM table WHERE PartitionKey = $1 AND RowKey = $2 AND Age = $3";
+        let params = vec![
+            DataType::Str(Some("part1".to_string())),
+            DataType::Str(Some("row1".to_string())),
+            DataType::Int32(Some(30)),
+        ];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unsupported conditions"));
+    }
+
+    #[test]
+    fn parse_delete_out_of_bounds_param() {
+        let query = "DELETE FROM table WHERE PartitionKey = $5 AND RowKey = $2";
+        let params = vec![DataType::Str(Some("row1".to_string()))];
+
+        let result = ExecPhrase::parse(query, &params);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Parameter $5"));
     }
 }

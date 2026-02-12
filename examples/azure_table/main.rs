@@ -54,27 +54,26 @@ pub async fn main() {
         DataType::Timestamp(Some(chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true))),
         DataType::Int32(Some(100)),
         DataType::Float(Some(12.34)),
-        DataType::Binary(Some(b"SGVsbG8uIE15IG5hbWUgaXMgTWFyZ2Uu".to_vec())),  
+        DataType::Binary(Some(b"SGVsbG8uIE15IG5hbWUgaXMgTWFyZ2Uu".to_vec())),
     ];
     let result = cnn.exec(query, params).await.expect("insert execution failed");
     tracing::debug!("insert result: {result}");
 
-    let query = "UPDATE testAugenticBE SET IsActive = $1 WHERE PartitionKey = $2 AND RowKey = $3".to_string();
-    let params =
-        vec![
-            DataType::Boolean(Some(false)),
-            DataType::Str(Some("testAugenticBE".to_string())),
-            DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
-        ];
+    let query = "UPDATE testAugenticBE SET IsActive = $1 WHERE PartitionKey = $2 AND RowKey = $3"
+        .to_string();
+    let params = vec![
+        DataType::Boolean(Some(false)),
+        DataType::Str(Some("testAugenticBE".to_string())),
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+    ];
     let result = cnn.exec(query, params).await.expect("update execution failed");
     tracing::debug!("update result: {result}");
 
     let query = "DELETE FROM testAugenticBE WHERE PartitionKey = $1 AND RowKey = $2".to_string();
-    let params =
-        vec![
-            DataType::Str(Some("testAugenticBE".to_string())),
-            DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
-        ];
+    let params = vec![
+        DataType::Str(Some("testAugenticBE".to_string())),
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+    ];
     let result = cnn.exec(query, params).await.expect("delete execution failed");
     tracing::debug!("delete result: {result}");
 }

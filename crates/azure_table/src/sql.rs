@@ -83,15 +83,17 @@ impl Connection for AzTableConnection {
         let account_name = self.config.name.clone();
         let account_key = self.config.key.clone();
         let table = self.table.clone();
-        let resource_path = format!("/{account_name}/{table}()");
         let client = self.http_client.clone();
         async move {
             let phrase = ExecPhrase::parse(&query, &params)?;
 
-            let uri = match &phrase.action {
-                ExecAction::Insert => format!("https://{account_name}.table.core.windows.net/{table}"),
-                ExecAction::Update | ExecAction::Delete => format!("https://{account_name}.table.core.windows.net/{table}(PartitionKey='{}',RowKey='{}')", phrase.partition, phrase.row),
+            let (resource_path, uri) = match &phrase.action {
+                ExecAction::Insert => (format!("/{account_name}/{table}"),
+                    format!("https://{account_name}.table.core.windows.net/{table}")),
+                ExecAction::Update | ExecAction::Delete => (format!("/{account_name}/{table}(PartitionKey='{}',RowKey='{}')", phrase.partition, phrase.row),
+                    format!("https://{account_name}.table.core.windows.net/{table}(PartitionKey='{}',RowKey='{}')", phrase.partition, phrase.row)),
             };
+            tracing::debug!("resource path: {resource_path}");
 
             let now = chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
             let response = match &phrase.action {
