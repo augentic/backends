@@ -42,4 +42,12 @@ pub async fn main() {
     for row in rows {
         tracing::debug!("{row:?}");
     }
+
+    // let query = "INSERT INTO testAugenticBE (Id, Name, IsActive, Created, Points, Discount, Avatar) VALUES ($1, $2, $3, $4, $5, $6, $7)".to_string();
+
+    let query = "UPDATE testAugenticBE SET IsActive = $1 WHERE Name = $2".to_string();
+    let params =
+        vec![DataType::Boolean(Some(false)), DataType::Str(Some("Alice Montgomery".to_string()))];
+    let result = cnn.exec(query, params).await.expect("Update execution failed");
+    tracing::debug!("Update result: {result}");
 }

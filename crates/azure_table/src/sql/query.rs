@@ -34,15 +34,10 @@ pub fn parse(val: &Value) -> anyhow::Result<Vec<Row>> {
                         continue;
                     }
                     // If the key is `RowKey`, use it as the row index.
-                    if k == "RowKey" {
-                        if let Some(s) = v.as_str() {
-                            index = s.to_string();
-                        }
-                        continue;
-                    }
-                    // If the key is another system one, skip it.
-                    if k == "PartitionKey" || k == "Timestamp" {
-                        continue;
+                    if k == "RowKey"
+                        && let Some(s) = v.as_str()
+                    {
+                        index = s.to_string();
                     }
                     // If the key contains "@odata.type", skip it (but we will
                     // use it to determine the data type of the corresponding
@@ -67,26 +62,6 @@ pub fn parse(val: &Value) -> anyhow::Result<Vec<Row>> {
         }
     }
     Ok(rows)
-}
-
-pub fn parse_keys(val: &Value) -> anyhow::Result<Vec<(String, String)>> {
-    let mut keys = Vec::new();
-    if let Some(entries) = val.get("value").and_then(|v| v.as_array()) {
-        for entry in entries {
-            if let Some(obj) = entry.as_object() {
-                let partition_key = obj
-                    .get("PartitionKey")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing PartitionKey in response"))?;
-                let row_key = obj
-                    .get("RowKey")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("Missing RowKey in response"))?;
-                keys.push((partition_key.to_string(), row_key.to_string()));
-            }
-        }
-    }
-    Ok(keys)
 }
 
 fn from_odata_type(value: &Value, data_type: &str) -> anyhow::Result<DataType> {
@@ -584,6 +559,7 @@ mod tests {
                     "odata.etag": "W/\"0x5B168C7B6E589D2\"",
                     "PartitionKey": "partition1",
                     "RowKey": "row1",
+                    "Timestamp@odata.type": "Edm.DateTime",
                     "Timestamp": "2026-01-30T12:00:00Z",
                     "Name": "John Doe",
                     "Name@odata.type": "Edm.String"
@@ -594,9 +570,13 @@ mod tests {
         let result = parse(&json).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].index, "row1");
-        assert_eq!(result[0].fields.len(), 1);
-        assert_eq!(result[0].fields[0].name, "Name");
-        match &result[0].fields[0].value {
+        assert_eq!(result[0].fields.len(), 4);
+        let field = result[0]
+            .fields
+            .iter()
+            .find(|f| f.name == "Name")
+            .expect("expected to find field 'Name'");
+        match &field.value {
             DataType::Str(Some(s)) => assert_eq!(s, "John Doe"),
             _ => panic!("Expected Str(Some(\"John Doe\"))"),
         }
@@ -610,6 +590,7 @@ mod tests {
                     "odata.etag": "etag1",
                     "PartitionKey": "p1",
                     "RowKey": "r1",
+                    "Timestamp@odata.type": "Edm.DateTime",
                     "Timestamp": "2026-01-30T12:00:00Z",
                     "stringField": "test",
                     "stringField@odata.type": "Edm.String",
@@ -633,7 +614,7 @@ mod tests {
 
         let result = parse(&json).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].fields.len(), 8);
+        assert_eq!(result[0].fields.len(), 11);
 
         // Check each field by finding it by name (order not guaranteed)
         let fields = &result[0].fields;
@@ -695,6 +676,7 @@ mod tests {
                     "odata.etag": "etag1",
                     "PartitionKey": "p1",
                     "RowKey": "r1",
+                    "Timestamp@odata.type": "Edm.DateTime",
                     "Timestamp": "2026-01-30T12:00:00Z",
                     "name": "Alice",
                     "name@odata.type": "Edm.String",
@@ -705,6 +687,7 @@ mod tests {
                     "odata.etag": "etag2",
                     "PartitionKey": "p1",
                     "RowKey": "r2",
+                    "Timestamp@odata.type": "Edm.DateTime",
                     "Timestamp": "2026-01-30T12:00:00Z",
                     "name": "Bob",
                     "name@odata.type": "Edm.String",
@@ -718,7 +701,7 @@ mod tests {
         assert_eq!(result.len(), 2);
 
         assert_eq!(result[0].index, "r1");
-        assert_eq!(result[0].fields.len(), 2);
+        assert_eq!(result[0].fields.len(), 5);
         let name_field = result[0].fields.iter().find(|f| f.name == "name").unwrap();
         match &name_field.value {
             DataType::Str(Some(s)) => assert_eq!(s, "Alice"),
@@ -731,7 +714,7 @@ mod tests {
         }
 
         assert_eq!(result[1].index, "r2");
-        assert_eq!(result[1].fields.len(), 2);
+        assert_eq!(result[1].fields.len(), 5);
         let name_field = result[1].fields.iter().find(|f| f.name == "name").unwrap();
         match &name_field.value {
             DataType::Str(Some(s)) => assert_eq!(s, "Bob"),
@@ -752,6 +735,7 @@ mod tests {
                     "odata.etag": "etag1",
                     "PartitionKey": "p1",
                     "RowKey": "r1",
+                    "Timestamp@odata.type": "Edm.DateTime",
                     "Timestamp": "2026-01-30T12:00:00Z",
                     "stringField": "John Doe",
                     "intField": 42,
@@ -764,7 +748,7 @@ mod tests {
 
         let result = parse(&json).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].fields.len(), 4);
+        assert_eq!(result[0].fields.len(), 7);
 
         let fields = &result[0].fields;
 
@@ -794,29 +778,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_skips_system_fields() {
-        let json = serde_json::json!({
-            "value": [
-                {
-                    "odata.etag": "etag1",
-                    "odata.metadata": "https://example.table.core.windows.net/$metadata#table",
-                    "PartitionKey": "partition1",
-                    "RowKey": "row1",
-                    "Timestamp": "2026-01-30T12:00:00Z",
-                    "customField": "value",
-                    "customField@odata.type": "Edm.String"
-                }
-            ]
-        });
-
-        let result = parse(&json).unwrap();
-        assert_eq!(result.len(), 1);
-        // Should only have customField, not PartitionKey, RowKey, Timestamp, or other odata fields
-        assert_eq!(result[0].fields.len(), 1);
-        assert_eq!(result[0].fields[0].name, "customField");
-    }
-
-    #[test]
     fn parse_int32_out_of_range() {
         let json = serde_json::json!({
             "value": [
@@ -824,6 +785,7 @@ mod tests {
                     "odata.etag": "etag1",
                     "PartitionKey": "p1",
                     "RowKey": "r1",
+                    "Timestamp@odata.type": "Edm.DateTime",
                     "Timestamp": "2026-01-30T12:00:00Z",
                     "largeInt": 9_223_372_036_854_775_807_i64,
                     "largeInt@odata.type": "Edm.Int32"
@@ -844,6 +806,7 @@ mod tests {
                     "odata.etag": "etag1",
                     "PartitionKey": "p1",
                     "RowKey": "r1",
+                    "Timestamp@odata.type": "Edm.DateTime",
                     "Timestamp": "2026-01-30T12:00:00Z",
                     "unknownField": "value",
                     "unknownField@odata.type": "Edm.Unsupported"
@@ -856,6 +819,11 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("unsupported data type"));
     }
 
+    // This and the code it tests are here to cope with being sent null values.
+    // However Azure Table Storage doesn't actually support null values and will
+    // just not include the property at all if it's null. The guest will have
+    // to cope with that in a business object mapping layer. We choose to keep
+    // the code here to handle nulls just in case, rather than returning errors.
     #[test]
     fn parse_null_values() {
         let json = serde_json::json!({
@@ -864,6 +832,7 @@ mod tests {
                     "odata.etag": "etag1",
                     "PartitionKey": "p1",
                     "RowKey": "r1",
+                    "Timestamp@odata.type": "Edm.DateTime",
                     "Timestamp": "2026-01-30T12:00:00Z",
                     "nullString": null,
                     "nullString@odata.type": "Edm.String",
@@ -875,7 +844,7 @@ mod tests {
 
         let result = parse(&json).unwrap();
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].fields.len(), 2);
+        assert_eq!(result[0].fields.len(), 5);
 
         let null_string = result[0].fields.iter().find(|f| f.name == "nullString").unwrap();
         match &null_string.value {

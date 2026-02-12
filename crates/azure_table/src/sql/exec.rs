@@ -6,8 +6,6 @@ use base64ct::{Base64, Encoding};
 use qwasr_wasi_sql::{DataType, Field};
 use serde_json::Value;
 
-use super::sql_to_odata_filter;
-
 #[derive(Debug)]
 pub enum ExecAction {
     Insert,
@@ -18,7 +16,8 @@ pub enum ExecAction {
 #[derive(Debug)]
 pub struct ExecPhrase {
     pub action: ExecAction,
-    pub filter: Option<String>,
+    pub partition: String,
+    pub row: String,
     pub entity: Vec<Field>,
 }
 
@@ -37,19 +36,35 @@ impl ExecPhrase {
             bail!("only INSERT, UPDATE, and DELETE queries are supported");
         };
 
-        // Extract WHERE clause if present
-        let filter = Self::extract_where_clause(query);
-
         // Parse fields based on action, using original parameter types
         let entity = match action {
             ExecAction::Insert => Self::parse_insert(query, params)?,
             ExecAction::Update => Self::parse_update(query, params)?,
-            ExecAction::Delete => Self::parse_delete(),
+            ExecAction::Delete => Self::parse_delete(query, params)?,
+        };
+
+        // We only support queries that operate on a single entity defined by
+        // PartitionKey and RowKey, so extract those from the fields.
+        let partition = entity.iter().find(|f| f.name == "PartitionKey").ok_or_else(|| {
+            anyhow!("query must include a PartitionKey field for Azure Table Storage")
+        })?;
+        let partition = match &partition.value {
+            DataType::Str(Some(s)) => s.clone(),
+            _ => bail!("PartitionKey field must be a non-null string"),
+        };
+        let row = entity
+            .iter()
+            .find(|f| f.name == "RowKey")
+            .ok_or_else(|| anyhow!("query must include a RowKey field for Azure Table Storage"))?;
+        let row = match &row.value {
+            DataType::Str(Some(s)) => s.clone(),
+            _ => bail!("RowKey field must be a non-null string"),
         };
 
         Ok(Self {
             action,
-            filter,
+            partition,
+            row,
             entity,
         })
     }
@@ -146,10 +161,63 @@ impl ExecPhrase {
         Ok(fields)
     }
 
-    const fn parse_delete() -> Vec<Field> {
-        // DELETE queries don't need entity fields
-        // The WHERE clause will be handled separately if needed
-        Vec::new()
+    fn parse_delete(query: &str, params: &[DataType]) -> anyhow::Result<Vec<Field>> {
+        // DELETE queries don't really need entity fields but we parse the
+        // WHERE clause to extract the PartitionKey and RowKey.
+        let query_upper = query.to_uppercase();
+        let mut fields = Vec::new();
+
+        if let Some(where_pos) = query_upper.find(" WHERE ") {
+            let filter_str = query_upper[where_pos + 7..].trim();
+            if filter_str.is_empty() {
+                bail!(
+                    "DELETE query must have a non-empty WHERE clause to specify the entity to delete"
+                );
+            }
+            // Parse the WHERE clause for column = $N conditions
+            for part in filter_str.split(" AND ") {
+                let part = part.trim();
+                // Parse column = $N
+                let eq_parts: Vec<&str> = part.split('=').map(str::trim).collect();
+                if eq_parts.len() == 2 {
+                    let col_name = eq_parts[0].to_string();
+                    let value_part = eq_parts[1];
+
+                    // Check if it's a parameter placeholder
+                    if let Some(param_idx) = Self::parse_param_placeholder(value_part) {
+                        if param_idx >= params.len() {
+                            bail!(
+                                "Parameter ${} referenced but only {} parameters provided",
+                                param_idx + 1,
+                                params.len()
+                            );
+                        }
+                        fields.push(Field {
+                            name: col_name,
+                            value: params[param_idx].clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // It's possible the WHERE clause contains other conditions besides
+        // PartitionKey and RowKey we could just ignore those, but this might
+        // lead to unexpected behaviour by the guest. So we impose the check:
+        let has_partition = fields.iter().any(|f| f.name == "PartitionKey");
+        let has_row = fields.iter().any(|f| f.name == "RowKey");
+        if !has_partition || !has_row {
+            bail!(
+                "DELETE query must specify PartitionKey and RowKey in the WHERE clause to identify the entity to delete"
+            );
+        }
+        if fields.len() > 2 {
+            bail!(
+                "DELETE query has unsupported conditions in WHERE clause - only PartitionKey and RowKey equality conditions are supported"
+            );
+        }
+
+        Ok(fields)
     }
 
     fn extract_columns(insert_part: &str) -> anyhow::Result<Vec<String>> {
@@ -201,33 +269,12 @@ impl ExecPhrase {
             .and_then(|n| n.checked_sub(1))
     }
 
-    fn extract_where_clause(query: &str) -> Option<String> {
-        let query_upper = query.to_uppercase();
-
-        // Find WHERE keyword and extract everything after it
-        query_upper.find(" WHERE ").and_then(|where_pos| {
-            let where_clause = query[where_pos + 7..].trim();
-
-            if where_clause.is_empty() {
-                None
-            } else {
-                // Convert SQL operators to OData operators
-                Some(sql_to_odata_filter(where_clause))
-            }
-        })
-    }
-
     #[allow(clippy::too_many_lines)]
-    pub fn entity_to_json(&self, partition: &str, row: &str) -> anyhow::Result<Option<Value>> {
+    pub fn entity_to_json(&self) -> anyhow::Result<Option<Value>> {
         if self.entity.is_empty() {
             Ok(None)
         } else {
             let mut map = serde_json::Map::new();
-
-            // Add required Azure Table Storage keys
-            map.insert("PartitionKey".to_string(), Value::String(partition.to_string()));
-            map.insert("RowKey".to_string(), Value::String(row.to_string()));
-
             // Add entity fields with OData metadata for types that cannot be inferred
             for field in &self.entity {
                 match &field.value {
@@ -336,11 +383,12 @@ mod tests {
     fn entity_to_json_empty() {
         let exec_phrase = ExecPhrase {
             action: ExecAction::Delete,
-            filter: None,
+            partition: String::new(),
+            row: String::new(),
             entity: Vec::new(),
         };
 
-        let result = exec_phrase.entity_to_json("partition1", "row1").unwrap();
+        let result = exec_phrase.entity_to_json().unwrap();
         assert!(result.is_none());
     }
 
@@ -348,14 +396,25 @@ mod tests {
     fn entity_to_json_with_partition_and_row_keys() {
         let exec_phrase = ExecPhrase {
             action: ExecAction::Insert,
-            filter: None,
-            entity: vec![Field {
-                name: "Name".to_string(),
-                value: DataType::Str(Some("Alice".to_string())),
-            }],
+            partition: "partition1".to_string(),
+            row: "row1".to_string(),
+            entity: vec![
+                Field {
+                    name: "PartitionKey".to_string(),
+                    value: DataType::Str(Some("partition1".to_string())),
+                },
+                Field {
+                    name: "RowKey".to_string(),
+                    value: DataType::Str(Some("row1".to_string())),
+                },
+                Field {
+                    name: "Name".to_string(),
+                    value: DataType::Str(Some("Alice".to_string())),
+                },
+            ],
         };
 
-        let result = exec_phrase.entity_to_json("partition1", "row1").unwrap().unwrap();
+        let result = exec_phrase.entity_to_json().unwrap().unwrap();
         let obj = result.as_object().unwrap();
 
         assert_eq!(obj.get("PartitionKey").unwrap().as_str().unwrap(), "partition1");
@@ -366,8 +425,17 @@ mod tests {
     fn entity_to_json_inferable_types_no_metadata() {
         let exec_phrase = ExecPhrase {
             action: ExecAction::Insert,
-            filter: None,
+            partition: "partition1".to_string(),
+            row: "row1".to_string(),
             entity: vec![
+                Field {
+                    name: "PartitionKey".to_string(),
+                    value: DataType::Str(Some("partition1".to_string())),
+                },
+                Field {
+                    name: "RowKey".to_string(),
+                    value: DataType::Str(Some("row1".to_string())),
+                },
                 Field {
                     name: "stringField".to_string(),
                     value: DataType::Str(Some("test".to_string())),
@@ -387,7 +455,7 @@ mod tests {
             ],
         };
 
-        let result = exec_phrase.entity_to_json("p1", "r1").unwrap().unwrap();
+        let result = exec_phrase.entity_to_json().unwrap().unwrap();
         let obj = result.as_object().unwrap();
 
         // Check values are correct
@@ -407,8 +475,17 @@ mod tests {
     fn entity_to_json_non_inferable_types_with_metadata() {
         let exec_phrase = ExecPhrase {
             action: ExecAction::Insert,
-            filter: None,
+            partition: "partition1".to_string(),
+            row: "row1".to_string(),
             entity: vec![
+                Field {
+                    name: "PartitionKey".to_string(),
+                    value: DataType::Str(Some("partition1".to_string())),
+                },
+                Field {
+                    name: "RowKey".to_string(),
+                    value: DataType::Str(Some("row1".to_string())),
+                },
                 Field {
                     name: "longField".to_string(),
                     value: DataType::Int64(Some(9_223_372_036_854_775_807)),
@@ -424,7 +501,7 @@ mod tests {
             ],
         };
 
-        let result = exec_phrase.entity_to_json("p1", "r1").unwrap().unwrap();
+        let result = exec_phrase.entity_to_json().unwrap().unwrap();
         let obj = result.as_object().unwrap();
 
         // Check values
@@ -442,8 +519,17 @@ mod tests {
     fn entity_to_json_various_types() {
         let exec_phrase = ExecPhrase {
             action: ExecAction::Insert,
-            filter: None,
+            partition: "partition1".to_string(),
+            row: "row1".to_string(),
             entity: vec![
+                Field {
+                    name: "PartitionKey".to_string(),
+                    value: DataType::Str(Some("partition1".to_string())),
+                },
+                Field {
+                    name: "RowKey".to_string(),
+                    value: DataType::Str(Some("row1".to_string())),
+                },
                 Field {
                     name: "binaryField".to_string(),
                     value: DataType::Binary(Some(b"Hello World".to_vec())),
@@ -479,7 +565,7 @@ mod tests {
             ],
         };
 
-        let result = exec_phrase.entity_to_json("p1", "r1").unwrap().unwrap();
+        let result = exec_phrase.entity_to_json().unwrap().unwrap();
         let obj = result.as_object().unwrap();
 
         // Check base64 encoded value
@@ -511,14 +597,25 @@ mod tests {
     fn entity_to_json_uint64_overflow() {
         let exec_phrase = ExecPhrase {
             action: ExecAction::Insert,
-            filter: None,
-            entity: vec![Field {
-                name: "hugeUint64".to_string(),
-                value: DataType::Uint64(Some(u64::MAX)),
-            }],
+            partition: "partition1".to_string(),
+            row: "row1".to_string(),
+            entity: vec![
+                Field {
+                    name: "PartitionKey".to_string(),
+                    value: DataType::Str(Some("partition1".to_string())),
+                },
+                Field {
+                    name: "RowKey".to_string(),
+                    value: DataType::Str(Some("row1".to_string())),
+                },
+                Field {
+                    name: "hugeUint64".to_string(),
+                    value: DataType::Uint64(Some(u64::MAX)),
+                },
+            ],
         };
 
-        let result = exec_phrase.entity_to_json("p1", "r1");
+        let result = exec_phrase.entity_to_json();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("exceeds maximum Int64 value"));
     }

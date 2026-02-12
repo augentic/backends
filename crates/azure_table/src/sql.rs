@@ -15,7 +15,7 @@ use serde_json::Value;
 use sha2::Sha256;
 
 use crate::sql::exec::{ExecAction, ExecPhrase};
-use crate::sql::query::{parse, parse_keys};
+use crate::sql::query::parse;
 use crate::{Client, ConnectOptions};
 
 impl WasiSqlCtx for Client {
@@ -88,45 +88,9 @@ impl Connection for AzTableConnection {
         async move {
             let phrase = ExecPhrase::parse(&query, &params)?;
 
-            let (uri, partition, row) = match &phrase.action {
-                ExecAction::Insert => (format!("https://{account_name}.table.core.windows.net/{table}"), String::new(), String::new()),
-                ExecAction::Update | ExecAction::Delete => {
-                    // Use the filter to get the entity to operate on.
-                    let filter = phrase.filter.clone().ok_or_else(|| {
-                        anyhow!("only queries with a WHERE clause are supported for exec")
-                    })?;
-                    let odata_filter= format!("$filter={filter}");
-                    let fetch_uri = format!("https://{account_name}.table.core.windows.net/{table}()?{odata_filter}");
-                    let now = chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
-                    let auth = auth_header(&account_name, &account_key, &now, &resource_path)?;
-                    let response = client
-                        .get(&fetch_uri)
-                        .header("x-ms-date", now)
-                        .header("x-ms-version", "2026-02-06")
-                        .header("Authorization", auth)
-                        .header("Accept", "application/json;odata=fullmetadata")
-                        .send()
-                        .await
-                        .map_err(|e| anyhow!("HTTP request error on pre-fetch: {e}"))?;
-                    if !response.status().is_success() {
-                        bail!(
-                            "Azure Table query failed on pre-fetch: {}",
-                            response
-                                .error_for_status()
-                                .err()
-                                .map_or_else(|| "unknown error".to_string(), |e| e.to_string())
-                        );
-                    }
-                    let body: Value =
-                        response.json().await.map_err(|e| anyhow!("Failed to parse response JSON: {e}"))?;
-                    let keys = parse_keys(&body)?;
-                    if keys.len() != 1 {
-                        bail!("only single-entity operations are supported for exec");
-                    }
-                    let (partition, row) = &keys[0];
-                    let uri = format!("https://{account_name}.table.core.windows.net/{table}(PartitionKey='{partition}',RowKey='{row}')");
-                    (uri, partition.clone(), row.clone())
-                }
+            let uri = match &phrase.action {
+                ExecAction::Insert => format!("https://{account_name}.table.core.windows.net/{table}"),
+                ExecAction::Update | ExecAction::Delete => format!("https://{account_name}.table.core.windows.net/{table}(PartitionKey='{}',RowKey='{}')", phrase.partition, phrase.row),
             };
 
             let now = chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
@@ -137,7 +101,7 @@ impl Connection for AzTableConnection {
                         .header("x-ms-version", "2026-02-06")
                         .header("Authorization", auth_header(&account_name, &account_key, &now, &resource_path)?)
                         .header("Accept", "application/json;odata=fullmetadata")
-                        .json(&phrase.entity_to_json(&partition, &row)?)
+                        .json(&phrase.entity_to_json()?)
                         .send()
                         .await
                         .map_err(|e| anyhow!("HTTP request error: {e}"))?
@@ -148,7 +112,7 @@ impl Connection for AzTableConnection {
                         .header("x-ms-version", "2026-02-06")
                         .header("Authorization", auth_header(&account_name, &account_key, &now, &resource_path)?)
                         .header("Accept", "application/json;odata=fullmetadata")
-                        .json(&phrase.entity_to_json(&partition, &row)?)
+                        .json(&phrase.entity_to_json()?)
                         .send()
                         .await
                         .map_err(|e| anyhow!("HTTP request error: {e}"))?
