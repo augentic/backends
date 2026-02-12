@@ -1,5 +1,6 @@
 use std::env;
 
+use chrono::SecondsFormat;
 use dotenvy::dotenv;
 use qwasr::Backend;
 use qwasr_azure_table::{Client, ConnectOptions};
@@ -43,11 +44,37 @@ pub async fn main() {
         tracing::debug!("{row:?}");
     }
 
-    // let query = "INSERT INTO testAugenticBE (Id, Name, IsActive, Created, Points, Discount, Avatar) VALUES ($1, $2, $3, $4, $5, $6, $7)".to_string();
+    let query = "INSERT INTO testAugenticBE (PartitionKey, RowKey, Id, Name, IsActive, Created, Points, Discount, Avatar) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)".to_string();
+    let params = vec![
+        DataType::Str(Some("testAugenticBE".to_string())),
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+        DataType::Str(Some("Marge Simpson".to_string())),
+        DataType::Boolean(Some(true)),
+        DataType::Timestamp(Some(chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true))),
+        DataType::Int32(Some(100)),
+        DataType::Float(Some(12.34)),
+        DataType::Binary(Some(b"SGVsbG8uIE15IG5hbWUgaXMgTWFyZ2Uu".to_vec())),  
+    ];
+    let result = cnn.exec(query, params).await.expect("insert execution failed");
+    tracing::debug!("insert result: {result}");
 
-    let query = "UPDATE testAugenticBE SET IsActive = $1 WHERE Name = $2".to_string();
+    let query = "UPDATE testAugenticBE SET IsActive = $1 WHERE PartitionKey = $2 AND RowKey = $3".to_string();
     let params =
-        vec![DataType::Boolean(Some(false)), DataType::Str(Some("Alice Montgomery".to_string()))];
-    let result = cnn.exec(query, params).await.expect("Update execution failed");
-    tracing::debug!("Update result: {result}");
+        vec![
+            DataType::Boolean(Some(false)),
+            DataType::Str(Some("testAugenticBE".to_string())),
+            DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+        ];
+    let result = cnn.exec(query, params).await.expect("update execution failed");
+    tracing::debug!("update result: {result}");
+
+    let query = "DELETE FROM testAugenticBE WHERE PartitionKey = $1 AND RowKey = $2".to_string();
+    let params =
+        vec![
+            DataType::Str(Some("testAugenticBE".to_string())),
+            DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+        ];
+    let result = cnn.exec(query, params).await.expect("delete execution failed");
+    tracing::debug!("delete result: {result}");
 }

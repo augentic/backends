@@ -1515,6 +1515,7 @@ dependencies = [
 name = "examples"
 version = "0.22.0"
 dependencies = [
+ "chrono",
  "dotenvy",
  "qwasr",
  "qwasr-azure-table",

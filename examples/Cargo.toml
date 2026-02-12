@@ -10,6 +10,7 @@ name = "azure_table"
 path = "azure_table/main.rs"
 
 [dependencies]
+chrono.workspace = true
 dotenvy = "0.15.7"
 qwasr.workspace = true
 qwasr-azure-table = { path = "../crates/azure_table" }
