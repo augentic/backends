@@ -1,5 +1,5 @@
 [package]
-name = "warp-redis"
+name = "qwasr-redis"
 description = "Redis resource provider"
 readme = "README.md"
 authors.workspace = true

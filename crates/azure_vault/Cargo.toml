@@ -1,6 +1,6 @@
 [package]
-name = "qwasr-kafka"
-description = "Kafka messaging resource"
+name = "qwasr-azure-vault"
+description = "Azure backend secrets (vault) provider"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true
@@ -12,25 +12,21 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[lib]
+
 [lints]
 workspace = true
 
 [dependencies]
 anyhow.workspace = true
-chrono.workspace = true
+azure_core.workspace = true
+azure_identity.workspace = true
+azure_security_keyvault_secrets = "0.10.0"
+base64ct.workspace = true
 fromenv.workspace = true
 futures.workspace = true
 http.workspace = true
-jsonschema = { version = "0.40.0", default-features = false }
 qwasr.workspace = true
-qwasr-wasi-messaging.workspace = true
-rand = "0.9.2"
-rdkafka = { version = "0.38", features = ["cmake-build", "ssl-vendored", "tokio"] }
-schema-registry-client = "0.4.1"
-serde_json.workspace = true
-tokio.workspace = true
+qwasr-wasi-identity.workspace = true
+qwasr-wasi-vault.workspace = true
 tracing.workspace = true
-
-[dev-dependencies]
-csv = "1.4.0"
-serde.workspace = true

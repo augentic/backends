@@ -1,0 +1,85 @@
+use std::env;
+
+use chrono::SecondsFormat;
+use dotenvy::dotenv;
+use qwasr::Backend;
+use qwasr_azure_table::{Client, ConnectOptions};
+use qwasr_wasi_sql::{DataType, WasiSqlCtx};
+use tracing_subscriber::filter::EnvFilter;
+use tracing_subscriber::fmt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+
+#[tokio::main]
+pub async fn main() {
+    dotenv().expect("Failed to load .env file");
+    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+
+    tracing::debug!("Sample Azure Table Storage backend.");
+
+    let account_name =
+        env::var("AZURE_STORAGE_ACCOUNT").expect("Set AZURE_STORAGE_ACCOUNT env variable");
+    let access_key = env::var("AZURE_STORAGE_KEY").expect("Set AZURE_STORAGE_KEY env variable");
+
+    let cnn_opts = ConnectOptions {
+        name: account_name,
+        key: access_key,
+    };
+
+    let client = Client::connect_with(cnn_opts).await.expect("Failed to set connection options");
+
+    let cnn = client.open("testAugenticBE".to_string()).await.expect("Failed configure connection");
+    let query = "SELECT * from testAugenticBE".to_string();
+    let rows = cnn.query(query, Vec::new()).await.expect("Query execution failed");
+    tracing::debug!("All rows:");
+    for row in rows {
+        tracing::debug!("{row:?}");
+    }
+
+    let query = "SELECT TOP 1 * FROM testAugenticBE WHERE IsActive = $1".to_string();
+    let params = vec![DataType::Boolean(Some(true))];
+    let rows = cnn.query(query, params).await.expect("Query execution failed");
+    tracing::debug!("First active row:");
+    for row in rows {
+        tracing::debug!("{row:?}");
+    }
+
+    let query = "INSERT INTO testAugenticBE (PartitionKey, RowKey, Id, Name, IsActive, Created, Points, Discount, Avatar) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)".to_string();
+    let params = vec![
+        DataType::Str(Some("testAugenticBE".to_string())),
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+        DataType::Str(Some("Marge Simpson".to_string())),
+        DataType::Boolean(Some(true)),
+        DataType::Timestamp(Some(chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true))),
+        DataType::Int32(Some(100)),
+        DataType::Float(Some(12.34)),
+        DataType::Binary(Some(b"SGVsbG8uIE15IG5hbWUgaXMgTWFyZ2Uu".to_vec())),
+    ];
+    let result = cnn.exec(query, params).await.expect("insert execution failed");
+    tracing::debug!("insert result: {result}");
+
+    let query = "UPDATE testAugenticBE SET Id = $1, Name = $2, IsActive = $3, Created = $4, Points = $5, Discount = $6, Avatar = $7 WHERE PartitionKey = $8 AND RowKey = $9"
+        .to_string();
+    let params = vec![
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+        DataType::Str(Some("Marge Simpson".to_string())),
+        DataType::Boolean(Some(false)),
+        DataType::Timestamp(Some(chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true))),
+        DataType::Int32(Some(100)),
+        DataType::Float(Some(12.34)),
+        DataType::Binary(Some(b"SGVsbG8uIE15IG5hbWUgaXMgTWFyZ2Uu".to_vec())),
+        DataType::Str(Some("testAugenticBE".to_string())),
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+    ];
+    let result = cnn.exec(query, params).await.expect("update execution failed");
+    tracing::debug!("update result: {result}");
+
+    let query = "DELETE FROM testAugenticBE WHERE PartitionKey = $1 AND RowKey = $2".to_string();
+    let params = vec![
+        DataType::Str(Some("testAugenticBE".to_string())),
+        DataType::Str(Some("zvok8qwi6jj9oyar47jypv1x".to_string())),
+    ];
+    let result = cnn.exec(query, params).await.expect("delete execution failed");
+    tracing::debug!("delete result: {result}");
+}

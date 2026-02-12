@@ -1,5 +1,5 @@
 [package]
-name = "warp-nats"
+name = "qwasr-nats"
 description = "NATS provider for messaging, keyvalue, and blobstore"
 readme = "README.md"
 authors.workspace = true

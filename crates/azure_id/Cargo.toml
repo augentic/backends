@@ -1,7 +1,8 @@
 [package]
-name = "warp-azure"
-description = "Azure resource provider"
+name = "qwasr-azure-id"
+description = "Azure backend identity provider"
 readme = "README.md"
+
 authors.workspace = true
 categories.workspace = true
 edition.workspace = true
@@ -19,14 +20,12 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
-azure_core = "0.31.0"
-azure_identity = "0.31.0"
-azure_security_keyvault_secrets = "0.10.0"
-base64ct = { version = "1.8.0", features = ["std"] }
+azure_core.workspace = true
+azure_identity.workspace = true
+base64ct.workspace = true
 fromenv.workspace = true
 futures.workspace = true
 http.workspace = true
 qwasr.workspace = true
 qwasr-wasi-identity.workspace = true
-qwasr-wasi-vault.workspace = true
 tracing.workspace = true
