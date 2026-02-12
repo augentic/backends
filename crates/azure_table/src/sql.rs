@@ -124,7 +124,7 @@ impl Connection for AzTableConnection {
                         .header("x-ms-date", &now)
                         .header("x-ms-version", "2026-02-06")
                         .header("Authorization", auth_header(&account_name, &account_key, &now, &resource_path)?)
-                        .header("Accept", "application/json;odata=fullmetadata")
+                        .header("If-Match", "*") // Forces unconditional delete.
                         .send()
                         .await
                         .map_err(|e| anyhow!("HTTP request error: {e}"))?
