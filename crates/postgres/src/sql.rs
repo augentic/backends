@@ -6,12 +6,13 @@ use anyhow::{Context, anyhow, bail};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use deadpool_postgres::Object;
 use futures::future::FutureExt;
-use qwasr_wasi_sql::{Connection, DataType, Field, FutureResult, Row, WasiSqlCtx};
+use omnia_wasi_sql::{Connection, DataType, Field, FutureResult, Row, WasiSqlCtx};
 use tokio_postgres::row::Row as PgRow;
 
 use crate::Client;
 use crate::types::{Param, ParamRef, PgType};
 
+/// `wasi-sql` implementation backed by `deadpool-postgres` connection pools.
 impl WasiSqlCtx for Client {
     fn open(&self, name: String) -> FutureResult<Arc<dyn Connection>> {
         tracing::debug!("getting connection {name}");
@@ -31,6 +32,7 @@ impl WasiSqlCtx for Client {
     }
 }
 
+/// A pooled `PostgreSQL` connection implementing the `wasi-sql` `Connection` trait.
 #[derive(Debug)]
 pub struct PostgresConnection(Arc<Object>);
 

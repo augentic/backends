@@ -4,7 +4,9 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use tokio_postgres::types::private::BytesMut;
 use tokio_postgres::types::{IsNull, ToSql, Type, to_sql_checked};
 
+/// An owned, type-erased SQL parameter.
 pub type Param = Box<dyn ToSql + Send + Sync>;
+/// A borrowed reference to a SQL parameter.
 pub type ParamRef<'a> = &'a (dyn ToSql + Sync);
 
 /// `PgType` to wrap around wasi-sql `DataType` to help implement `ToSql` trait

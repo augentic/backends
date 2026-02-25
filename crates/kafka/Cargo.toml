@@ -1,5 +1,5 @@
 [package]
-name = "qwasr-kafka"
+name = "omnia-kafka"
 description = "Kafka messaging resource"
 readme = "README.md"
 authors.workspace = true
@@ -15,17 +15,20 @@ version.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
 http.workspace = true
-jsonschema = { version = "0.40.0", default-features = false }
-qwasr.workspace = true
-qwasr-wasi-messaging.workspace = true
-rand = "0.9.2"
-rdkafka = { version = "0.38", features = ["cmake-build", "ssl-vendored", "tokio"] }
+jsonschema = { version = "0.42.1", default-features = false }
+omnia.workspace = true
+omnia-wasi-messaging.workspace = true
+rand = "0.10.0"
+rdkafka = { version = "0.39.0", features = ["cmake-build", "curl", "ssl-vendored", "tokio"] }
 schema-registry-client = "0.4.1"
 serde_json.workspace = true
 tokio.workspace = true

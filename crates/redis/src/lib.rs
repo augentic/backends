@@ -1,5 +1,4 @@
-//! Redis Client.
-#![allow(missing_docs)]
+#![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
 
 mod keyvalue;
@@ -8,11 +7,11 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use fromenv::FromEnv;
-use qwasr::Backend;
+use omnia::Backend;
 use redis::aio::{ConnectionManager, ConnectionManagerConfig};
 use tracing::instrument;
 
+/// Redis key-value backend client.
 #[derive(Clone)]
 pub struct Client(ConnectionManager);
 
@@ -43,17 +42,27 @@ impl Backend for Client {
     }
 }
 
-#[derive(Debug, Clone, FromEnv)]
-pub struct ConnectOptions {
-    #[env(from = "REDIS_URL", default = "redis://localhost:6379")]
-    pub url: String,
-    #[env(from = "REDIS_MAX_RETRIES", default = "3")]
-    pub max_retries: usize,
-    #[env(from = "REDIS_MAX_DELAY", default = "1000")]
-    pub max_delay: u64,
-}
+#[allow(missing_docs)]
+mod config {
+    use fromenv::FromEnv;
 
-impl qwasr::FromEnv for ConnectOptions {
+    /// Connection options for the Redis backend.
+    #[derive(Debug, Clone, FromEnv)]
+    pub struct ConnectOptions {
+        /// Redis connection URL.
+        #[env(from = "REDIS_URL", default = "redis://localhost:6379")]
+        pub url: String,
+        /// Maximum number of reconnection retries.
+        #[env(from = "REDIS_MAX_RETRIES", default = "3")]
+        pub max_retries: usize,
+        /// Maximum backoff delay in milliseconds.
+        #[env(from = "REDIS_MAX_DELAY", default = "1000")]
+        pub max_delay: u64,
+    }
+}
+pub use config::ConnectOptions;
+
+impl omnia::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }

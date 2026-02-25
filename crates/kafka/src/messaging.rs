@@ -7,7 +7,7 @@ use futures::Stream;
 use futures::future::FutureExt;
 use futures::stream::StreamExt;
 use futures::task::{Context, Poll};
-use qwasr_wasi_messaging::{
+use omnia_wasi_messaging::{
     Client, FutureResult, Message, MessageProxy, Metadata, RequestOptions, Subscriptions,
     WasiMessagingCtx,
 };
@@ -18,6 +18,7 @@ use tokio::sync::mpsc;
 
 const CAPACITY: usize = 1024;
 
+/// `wasi-messaging` implementation backed by Kafka via `rdkafka`.
 impl WasiMessagingCtx for crate::Client {
     fn connect(&self) -> FutureResult<Arc<dyn Client>> {
         let client = self.clone();
@@ -168,7 +169,7 @@ impl Message for KafkaMessage {
         self.0.payload().map_or(0, <[u8]>::len)
     }
 
-    fn reply(&self) -> Option<qwasr_wasi_messaging::Reply> {
+    fn reply(&self) -> Option<omnia_wasi_messaging::Reply> {
         None
     }
 
@@ -277,6 +278,7 @@ impl Client for crate::Client {
     }
 }
 
+/// Async stream of Kafka messages forwarded from a background consumer task.
 #[derive(Debug)]
 pub struct Subscriber {
     receiver: mpsc::Receiver<MessageProxy>,

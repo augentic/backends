@@ -1,14 +1,13 @@
+#![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
-
-//! MongoDB Client.
 
 mod blobstore;
 
 use anyhow::{Context, Result};
-use fromenv::FromEnv;
-use qwasr::Backend;
+use omnia::Backend;
 use tracing::instrument;
 
+/// MongoDB blobstore backend client.
 #[derive(Debug, Clone)]
 pub struct Client(mongodb::Client);
 
@@ -26,13 +25,21 @@ impl Backend for Client {
     }
 }
 
-#[derive(Clone, Debug, FromEnv)]
-pub struct ConnectOptions {
-    #[env(from = "MONGODB_URL")]
-    pub uri: String,
-}
+#[allow(missing_docs)]
+mod config {
+    use fromenv::FromEnv;
 
-impl qwasr::FromEnv for ConnectOptions {
+    /// Connection options for the MongoDB backend.
+    #[derive(Clone, Debug, FromEnv)]
+    pub struct ConnectOptions {
+        /// MongoDB connection URI (must include a default database).
+        #[env(from = "MONGODB_URL")]
+        pub uri: String,
+    }
+}
+pub use config::ConnectOptions;
+
+impl omnia::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }

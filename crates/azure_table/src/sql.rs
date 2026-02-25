@@ -8,8 +8,8 @@ use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use futures::future::FutureExt;
 use hmac::{Hmac, Mac};
+use omnia_wasi_sql::{Connection, DataType, FutureResult, Row, WasiSqlCtx};
 use query::QueryPhrases;
-use qwasr_wasi_sql::{Connection, DataType, FutureResult, Row, WasiSqlCtx};
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 use sha2::Sha256;
@@ -18,6 +18,7 @@ use crate::sql::exec::{ExecAction, ExecPhrase};
 use crate::sql::query::parse;
 use crate::{Client, ConnectOptions};
 
+/// `wasi-sql` implementation backed by Azure Table Storage REST API.
 impl WasiSqlCtx for Client {
     fn open(&self, name: String) -> FutureResult<Arc<dyn Connection>> {
         tracing::debug!("opening connection to azure storage table {name}");
@@ -31,10 +32,14 @@ impl WasiSqlCtx for Client {
     }
 }
 
+/// A connection to a single Azure Table, backed by HTTP REST calls.
 #[derive(Debug)]
 pub struct AzTableConnection {
+    /// HTTP client used for Azure REST requests.
     pub http_client: HttpClient,
+    /// Storage account configuration.
     pub config: ConnectOptions,
+    /// Target table name.
     pub table: String,
 }
 

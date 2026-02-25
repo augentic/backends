@@ -1,6 +1,5 @@
+#![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
-
-//! Kafka Client.
 
 mod messaging;
 mod partitioner;
@@ -10,8 +9,7 @@ use std::fmt::{self, Debug};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use fromenv::{FromEnv, ParseResult};
-use qwasr::Backend;
+use omnia::Backend;
 use rand::random_range;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::producer::{DeliveryResult, ProducerContext, ThreadedProducer};
@@ -23,6 +21,7 @@ use crate::registry::Registry;
 
 const DEFAULT_GROUP: &str = "wrt-kafka-consumer";
 
+/// Kafka backend client with producer, optional consumer, and optional schema registry.
 #[derive(Clone)]
 pub struct Client {
     producer: ThreadedProducer<Tracer>,
@@ -77,49 +76,70 @@ impl Backend for Client {
     }
 }
 
-#[derive(Debug, Clone, FromEnv)]
-pub struct ConnectOptions {
-    // #[env(from = "KAFKA_CLIENT_ID")]
-    #[env(from = "COMPONENT")]
-    pub client_id: String,
-    #[env(from = "KAFKA_BROKERS")]
-    pub brokers: String,
-    #[env(from = "KAFKA_USERNAME")]
-    pub username: Option<String>,
-    #[env(from = "KAFKA_PASSWORD")]
-    pub password: Option<String>,
-    #[env(from = "KAFKA_PARTITION_COUNT", default = "12")]
-    pub partition_count: i32,
-    #[env(nested)]
-    pub consumer: Option<ConsumerOptions>,
-    #[env(nested)]
-    pub registry: Option<RegistryOptions>,
-}
+#[allow(missing_docs)]
+mod config {
+    use fromenv::{FromEnv, ParseResult};
 
-#[derive(Debug, Clone, FromEnv)]
-pub struct ConsumerOptions {
-    #[env(from = "KAFKA_TOPICS", with = split)]
-    pub topics: Vec<String>,
-    #[env(from = "KAFKA_CONSUMER_GROUP")]
-    pub group_id: Option<String>,
-}
+    /// Connection options for the Kafka backend.
+    #[derive(Debug, Clone, FromEnv)]
+    pub struct ConnectOptions {
+        /// Client identifier prefix (suffixed with a random number).
+        #[env(from = "COMPONENT")]
+        pub client_id: String,
+        /// Comma-separated broker addresses.
+        #[env(from = "KAFKA_BROKERS")]
+        pub brokers: String,
+        /// SASL username (enables `SASL_SSL` when set with password).
+        #[env(from = "KAFKA_USERNAME")]
+        pub username: Option<String>,
+        /// SASL password.
+        #[env(from = "KAFKA_PASSWORD")]
+        pub password: Option<String>,
+        /// Partition count for custom partitioner.
+        #[env(from = "KAFKA_PARTITION_COUNT", default = "12")]
+        pub partition_count: i32,
+        /// Optional consumer configuration.
+        #[env(nested)]
+        pub consumer: Option<ConsumerOptions>,
+        /// Optional Schema Registry configuration.
+        #[env(nested)]
+        pub registry: Option<RegistryOptions>,
+    }
 
-#[derive(Debug, Clone, FromEnv)]
-pub struct RegistryOptions {
-    #[env(from = "KAFKA_REGISTRY_URL")]
-    pub url: String,
-    #[env(from = "KAFKA_REGISTRY_API_KEY")]
-    api_key: String,
-    #[env(from = "KAFKA_REGISTRY_API_SECRET")]
-    api_secret: String,
-    #[env(from = "KAFKA_REGISTRY_CACHE_TTL", default = "3600")]
-    cache_ttl_secs: u64,
-}
+    /// Kafka consumer configuration.
+    #[derive(Debug, Clone, FromEnv)]
+    pub struct ConsumerOptions {
+        /// Comma-separated topics to subscribe to.
+        #[env(from = "KAFKA_TOPICS", with = split)]
+        pub topics: Vec<String>,
+        /// Consumer group ID.
+        #[env(from = "KAFKA_CONSUMER_GROUP")]
+        pub group_id: Option<String>,
+    }
 
-#[allow(clippy::unnecessary_wraps)]
-fn split(s: &str) -> ParseResult<Vec<String>> {
-    Ok(s.split(',').map(ToOwned::to_owned).collect())
+    /// Confluent Schema Registry configuration.
+    #[derive(Debug, Clone, FromEnv)]
+    pub struct RegistryOptions {
+        /// Schema Registry URL.
+        #[env(from = "KAFKA_REGISTRY_URL")]
+        pub url: String,
+        /// Schema Registry API key.
+        #[env(from = "KAFKA_REGISTRY_API_KEY")]
+        pub(crate) api_key: String,
+        /// Schema Registry API secret.
+        #[env(from = "KAFKA_REGISTRY_API_SECRET")]
+        pub(crate) api_secret: String,
+        /// Schema cache TTL in seconds.
+        #[env(from = "KAFKA_REGISTRY_CACHE_TTL", default = "3600")]
+        pub(crate) cache_ttl_secs: u64,
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn split(s: &str) -> ParseResult<Vec<String>> {
+        Ok(s.split(',').map(ToOwned::to_owned).collect())
+    }
 }
+pub use config::{ConnectOptions, ConsumerOptions, RegistryOptions};
 
 impl From<&ConnectOptions> for ClientConfig {
     fn from(kafka: &ConnectOptions) -> Self {
@@ -144,12 +164,13 @@ impl From<&ConnectOptions> for ClientConfig {
     }
 }
 
-impl qwasr::FromEnv for ConnectOptions {
+impl omnia::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }
 }
 
+/// Kafka producer delivery callback that logs send results.
 pub struct Tracer;
 impl ClientContext for Tracer {}
 impl ProducerContext for Tracer {

@@ -68,9 +68,8 @@ cargo +nightly miri nextest run --no-tests=pass
 
 # Outdated
 [tasks.outdated]
-command = "cargo"
 script = '''
-cargo outdated --workspace --exit-code 1 --depth 1 --ignore prost
+cargo outdated --workspace --exit-code 1 --depth 1
 '''
 install_crate = "cargo-outdated"
 
@@ -82,7 +81,7 @@ dependencies = ["clean"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
 # Test Doc
-[tasks.test-doc]
+[tasks.test-docs]
 command = "cargo"
 args = ["test", "--doc", "--all-features", "--workspace"]
 
@@ -95,3 +94,32 @@ cargo vet regenerate unpublished
 cargo vet --locked
 '''
 install_crate = "cargo-vet"
+
+[tasks.publish]
+command = "cargo"
+args = ["publish", "--registry=augentic", "--allow-dirty", "--dry-run"]
+
+# Publish all crates to crates.io in dependency order (dry-run by default).
+# Remove --dry-run to actually publish.
+[tasks.publish-crates-io]
+script = '''
+set -e
+
+DRY_RUN="--dry-run"
+if [ "${PUBLISH_FOR_REAL}" = "true" ]; then
+  DRY_RUN=""
+fi
+
+echo "=== Backend provider crates (no internal dependencies) ==="
+cargo publish -p omnia-azure-id $DRY_RUN
+cargo publish -p omnia-azure-table $DRY_RUN
+cargo publish -p omnia-azure-vault $DRY_RUN
+cargo publish -p omnia-kafka $DRY_RUN
+cargo publish -p omnia-mongodb $DRY_RUN
+cargo publish -p omnia-nats $DRY_RUN
+cargo publish -p omnia-opentelemetry $DRY_RUN
+cargo publish -p omnia-postgres $DRY_RUN
+cargo publish -p omnia-redis $DRY_RUN
+
+echo "=== Done ==="
+'''

@@ -3,25 +3,35 @@
 
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
-use qwasr_wasi_sql::{DataType, Field};
+use omnia_wasi_sql::{DataType, Field};
 use serde_json::Value;
 
+/// The type of modification operation.
 #[derive(Debug)]
 pub enum ExecAction {
+    /// Insert a new entity.
     Insert,
+    /// Update an existing entity.
     Update,
+    /// Delete an entity.
     Delete,
 }
 
+/// A parsed modification statement targeting a single Azure Table entity.
 #[derive(Debug)]
 pub struct ExecPhrase {
+    /// The operation to perform.
     pub action: ExecAction,
+    /// Partition key of the target entity.
     pub partition: String,
+    /// Row key of the target entity.
     pub row: String,
+    /// Fields to write (ignored for deletes).
     pub entity: Vec<Field>,
 }
 
 impl ExecPhrase {
+    /// Parse a SQL-like modification statement into an [`ExecPhrase`].
     pub fn parse(query: &str, params: &[DataType]) -> anyhow::Result<Self> {
         let query_upper = query.trim().to_uppercase();
 
@@ -321,6 +331,7 @@ impl ExecPhrase {
         Ok(())
     }
 
+    /// Convert the entity fields to a JSON value for the Azure REST API body.
     #[allow(clippy::too_many_lines)]
     pub fn entity_to_json(&self) -> anyhow::Result<Option<Value>> {
         if self.entity.is_empty() {

@@ -2,9 +2,9 @@ use std::env;
 
 use chrono::SecondsFormat;
 use dotenvy::dotenv;
-use qwasr::Backend;
-use qwasr_azure_table::{Client, ConnectOptions};
-use qwasr_wasi_sql::{DataType, WasiSqlCtx};
+use omnia::Backend;
+use omnia_azure_table::{Client, ConnectOptions};
+use omnia_wasi_sql::{DataType, WasiSqlCtx};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;

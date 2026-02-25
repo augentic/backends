@@ -1,5 +1,5 @@
 [package]
-name = "qwasr-redis"
+name = "omnia-redis"
 description = "Redis resource provider"
 readme = "README.md"
 authors.workspace = true
@@ -15,11 +15,14 @@ version.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 anyhow.workspace = true
 fromenv.workspace = true
 futures.workspace = true
-qwasr.workspace = true
-qwasr-wasi-keyvalue.workspace = true
-redis = { version = "1.0.1", features = ["connection-manager", "tokio-rustls-comp"] }
+omnia.workspace = true
+omnia-wasi-keyvalue.workspace = true
+redis = { version = "1.0.4", features = ["connection-manager", "tokio-rustls-comp"] }
 tracing.workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "qwasr-mongodb"
+name = "omnia-mongodb"
 description = "MongoDB resource provider"
 readme = "README.md"
 authors.workspace = true
@@ -17,14 +17,17 @@ version.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
-mongodb = "3.5.0"
-qwasr.workspace = true
-qwasr-wasi-blobstore.workspace = true
+mongodb = "3.5.1"
+omnia.workspace = true
+omnia-wasi-blobstore.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

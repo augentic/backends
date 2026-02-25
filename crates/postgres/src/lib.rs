@@ -1,11 +1,5 @@
+#![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
-
-//! Postgres client builder for runtime.
-//!
-//! TODO: This attempt uses an enum in the wit for data types as a way to map
-//! a few of the many Postgres types to Rust types. Investigate if using any low
-//! level tools inside an ORM crate like Diesel would get us better type
-//! coverage with less effort.
 
 mod sql;
 mod types;
@@ -15,8 +9,7 @@ use std::str;
 
 use anyhow::{Context as _, Result, anyhow};
 use deadpool_postgres::{Pool, PoolConfig, Runtime};
-use fromenv::FromEnv;
-use qwasr::Backend;
+use omnia::Backend;
 use rustls::crypto::ring;
 use rustls::{ClientConfig, RootCertStore};
 use tokio_postgres::config::{Host, SslMode};
@@ -93,20 +86,35 @@ impl Backend for Client {
     }
 }
 
+/// A named connection pool entry.
 #[derive(Debug, Clone)]
 pub struct PoolEntry {
-    pub name: String, // e.g. "eventstore"
+    /// Pool name (e.g. `"EVENTSTORE"`). Used as lookup key and env var suffix.
+    pub name: String,
+    /// `PostgreSQL` connection URI.
     pub uri: String,
+    /// Maximum number of connections in the pool.
     pub pool_size: usize,
 }
 
-#[derive(Debug, Clone, FromEnv)]
-pub struct ConnectOptions {
-    pub default_pool: PoolEntry,
-    pub additional_pools: Vec<PoolEntry>,
-}
+#[allow(missing_docs)]
+mod config {
+    use fromenv::FromEnv;
 
-impl qwasr::FromEnv for ConnectOptions {
+    use super::PoolEntry;
+
+    /// Connection options for the `PostgreSQL` backend.
+    #[derive(Debug, Clone, FromEnv)]
+    pub struct ConnectOptions {
+        /// Default connection pool (from `POSTGRES_URL`).
+        pub default_pool: PoolEntry,
+        /// Additional named pools discovered from `POSTGRES_POOLS`.
+        pub additional_pools: Vec<PoolEntry>,
+    }
+}
+pub use config::ConnectOptions;
+
+impl omnia::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         // default pool (required)
         let default_uri = std::env::var("POSTGRES_URL").context("POSTGRES_URL must be set");

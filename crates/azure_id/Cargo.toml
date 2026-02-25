@@ -1,5 +1,5 @@
 [package]
-name = "qwasr-azure-id"
+name = "omnia-azure-id"
 description = "Azure backend identity provider"
 readme = "README.md"
 
@@ -18,14 +18,15 @@ version.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 anyhow.workspace = true
 azure_core.workspace = true
 azure_identity.workspace = true
-base64ct.workspace = true
 fromenv.workspace = true
 futures.workspace = true
-http.workspace = true
-qwasr.workspace = true
-qwasr-wasi-identity.workspace = true
+omnia.workspace = true
+omnia-wasi-identity.workspace = true
 tracing.workspace = true
