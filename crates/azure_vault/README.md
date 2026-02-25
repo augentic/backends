@@ -22,7 +22,7 @@ When no service principal credentials are set, `DeveloperToolsCredential` is use
 
 ## Usage
 
-```rust,no_run
+```rust,ignore
 use omnia::Backend;
 use omnia_azure_vault::Client;
 

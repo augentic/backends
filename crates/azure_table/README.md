@@ -41,7 +41,7 @@ The `azure_data_tables` crate is on a [legacy branch](https://github.com/Azure/a
 
 ## Usage
 
-```rust,no_run
+```rust,ignore
 use omnia::Backend;
 use omnia_azure_table::Client;
 

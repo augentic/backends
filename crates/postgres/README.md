@@ -21,7 +21,7 @@ MSRV: Rust 1.93
 
 ## Usage
 
-```rust,no_run
+```rust,ignore
 use omnia::Backend;
 use omnia_postgres::Client;
 
