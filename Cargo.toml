@@ -78,7 +78,7 @@ omnia-wasi-sql = "0.28.0"
 omnia-wasi-vault = "0.28.0"
 
 # local crates
-omnia-azure-table = { path = "crates/azure_table", version = "0.23.0" }
+omnia-azure-table = { path = "crates/azure-table", version = "0.23.0" }
 
 [profile.release]
 lto = true
