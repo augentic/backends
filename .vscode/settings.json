@@ -3,4 +3,8 @@
         "Cargo.toml"
     ],
     "rust-analyzer.check.command": "clippy",
+    "[markdown]": {
+        "editor.wordWrap": "wordWrapColumn",
+        "editor.wordWrapColumn": 100
+    }
 }
