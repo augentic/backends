@@ -6,9 +6,9 @@ mod otel;
 use std::fmt::Debug;
 
 use anyhow::{Context, Result};
+use omnia::Backend;
 use opentelemetry_proto::tonic::collector::metrics::v1::metrics_service_client::MetricsServiceClient;
 use opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient;
-use omnia::Backend;
 use tonic::transport::Channel;
 use tracing::instrument;
 

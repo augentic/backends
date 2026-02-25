@@ -1,10 +1,10 @@
 //! OpenTelemetry implementation for the OpenTelemetry gRPC resource.
 
 use futures::FutureExt;
-use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest;
-use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 use omnia::FutureResult;
 use omnia_wasi_otel::WasiOtelCtx;
+use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest;
+use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 
 use crate::Client;
 
