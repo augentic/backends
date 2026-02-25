@@ -6,13 +6,14 @@ use chrono::Utc;
 use futures::{FutureExt, StreamExt};
 use mongodb::Collection;
 use mongodb::bson::{self, Bson, Document};
-use qwasr_wasi_blobstore::{
+use omnia_wasi_blobstore::{
     Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::Client;
 
+/// A stored blob document in MongoDB.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Blob {
     name: String,
@@ -21,6 +22,7 @@ pub struct Blob {
     created_at: u64,
 }
 
+/// `wasi-blobstore` implementation backed by MongoDB collections.
 impl WasiBlobstoreCtx for Client {
     fn create_container(&self, name: String) -> FutureResult<Arc<dyn Container>> {
         tracing::trace!("creating container: {name}");
@@ -63,6 +65,7 @@ impl WasiBlobstoreCtx for Client {
     }
 }
 
+/// A blobstore container backed by a MongoDB collection.
 #[derive(Debug)]
 pub struct MongoDbContainer {
     name: String,

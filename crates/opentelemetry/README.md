@@ -1,28 +1,30 @@
-# opentelemetry
+# omnia-opentelemetry
 
-OpenTelemetry gRPC backend implementation for the `wasi-otel` interface.
+[![crates.io](https://img.shields.io/crates/v/omnia-opentelemetry.svg)](https://crates.io/crates/omnia-opentelemetry)
+[![docs.rs](https://docs.rs/omnia-opentelemetry/badge.svg)](https://docs.rs/omnia-opentelemetry)
 
-This backend connects to an OpenTelemetry Collector via gRPC and exports traces and metrics using the OTLP protocol.
+OpenTelemetry gRPC backend for the Omnia WASI runtime, implementing the `wasi-otel` interface.
+
+Exports traces and metrics to an OpenTelemetry Collector via gRPC using the OTLP protocol. Telemetry failures are logged but never propagated to application logic.
+
+MSRV: Rust 1.93
 
 ## Configuration
 
-The backend is configured through environment variables:
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OTEL_GRPC_URL` | no | `http://localhost:4317` | Collector gRPC endpoint |
 
-- `OTEL_GRPC_URL` - The gRPC endpoint URL (default: `http://localhost:4317`)
+## Usage
 
-## Example
+```rust,no_run
+use omnia::Backend;
+use omnia_opentelemetry::Client;
 
-```rust
-use be_opentelemetry::Client;
-use kernel::Backend;
-
-let client = Client::connect().await?;
+let options = omnia_opentelemetry::ConnectOptions::from_env()?;
+let client = Client::connect_with(options).await?;
 ```
 
-## Features
+## License
 
-- Exports traces to OpenTelemetry Collector via gRPC
-- Exports metrics to OpenTelemetry Collector via gRPC
-- Automatic retry and connection management via tonic
-- Non-blocking exports (errors are logged but don't fail application logic)
-
+MIT OR Apache-2.0

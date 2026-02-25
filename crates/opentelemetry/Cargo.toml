@@ -1,5 +1,5 @@
 [package]
-name = "qwasr-opentelemetry"
+name = "omnia-opentelemetry"
 description = "OpenTelemetry gRPC resource provider"
 readme = "README.md"
 authors.workspace = true
@@ -15,12 +15,15 @@ version.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 anyhow.workspace = true
 fromenv.workspace = true
 futures.workspace = true
+omnia.workspace = true
+omnia-wasi-otel.workspace = true
 opentelemetry-proto = { version = "0.31.0", features = ["gen-tonic"] }
-qwasr.workspace = true
-qwasr-wasi-otel.workspace = true
-tonic = "0.14.2"
+tonic = "0.14.5"
 tracing.workspace = true

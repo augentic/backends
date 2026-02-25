@@ -1,10 +1,10 @@
-//! Messaging implementation for the Redis resource.
+//! Key-value implementation for the Redis backend.
 use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::Context;
 use futures::FutureExt;
-use qwasr_wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
+use omnia_wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
 use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
 
@@ -12,6 +12,7 @@ use crate::Client;
 
 const TTL_DAY: u64 = 24 * 60 * 60; // 1 day
 
+/// `wasi-keyvalue` implementation backed by Redis.
 impl WasiKeyValueCtx for Client {
     fn open_bucket(&self, identifier: String) -> FutureResult<Arc<dyn Bucket>> {
         tracing::trace!("opening redis bucket: {}", identifier);
@@ -28,6 +29,7 @@ impl WasiKeyValueCtx for Client {
     }
 }
 
+/// Wrapper around [`ConnectionManager`] to implement [`Debug`].
 pub struct Conn(ConnectionManager);
 
 impl Debug for Conn {
@@ -36,9 +38,12 @@ impl Debug for Conn {
     }
 }
 
+/// A key-value bucket backed by Redis, namespaced by identifier.
 #[derive(Debug)]
 pub struct RedisBucket {
+    /// Bucket identifier used as key prefix.
     pub identifier: String,
+    /// Redis connection.
     pub conn: Conn,
 }
 

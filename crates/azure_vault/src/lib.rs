@@ -1,6 +1,5 @@
+#![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
-
-//! Azure Key Vault Secrets Client.
 
 mod key_vault;
 
@@ -11,10 +10,10 @@ use anyhow::{Context, Result};
 use azure_core::credentials::{Secret, TokenCredential};
 use azure_identity::{ClientSecretCredential, DeveloperToolsCredential};
 use azure_security_keyvault_secrets::SecretClient;
-use fromenv::FromEnv;
-use qwasr::Backend;
+use omnia::Backend;
 use tracing::instrument;
 
+/// Azure Key Vault secrets backend client.
 #[derive(Clone)]
 pub struct Client {
     key_vault: Option<Arc<SecretClient>>,
@@ -31,7 +30,6 @@ impl Backend for Client {
 
     #[instrument]
     async fn connect_with(options: Self::ConnectOptions) -> Result<Self> {
-        // connect to Azure API
         let credential: Arc<dyn TokenCredential> = if let Some(cred) = &options.credential {
             ClientSecretCredential::new(
                 &cred.tenant_id,
@@ -49,7 +47,7 @@ impl Backend for Client {
             return Ok(Self { key_vault: None });
         };
 
-        let client = SecretClient::new(url, credential, None)
+        let client = SecretClient::new(url, Arc::clone(&credential), None)
             .context("failed to connect to azure keyvault")?;
         tracing::info!("connected to azure keyvault");
 
@@ -59,25 +57,38 @@ impl Backend for Client {
     }
 }
 
-#[derive(Debug, Clone, FromEnv)]
-pub struct ConnectOptions {
-    #[env(nested)]
-    pub credential: Option<CredentialOptions>,
-    #[env(from = "AZURE_KEYVAULT_URL")]
-    pub keyvault_url: Option<String>,
-}
+#[allow(missing_docs)]
+mod config {
+    use fromenv::FromEnv;
 
-#[derive(Debug, Clone, FromEnv)]
-pub struct CredentialOptions {
-    #[env(from = "AZURE_TENANT_ID")]
-    pub tenant_id: String,
-    #[env(from = "AZURE_CLIENT_ID")]
-    pub client_id: String,
-    #[env(from = "AZURE_CLIENT_SECRET")]
-    pub client_secret: String,
-}
+    /// Connection options for the Azure Key Vault backend.
+    #[derive(Debug, Clone, FromEnv)]
+    pub struct ConnectOptions {
+        /// Optional service principal credentials (falls back to developer tools).
+        #[env(nested)]
+        pub credential: Option<CredentialOptions>,
+        /// Key Vault URL. When absent, the vault is disabled.
+        #[env(from = "AZURE_KEYVAULT_URL")]
+        pub keyvault_url: Option<String>,
+    }
 
-impl qwasr::FromEnv for ConnectOptions {
+    /// Azure service principal credential fields.
+    #[derive(Debug, Clone, FromEnv)]
+    pub struct CredentialOptions {
+        /// Azure AD tenant identifier.
+        #[env(from = "AZURE_TENANT_ID")]
+        pub tenant_id: String,
+        /// Azure AD application (client) identifier.
+        #[env(from = "AZURE_CLIENT_ID")]
+        pub client_id: String,
+        /// Azure AD application secret.
+        #[env(from = "AZURE_CLIENT_SECRET")]
+        pub client_secret: String,
+    }
+}
+pub use config::{ConnectOptions, CredentialOptions};
+
+impl omnia::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }

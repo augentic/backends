@@ -3,11 +3,12 @@
 use futures::FutureExt;
 use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest;
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
-use qwasr::FutureResult;
-use qwasr_wasi_otel::WasiOtelCtx;
+use omnia::FutureResult;
+use omnia_wasi_otel::WasiOtelCtx;
 
 use crate::Client;
 
+/// `wasi-otel` implementation backed by OpenTelemetry gRPC collectors.
 impl WasiOtelCtx for Client {
     /// Export traces using gRPC.
     ///

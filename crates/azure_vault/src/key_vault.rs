@@ -8,10 +8,11 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use futures::TryStreamExt;
 use futures::future::FutureExt;
 use http::StatusCode;
-use qwasr_wasi_vault::{FutureResult, Locker, WasiVaultCtx};
+use omnia_wasi_vault::{FutureResult, Locker, WasiVaultCtx};
 
 use crate::Client;
 
+/// `wasi-vault` implementation backed by Azure Key Vault.
 impl WasiVaultCtx for Client {
     fn open_locker(&self, identifier: String) -> FutureResult<Arc<dyn Locker>> {
         tracing::trace!("opening locker: {identifier}");
@@ -30,6 +31,7 @@ impl WasiVaultCtx for Client {
     }
 }
 
+/// A namespaced secrets locker backed by Azure Key Vault.
 pub struct AzLocker {
     identifier: String,
     vault: Arc<SecretClient>,

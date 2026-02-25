@@ -1,6 +1,5 @@
+#![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
-
-//! NATS Client.
 
 mod blobstore;
 mod keyvalue;
@@ -10,10 +9,10 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_nats::AuthError;
-use fromenv::{FromEnv, ParseResult};
-use qwasr::Backend;
+use omnia::Backend;
 use tracing::instrument;
 
+/// NATS backend client for messaging, key-value, and blobstore.
 #[derive(Debug, Clone)]
 pub struct Client {
     inner: async_nats::Client,
@@ -47,25 +46,36 @@ impl Backend for Client {
     }
 }
 
-#[derive(Debug, Clone, FromEnv)]
-pub struct ConnectOptions {
-    #[env(from = "NATS_ADDR", default = "demo.nats.io")]
-    pub address: String,
-    #[env(from = "NATS_TOPICS", with = split)]
-    pub topics: Option<Vec<String>>,
-    #[env(from = "NATS_JWT")]
-    pub jwt: Option<String>,
-    #[env(from = "NATS_SEED")]
-    pub seed: Option<String>,
-}
+#[allow(missing_docs)]
+mod config {
+    use fromenv::{FromEnv, ParseResult};
 
-impl qwasr::FromEnv for ConnectOptions {
+    /// Connection options for the NATS backend.
+    #[derive(Debug, Clone, FromEnv)]
+    pub struct ConnectOptions {
+        /// NATS server address.
+        #[env(from = "NATS_ADDR", default = "demo.nats.io")]
+        pub address: String,
+        /// Optional topics for subscription mode.
+        #[env(from = "NATS_TOPICS", with = split)]
+        pub topics: Option<Vec<String>>,
+        /// Optional JWT used for NATS authentication.
+        #[env(from = "NATS_JWT")]
+        pub jwt: Option<String>,
+        /// Optional `NKey` seed used to sign server nonce challenges.
+        #[env(from = "NATS_SEED")]
+        pub seed: Option<String>,
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn split(s: &str) -> ParseResult<Vec<String>> {
+        Ok(s.split(',').map(ToOwned::to_owned).collect())
+    }
+}
+pub use config::ConnectOptions;
+
+impl omnia::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn split(s: &str) -> ParseResult<Vec<String>> {
-    Ok(s.split(',').map(ToOwned::to_owned).collect())
 }

@@ -5,10 +5,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use azure_core::credentials::TokenCredential;
 use azure_identity::{ManagedIdentityCredential, ManagedIdentityCredentialOptions, UserAssignedId};
 use futures::future::FutureExt;
-use qwasr_wasi_identity::{AccessToken, FutureResult, Identity, WasiIdentityCtx};
+use omnia_wasi_identity::{AccessToken, FutureResult, Identity, WasiIdentityCtx};
 
 use crate::{Client, CredentialType};
 
+/// `wasi-identity` implementation backed by Azure managed identity.
 impl WasiIdentityCtx for Client {
     fn get_identity(&self, name: String) -> FutureResult<Arc<dyn Identity>> {
         tracing::trace!("opening identity: {name}");
@@ -26,6 +27,7 @@ impl WasiIdentityCtx for Client {
     }
 }
 
+/// A named Azure identity that acquires tokens via the configured credential.
 pub struct AzIdentity {
     name: String,
     credential_type: CredentialType,

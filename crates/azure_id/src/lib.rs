@@ -1,16 +1,15 @@
+#![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
-
-//! Azure Identity Client.
 
 mod identity;
 
 use std::fmt::Debug;
 
 use anyhow::{Context, Result};
-use fromenv::FromEnv;
-use qwasr::Backend;
+use omnia::Backend;
 use tracing::instrument;
 
+/// Azure Identity backend client.
 #[derive(Clone)]
 pub struct Client {
     /// Type of credential to use for authentication.
@@ -34,15 +33,24 @@ impl Backend for Client {
     }
 }
 
-#[derive(Debug, Clone, Default, FromEnv)]
-pub struct ConnectOptions {
-    /// Future override credential type. Current implementation only supports
-    /// Managed Identity.
-    #[env(from = "CREDENTIAL_TYPE", default = "ManagedIdentity")]
-    pub credential_type: CredentialType,
-}
+#[allow(missing_docs)]
+mod config {
+    use fromenv::FromEnv;
 
-impl qwasr::FromEnv for ConnectOptions {
+    use super::CredentialType;
+
+    /// Connection options for the Azure Identity backend.
+    #[derive(Debug, Clone, Default, FromEnv)]
+    pub struct ConnectOptions {
+        /// Future override credential type. Current implementation only supports
+        /// Managed Identity.
+        #[env(from = "CREDENTIAL_TYPE", default = "ManagedIdentity")]
+        pub credential_type: CredentialType,
+    }
+}
+pub use config::ConnectOptions;
+
+impl omnia::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
         Self::from_env().finalize().context("issue loading connection options")
     }
@@ -51,6 +59,7 @@ impl qwasr::FromEnv for ConnectOptions {
 /// Type of credential to use for authentication.
 #[derive(Clone, Debug, Default)]
 pub enum CredentialType {
+    /// Use Azure Managed Identity for token acquisition.
     #[default]
     ManagedIdentity,
 }

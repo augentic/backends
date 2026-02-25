@@ -1,5 +1,5 @@
 [package]
-name = "qwasr-nats"
+name = "omnia-nats"
 description = "NATS provider for messaging, keyvalue, and blobstore"
 readme = "README.md"
 authors.workspace = true
@@ -15,6 +15,9 @@ version.workspace = true
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 anyhow.workspace = true
 async-nats = "0.46.0"
@@ -22,9 +25,9 @@ chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
 nkeys = "0.4.5"
-qwasr.workspace = true
-qwasr-wasi-blobstore.workspace = true
-qwasr-wasi-keyvalue.workspace = true
-qwasr-wasi-messaging.workspace = true
+omnia.workspace = true
+omnia-wasi-blobstore.workspace = true
+omnia-wasi-keyvalue.workspace = true
+omnia-wasi-messaging.workspace = true
 tokio.workspace = true
 tracing.workspace = true

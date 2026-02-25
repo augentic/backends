@@ -3,19 +3,18 @@ members = ["crates/*", "examples"]
 resolver = "3"
 
 [workspace.package]
-authors = ["Credibil"]
-categories = ["runtime", "wasi", "wasm"]
+authors = ["Augentic <https://augentic.io>"]
+categories = ["wasm", "api-bindings"]
 edition = "2024"
-homepage = "https://credibil.io"
-keywords = ["decentralized", "identity"]
+homepage = "https://augentic.io"
+keywords = ["wasi", "wasm", "backend", "runtime", "omnia"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/credibil/wrt"
+repository = "https://github.com/augentic/backends"
 rust-version = "1.93"
 version = "0.22.0"
 
 [workspace.lints.rust]
-# https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
-# missing_docs = "warn"
+missing_docs = "warn"
 trivial_numeric_casts = "warn"
 unsafe_op_in_unsafe_fn = "warn"
 unused_extern_crates = "warn"
@@ -53,30 +52,33 @@ unneeded_field_pattern = "warn"
 unused_result_ok = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.100"
-azure_core = "0.31.0"
-azure_identity = "0.31.0"
-base64ct = { version = "1.8.0", features = ["std"] }
-chrono = "0.4.43"
+anyhow = "1.0.102"
+azure_core = "0.32.0"
+azure_identity = "0.32.0"
+base64ct = { version = "1.8.3", features = ["std"] }
+chrono = "0.4.44"
 fromenv = "0.1.0"
-futures = "0.3.31"
-http = "1.3.1"
-rustls = { version = "0.23.36", default-features = false, features = ["logging", "ring", "std"] }
+futures = "0.3.32"
+http = "1.4.0"
+rustls = { version = "0.23.37", default-features = false, features = ["logging", "ring", "std"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 tokio = { version = "1.49.0", default-features = false }
-tracing = "0.1.41"
+tracing = "0.1.44"
 urlencoding = "2.1.3"
 
-# credibil registry
-qwasr = { version = "0.26.0", registry = "credibil" }
-qwasr-wasi-blobstore = { version = "0.26.0", registry = "credibil" }
-qwasr-wasi-identity = { version = "0.26.0", registry = "credibil" }
-qwasr-wasi-keyvalue = { version = "0.26.0", registry = "credibil" }
-qwasr-wasi-messaging = { version = "0.26.0", registry = "credibil" }
-qwasr-wasi-otel = { version = "0.26.0", registry = "credibil" }
-qwasr-wasi-sql = { version = "0.26.0", registry = "credibil" }
-qwasr-wasi-vault = { version = "0.26.0", registry = "credibil" }
+# omnia registry
+omnia = "0.28.0"
+omnia-wasi-blobstore = "0.28.0"
+omnia-wasi-identity = "0.28.0"
+omnia-wasi-keyvalue = "0.28.0"
+omnia-wasi-messaging = "0.28.0"
+omnia-wasi-otel = "0.28.0"
+omnia-wasi-sql = "0.28.0"
+omnia-wasi-vault = "0.28.0"
+
+# local crates
+omnia-azure-table = { path = "crates/azure_table", version = "0.22.0" }
 
 [profile.release]
 lto = true

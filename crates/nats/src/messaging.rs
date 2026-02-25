@@ -6,11 +6,12 @@ use anyhow::{Context, anyhow};
 use async_nats::HeaderMap;
 use futures::future::FutureExt;
 use futures::stream::{self, StreamExt};
-use qwasr_wasi_messaging::{
+use omnia_wasi_messaging::{
     Client, FutureResult, Message, MessageProxy, Metadata, Reply, RequestOptions, Subscriptions,
     WasiMessagingCtx,
 };
 
+/// `wasi-messaging` implementation backed by NATS.
 impl WasiMessagingCtx for crate::Client {
     fn connect(&self) -> FutureResult<Arc<dyn Client>> {
         let client = self.clone();

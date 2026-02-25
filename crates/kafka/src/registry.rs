@@ -181,6 +181,7 @@ impl Registry {
     }
 }
 
+/// Confluent Schema Registry wire-format payload (magic byte + schema ID + data).
 #[allow(unused)]
 pub struct Payload<'a> {
     magic_byte: u8,

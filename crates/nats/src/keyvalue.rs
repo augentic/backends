@@ -6,10 +6,11 @@ use async_nats::jetstream::kv::Config;
 use async_nats::jetstream::{self, kv};
 use futures::TryStreamExt;
 use futures::future::FutureExt;
-use qwasr_wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
+use omnia_wasi_keyvalue::{Bucket, FutureResult, WasiKeyValueCtx};
 
 use crate::Client;
 
+/// `wasi-keyvalue` implementation backed by NATS JetStream KV store.
 impl WasiKeyValueCtx for Client {
     fn open_bucket(&self, identifier: String) -> FutureResult<Arc<dyn Bucket>> {
         tracing::trace!("opening bucket: {identifier}");
@@ -39,6 +40,7 @@ impl WasiKeyValueCtx for Client {
     }
 }
 
+/// A key-value bucket backed by a NATS JetStream KV store.
 #[derive(Debug)]
 pub struct KvBucket(pub kv::Store);
 

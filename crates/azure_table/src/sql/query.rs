@@ -2,7 +2,7 @@
 
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
-use qwasr_wasi_sql::{DataType, Field, Row};
+use omnia_wasi_sql::{DataType, Field, Row};
 use serde_json::Value;
 
 use super::sql_to_odata_filter;
@@ -21,6 +21,7 @@ fn infer_data_type(value: &Value) -> &'static str {
     }
 }
 
+/// Parse an Azure Table Storage JSON response into WASI SQL rows.
 pub fn parse(val: &Value) -> anyhow::Result<Vec<Row>> {
     let mut rows = Vec::new();
     if let Some(entries) = val.get("value").and_then(|v| v.as_array()) {
@@ -102,6 +103,7 @@ fn from_odata_type(value: &Value, data_type: &str) -> anyhow::Result<DataType> {
     }
 }
 
+/// Parsed SELECT query components for Azure Table `OData` translation.
 #[derive(Debug)]
 pub struct QueryPhrases {
     select: Option<String>,
@@ -110,6 +112,7 @@ pub struct QueryPhrases {
 }
 
 impl QueryPhrases {
+    /// Parse a SQL-like SELECT statement into [`QueryPhrases`].
     pub fn query(query: &str, params: &[DataType]) -> anyhow::Result<Self> {
         // Check for unsupported features
         let query_upper = query.to_uppercase();
@@ -195,6 +198,7 @@ impl QueryPhrases {
         Ok(Self { select, filter, top })
     }
 
+    /// Build the `OData` query string from the parsed phrases.
     pub fn odata(&self) -> String {
         let mut clauses = Vec::new();
 
