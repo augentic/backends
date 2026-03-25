@@ -111,6 +111,7 @@ if [ "${PUBLISH_FOR_REAL}" = "true" ]; then
 fi
 
 echo "=== Backend provider crates (no internal dependencies) ==="
+cargo publish -p omnia-azure-blob $DRY_RUN
 cargo publish -p omnia-azure-id $DRY_RUN
 cargo publish -p omnia-azure-table $DRY_RUN
 cargo publish -p omnia-azure-vault $DRY_RUN

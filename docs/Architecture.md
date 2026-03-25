@@ -106,6 +106,7 @@ Backend crates provide concrete implementations connecting to external services:
 | `kafka`         | Apache Kafka      | messaging                      |
 | `mongodb`       | MongoDB           | blobstore                      |
 | `postgres`      | PostgreSQL        | sql                            |
+| `azure_blob`    | Azure Blob Storage| blobstore                      |
 | `azure_id`      | Azure Identity    | identity.                      |
 | `azure_vault`   | Azure Key Vault   | vault                          |
 | `azure_table`   | Azure Table Store | sql                            |

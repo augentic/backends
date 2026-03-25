@@ -6,6 +6,10 @@ version.workspace = true
 rust-version.workspace = true
 
 [[example]]
+name = "azure_blob"
+path = "azure_blob/main.rs"
+
+[[example]]
 name = "azure_table"
 path = "azure_table/main.rs"
 
@@ -13,7 +17,9 @@ path = "azure_table/main.rs"
 chrono.workspace = true
 dotenvy = "0.15.7"
 omnia.workspace = true
+omnia-azure-blob = { path = "../crates/azure-blob" }
 omnia-azure-table.workspace = true
+omnia-wasi-blobstore.workspace = true
 omnia-wasi-sql.workspace = true
 tokio.workspace = true
 tracing.workspace = true

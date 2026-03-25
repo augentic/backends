@@ -8,6 +8,7 @@ MSRV: Rust 1.93
 
 | Crate | WASI Interface | Service |
 | ----- | -------------- | ------- |
+| [`omnia-azure-blob`](crates/azure-blob) | `wasi-blobstore` | Azure Blob Storage |
 | [`omnia-azure-id`](crates/azure_id) | `wasi-identity` | Azure Managed Identity |
 | [`omnia-azure-table`](crates/azure_table) | `wasi-sql` | Azure Table Storage |
 | [`omnia-azure-vault`](crates/azure_vault) | `wasi-vault` | Azure Key Vault |
