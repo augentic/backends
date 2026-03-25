@@ -218,41 +218,35 @@ impl Container for AzureBlobContainer {
     }
 }
 
-/// Extract blob names from a list of [`BlobItem`]s, skipping items without a name.
-#[cfg(test)]
-pub(crate) fn collect_blob_names(
-    items: Vec<azure_storage_blob::models::BlobItem>,
-) -> Vec<String> {
-    items.into_iter().filter_map(|item| item.name).collect()
-}
-
-/// Build an [`ObjectMetadata`] from blob properties.
-#[cfg(test)]
-pub(crate) fn object_metadata_from_properties(
-    name: String,
-    container: String,
-    props: &azure_storage_blob::models::BlobProperties,
-) -> ObjectMetadata {
-    let size = props.content_length.unwrap_or(0);
-
-    #[allow(clippy::cast_sign_loss)]
-    let created_at = props
-        .creation_time
-        .map_or(0, |t| t.unix_timestamp() as u64);
-
-    ObjectMetadata {
-        name,
-        container,
-        size,
-        created_at,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use azure_storage_blob::models::{BlobItem, BlobProperties};
 
     use super::*;
+
+    fn collect_blob_names(items: Vec<BlobItem>) -> Vec<String> {
+        items.into_iter().filter_map(|item| item.name).collect()
+    }
+
+    fn object_metadata_from_properties(
+        name: String,
+        container: String,
+        props: &BlobProperties,
+    ) -> ObjectMetadata {
+        let size = props.content_length.unwrap_or(0);
+
+        #[allow(clippy::cast_sign_loss)]
+        let created_at = props
+            .creation_time
+            .map_or(0, |t| t.unix_timestamp() as u64);
+
+        ObjectMetadata {
+            name,
+            container,
+            size,
+            created_at,
+        }
+    }
 
     fn blob_item(name: Option<&str>) -> BlobItem {
         let mut item = BlobItem::default();
