@@ -18,8 +18,7 @@ pub async fn main() {
 
     tracing::info!("Azure Blob Storage backend desk-test");
 
-    let endpoint =
-        env::var("AZURE_BLOB_ENDPOINT").expect("Set AZURE_BLOB_ENDPOINT env variable");
+    let endpoint = env::var("AZURE_BLOB_ENDPOINT").expect("Set AZURE_BLOB_ENDPOINT env variable");
 
     let credential = match (
         env::var("AZURE_TENANT_ID").ok(),
@@ -34,19 +33,14 @@ pub async fn main() {
         _ => None,
     };
 
-    let cnn_opts = ConnectOptions {
-        endpoint,
-        credential,
-    };
+    let cnn_opts = ConnectOptions { endpoint, credential };
 
     let client = Client::connect_with(cnn_opts).await.expect("Failed to connect");
 
     // --- create container ---
     tracing::info!("creating container: {CONTAINER}");
-    let container = client
-        .create_container(CONTAINER.to_string())
-        .await
-        .expect("Failed to create container");
+    let container =
+        client.create_container(CONTAINER.to_string()).await.expect("Failed to create container");
 
     // --- container_exists ---
     let exists = client
@@ -64,10 +58,7 @@ pub async fn main() {
 
     tracing::info!("writing data.json");
     container
-        .write_data(
-            "data.json".to_string(),
-            br#"{"name":"Alice","age":30}"#.to_vec(),
-        )
+        .write_data("data.json".to_string(), br#"{"name":"Alice","age":30}"#.to_vec())
         .await
         .expect("Failed to write data.json");
 
@@ -93,16 +84,49 @@ pub async fn main() {
     tracing::info!("has greeting.txt: {has}");
 
     // --- object_info ---
-    let info = container
-        .object_info("greeting.txt".to_string())
-        .await
-        .expect("Failed to get object info");
+    let info =
+        container.object_info("greeting.txt".to_string()).await.expect("Failed to get object info");
     tracing::info!(
         "greeting.txt info: name={}, size={}, created_at={}",
         info.name,
         info.size,
         info.created_at
     );
+
+    // --- chunked stream read ---
+    const CHUNK_TEST_SIZE: usize = 8 * 1024 * 1024; // 8 MiB -- exceeds the 4 MiB default chunk
+    const CHUNK_TEST_BLOB: &str = "chunk-test.bin";
+
+    tracing::info!(
+        "writing {CHUNK_TEST_BLOB} ({} MiB) to exercise chunked download",
+        CHUNK_TEST_SIZE / (1024 * 1024)
+    );
+
+    let test_data: Vec<u8> = (0..CHUNK_TEST_SIZE).map(|i| (i % 256) as u8).collect();
+    container
+        .write_data(CHUNK_TEST_BLOB.to_string(), test_data.clone())
+        .await
+        .expect("Failed to write chunk-test blob");
+
+    let read_back = container
+        .get_data(CHUNK_TEST_BLOB.to_string(), 0, 0)
+        .await
+        .expect("Failed to read chunk-test blob")
+        .expect("chunk-test blob should exist");
+
+    assert_eq!(read_back.len(), CHUNK_TEST_SIZE, "round-tripped size mismatch");
+    assert_eq!(
+        read_back, test_data,
+        "round-tripped content mismatch -- chunked reassembly may be broken"
+    );
+    tracing::info!("chunked read OK: {CHUNK_TEST_SIZE} bytes verified");
+
+    let info = container
+        .object_info(CHUNK_TEST_BLOB.to_string())
+        .await
+        .expect("Failed to get chunk-test blob info");
+    assert_eq!(info.size, CHUNK_TEST_SIZE as u64, "object_info size mismatch");
+    tracing::info!("chunk-test blob size from object_info: {}", info.size);
 
     // --- delete_object ---
     tracing::info!("deleting greeting.txt");
@@ -117,18 +141,18 @@ pub async fn main() {
         .expect("Failed to check object existence");
     tracing::info!("has greeting.txt after delete: {has}");
 
-    // --- cleanup: delete remaining blob and container ---
-    tracing::info!("cleaning up data.json");
+    // --- cleanup: delete remaining blobs and container ---
+    tracing::info!("cleaning up {CHUNK_TEST_BLOB}");
     container
-        .delete_object("data.json".to_string())
+        .delete_object(CHUNK_TEST_BLOB.to_string())
         .await
-        .expect("Failed to delete data.json");
+        .expect("Failed to delete chunk-test blob");
+
+    tracing::info!("cleaning up data.json");
+    container.delete_object("data.json".to_string()).await.expect("Failed to delete data.json");
 
     tracing::info!("deleting container: {CONTAINER}");
-    client
-        .delete_container(CONTAINER.to_string())
-        .await
-        .expect("Failed to delete container");
+    client.delete_container(CONTAINER.to_string()).await.expect("Failed to delete container");
 
     tracing::info!("done");
 }

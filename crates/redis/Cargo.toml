@@ -24,5 +24,5 @@ fromenv.workspace = true
 futures.workspace = true
 omnia.workspace = true
 omnia-wasi-keyvalue.workspace = true
-redis = { version = "1.0.4", features = ["connection-manager", "tokio-rustls-comp"] }
+redis = { version = "1.1.0", features = ["connection-manager", "tokio-rustls-comp"] }
 tracing.workspace = true

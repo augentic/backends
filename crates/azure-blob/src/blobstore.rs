@@ -28,10 +28,7 @@ impl WasiBlobstoreCtx for Client {
                 .await
                 .context("creating container")?;
 
-            Ok(Arc::new(AzureBlobContainer {
-                name,
-                service,
-            }) as Arc<dyn Container>)
+            Ok(Arc::new(AzureBlobContainer { name, service }) as Arc<dyn Container>)
         }
         .boxed()
     }
@@ -40,10 +37,8 @@ impl WasiBlobstoreCtx for Client {
         tracing::trace!("getting container: {name}");
         let service = Arc::clone(&self.service);
 
-        async move {
-            Ok(Arc::new(AzureBlobContainer { name, service }) as Arc<dyn Container>)
-        }
-        .boxed()
+        async move { Ok(Arc::new(AzureBlobContainer { name, service }) as Arc<dyn Container>) }
+            .boxed()
     }
 
     fn delete_container(&self, name: String) -> FutureResult<()> {
@@ -84,9 +79,7 @@ struct AzureBlobContainer {
 
 impl Debug for AzureBlobContainer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AzureBlobContainer")
-            .field("name", &self.name)
-            .finish_non_exhaustive()
+        f.debug_struct("AzureBlobContainer").field("name", &self.name).finish_non_exhaustive()
     }
 }
 
@@ -109,15 +102,10 @@ impl Container for AzureBlobContainer {
         let blob_client = self.service.blob_client(&self.name, &name);
 
         async move {
-            let stream = blob_client
-                .managed_download(None)
-                .await
-                .context("downloading blob")?;
+            let stream = blob_client.managed_download(None).await.context("downloading blob")?;
 
-            let chunks: Vec<azure_core::Bytes> = stream
-                .try_collect()
-                .await
-                .context("reading blob stream")?;
+            let chunks: Vec<azure_core::Bytes> =
+                stream.try_collect().await.context("reading blob stream")?;
             let data: Vec<u8> = chunks.into_iter().flat_map(|b| b.to_vec()).collect();
             Ok(Some(data))
         }
@@ -130,10 +118,7 @@ impl Container for AzureBlobContainer {
 
         async move {
             let content = RequestContent::from(data);
-            blob_client
-                .upload(content, None)
-                .await
-                .context("uploading blob")?;
+            blob_client.upload(content, None).await.context("uploading blob")?;
             Ok(())
         }
         .boxed()
@@ -144,15 +129,10 @@ impl Container for AzureBlobContainer {
         let container_client = self.service.blob_container_client(&self.name);
 
         async move {
-            let pager = container_client
-                .list_blobs(None)
-                .context("listing blobs")?;
+            let pager = container_client.list_blobs(None).context("listing blobs")?;
 
             let items: Vec<_> = pager.try_collect().await.context("paginating blob list")?;
-            let names = items
-                .into_iter()
-                .filter_map(|item| item.name)
-                .collect();
+            let names = items.into_iter().filter_map(|item| item.name).collect();
 
             Ok(names)
         }
@@ -174,13 +154,7 @@ impl Container for AzureBlobContainer {
         tracing::trace!("checking existence of object: {name}");
         let blob_client = self.service.blob_client(&self.name, &name);
 
-        async move {
-            blob_client
-                .exists()
-                .await
-                .context("checking blob existence")
-        }
-        .boxed()
+        async move { blob_client.exists().await.context("checking blob existence") }.boxed()
     }
 
     fn object_info(&self, name: String) -> FutureResult<ObjectMetadata> {
@@ -189,23 +163,14 @@ impl Container for AzureBlobContainer {
         let container_name = self.name.clone();
 
         async move {
-            let response = blob_client
-                .get_properties(None)
-                .await
-                .context("getting blob properties")?;
+            let response =
+                blob_client.get_properties(None).await.context("getting blob properties")?;
 
-            let size = response
-                .content_length()
-                .ok()
-                .flatten()
-                .unwrap_or(0);
+            let size = response.content_length().ok().flatten().unwrap_or(0);
 
             #[allow(clippy::cast_sign_loss)]
-            let created_at = response
-                .creation_time()
-                .ok()
-                .flatten()
-                .map_or(0, |t| t.unix_timestamp() as u64);
+            let created_at =
+                response.creation_time().ok().flatten().map_or(0, |t| t.unix_timestamp() as u64);
 
             Ok(ObjectMetadata {
                 name,
@@ -229,16 +194,12 @@ mod tests {
     }
 
     fn object_metadata_from_properties(
-        name: String,
-        container: String,
-        props: &BlobProperties,
+        name: String, container: String, props: &BlobProperties,
     ) -> ObjectMetadata {
         let size = props.content_length.unwrap_or(0);
 
         #[allow(clippy::cast_sign_loss)]
-        let created_at = props
-            .creation_time
-            .map_or(0, |t| t.unix_timestamp() as u64);
+        let created_at = props.creation_time.map_or(0, |t| t.unix_timestamp() as u64);
 
         ObjectMetadata {
             name,
@@ -264,11 +225,8 @@ mod tests {
 
     #[test]
     fn collect_names_from_blob_items() {
-        let items = vec![
-            blob_item(Some("file1.txt")),
-            blob_item(Some("dir/file2.json")),
-            blob_item(None),
-        ];
+        let items =
+            vec![blob_item(Some("file1.txt")), blob_item(Some("dir/file2.json")), blob_item(None)];
 
         let names = collect_blob_names(items);
         assert_eq!(names, vec!["file1.txt", "dir/file2.json"]);
@@ -284,8 +242,7 @@ mod tests {
     fn metadata_from_properties_with_values() {
         let props = blob_props(Some(1024), Some(1_700_000_000));
 
-        let meta =
-            object_metadata_from_properties("blob.bin".into(), "mycontainer".into(), &props);
+        let meta = object_metadata_from_properties("blob.bin".into(), "mycontainer".into(), &props);
 
         assert_eq!(meta.name, "blob.bin");
         assert_eq!(meta.container, "mycontainer");

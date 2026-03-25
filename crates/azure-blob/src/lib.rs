@@ -41,9 +41,8 @@ impl Backend for Client {
             DeveloperToolsCredential::new(None).context("could not create credential")?
         };
 
-        let service =
-            BlobServiceClient::new(&options.endpoint, Some(credential), None)
-                .context("failed to create blob service client")?;
+        let service = BlobServiceClient::new(&options.endpoint, Some(credential), None)
+            .context("failed to create blob service client")?;
         tracing::info!("connected to azure blob storage");
 
         Ok(Self {
