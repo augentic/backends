@@ -102,11 +102,9 @@ impl Container for AzureBlobContainer {
         let blob_client = self.service.blob_client(&self.name, &name);
 
         async move {
-            let stream = blob_client.managed_download(None).await.context("downloading blob")?;
-
-            let chunks: Vec<azure_core::Bytes> =
-                stream.try_collect().await.context("reading blob stream")?;
-            let data: Vec<u8> = chunks.into_iter().flat_map(|b| b.to_vec()).collect();
+            let response = blob_client.download(None).await.context("downloading blob")?;
+            let data: Vec<u8> =
+                response.into_body().collect().await.context("reading blob body")?.to_vec();
             Ok(Some(data))
         }
         .boxed()
