@@ -37,17 +37,19 @@ pub async fn main() {
 
     let client = Client::connect_with(cnn_opts).await.expect("Failed to connect");
 
-    // --- create container ---
-    tracing::info!("creating container: {CONTAINER}");
-    let container =
-        client.create_container(CONTAINER.to_string()).await.expect("Failed to create container");
-
-    // --- container_exists ---
+    // --- ensure container exists (idempotent) ---
     let exists = client
         .container_exists(CONTAINER.to_string())
         .await
         .expect("Failed to check container existence");
-    tracing::info!("container exists: {exists}");
+    let container = if exists {
+        tracing::info!("container already exists, reusing: {CONTAINER}");
+        client.get_container(CONTAINER.to_string()).await.expect("Failed to get container")
+    } else {
+        tracing::info!("creating container: {CONTAINER}");
+        client.create_container(CONTAINER.to_string()).await.expect("Failed to create container")
+    };
+    tracing::info!("container exists: true");
 
     // --- write blobs ---
     tracing::info!("writing greeting.txt");
@@ -141,15 +143,12 @@ pub async fn main() {
         .expect("Failed to check object existence");
     tracing::info!("has greeting.txt after delete: {has}");
 
-    // --- cleanup: delete remaining blobs and container ---
-    tracing::info!("cleaning up {CHUNK_TEST_BLOB}");
-    container
-        .delete_object(CHUNK_TEST_BLOB.to_string())
-        .await
-        .expect("Failed to delete chunk-test blob");
-
-    tracing::info!("cleaning up data.json");
-    container.delete_object("data.json".to_string()).await.expect("Failed to delete data.json");
+    // --- cleanup: delete all blobs then container ---
+    let remaining = container.list_objects().await.expect("Failed to list objects for cleanup");
+    for blob in &remaining {
+        tracing::info!("cleaning up {blob}");
+        container.delete_object(blob.clone()).await.expect("Failed to delete blob");
+    }
 
     tracing::info!("deleting container: {CONTAINER}");
     client.delete_container(CONTAINER.to_string()).await.expect("Failed to delete container");
