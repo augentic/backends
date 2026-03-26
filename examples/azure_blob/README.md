@@ -60,7 +60,7 @@ Operations exercised:
 5. List all blobs in the container
 6. Check blob existence (`has_object`)
 7. Get blob metadata (`object_info`) -- name, size, created_at
-8. **Chunked stream read** -- write an 8 MiB blob, read it back via `managed_download`, and verify byte-level integrity to confirm multi-chunk reassembly works correctly
+8. **Chunked stream read** -- write an 8 MiB blob, read it back using the example's streaming download helper, and verify byte-level integrity to confirm multi-chunk reassembly works correctly
 9. Delete `greeting.txt` and confirm it no longer exists
 10. Clean up: delete all blobs and the container
 
