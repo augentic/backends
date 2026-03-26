@@ -7,7 +7,7 @@ pub mod query;
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use futures::future::FutureExt;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use omnia_wasi_jsondb::{
     Document, FilterTree, FutureResult, QueryOpts, QueryResult, WasiJsonDbCtx,
 };

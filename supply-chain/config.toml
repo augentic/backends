@@ -31,7 +31,7 @@ version = "0.8.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.apache-avro]]
-version = "0.19.0"
+version = "0.21.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.arc-swap]]
@@ -63,11 +63,11 @@ version = "0.6.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.aws-lc-rs]]
-version = "1.16.0"
+version = "1.16.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.aws-lc-sys]]
-version = "0.37.1"
+version = "0.39.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.axum]]
@@ -79,19 +79,23 @@ version = "0.5.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.azure_core]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.azure_core_macros]]
-version = "0.6.0"
+version = "0.7.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.azure_identity]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.azure_security_keyvault_secrets]]
-version = "0.11.0"
+version = "0.12.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.azure_storage_blob]]
+version = "0.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.backon]]
@@ -112,6 +116,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.bitvec]]
 version = "1.0.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.block-buffer]]
+version = "0.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.bon]]
@@ -170,6 +178,10 @@ criteria = "safe-to-deploy"
 version = "1.8.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.cmov]]
+version = "0.5.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.combine]]
 version = "4.6.7"
 criteria = "safe-to-deploy"
@@ -192,6 +204,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.const-oid]]
 version = "0.9.6"
+criteria = "safe-to-deploy"
+
+[[exemptions.const-oid]]
+version = "0.10.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.const-random]]
@@ -242,6 +258,10 @@ criteria = "safe-to-deploy"
 version = "0.1.7"
 criteria = "safe-to-deploy"
 
+[[exemptions.crypto-common]]
+version = "0.2.1"
+criteria = "safe-to-deploy"
+
 [[exemptions.csv]]
 version = "1.4.0"
 criteria = "safe-to-run"
@@ -249,6 +269,10 @@ criteria = "safe-to-run"
 [[exemptions.csv-core]]
 version = "0.1.13"
 criteria = "safe-to-run"
+
+[[exemptions.ctutils]]
+version = "0.4.0"
+criteria = "safe-to-deploy"
 
 [[exemptions.curl-sys]]
 version = "0.4.85+curl-8.18.0"
@@ -326,6 +350,10 @@ criteria = "safe-to-deploy"
 version = "0.10.7"
 criteria = "safe-to-deploy"
 
+[[exemptions.digest]]
+version = "0.11.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.dotenvy]]
 version = "0.15.7"
 criteria = "safe-to-deploy"
@@ -367,10 +395,6 @@ version = "0.1.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.fancy-regex]]
-version = "0.14.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.fancy-regex]]
 version = "0.17.0"
 criteria = "safe-to-deploy"
 
@@ -384,10 +408,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.flagset]]
 version = "0.4.7"
-criteria = "safe-to-deploy"
-
-[[exemptions.fluent-uri]]
-version = "0.3.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.fluent-uri]]
@@ -490,6 +510,14 @@ criteria = "safe-to-deploy"
 version = "0.12.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.hmac]]
+version = "0.13.0-rc.6"
+criteria = "safe-to-deploy"
+
+[[exemptions.hybrid-array]]
+version = "0.4.8"
+criteria = "safe-to-deploy"
+
 [[exemptions.hyper-rustls]]
 version = "0.27.7"
 criteria = "safe-to-deploy"
@@ -530,10 +558,6 @@ criteria = "safe-to-deploy"
 version = "0.10.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.itertools]]
-version = "0.14.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.itoa]]
 version = "1.0.17"
 criteria = "safe-to-deploy"
@@ -551,11 +575,11 @@ version = "0.3.90"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
-version = "0.30.0"
+version = "0.44.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
-version = "0.42.1"
+version = "0.45.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.lazycell]]
@@ -635,11 +659,11 @@ version = "0.1.5+1.15.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.mongodb]]
-version = "3.5.1"
+version = "3.5.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.mongodb-internal-macros]]
-version = "3.5.1"
+version = "3.5.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.multimap]]
@@ -846,6 +870,10 @@ criteria = "safe-to-deploy"
 version = "0.2.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.quick-xml]]
+version = "0.39.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.quinn]]
 version = "0.11.9"
 criteria = "safe-to-deploy"
@@ -875,7 +903,7 @@ version = "4.10.0+2.12.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.redis]]
-version = "1.0.4"
+version = "1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_syscall]]
@@ -883,11 +911,11 @@ version = "0.5.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.referencing]]
-version = "0.30.0"
+version = "0.44.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.referencing]]
-version = "0.42.1"
+version = "0.45.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.regex-lite]]
@@ -947,7 +975,7 @@ version = "0.102.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-webpki]]
-version = "0.103.9"
+version = "0.103.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.same-file]]
@@ -959,7 +987,7 @@ version = "0.1.28"
 criteria = "safe-to-deploy"
 
 [[exemptions.schema-registry-client]]
-version = "0.4.1"
+version = "0.4.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.sea-query]]
@@ -996,6 +1024,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.sha-1]]
 version = "0.10.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.sha2]]
+version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.signal-hook-registry]]
@@ -1139,7 +1171,7 @@ version = "0.32.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.tracing-subscriber]]
-version = "0.3.22"
+version = "0.3.23"
 criteria = "safe-to-deploy"
 
 [[exemptions.trait-variant]]
@@ -1167,15 +1199,15 @@ version = "1.19.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.typespec]]
-version = "0.12.0"
+version = "0.13.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.typespec_client_core]]
-version = "0.11.0"
+version = "0.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.typespec_macros]]
-version = "0.11.0"
+version = "0.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.unarray]]
