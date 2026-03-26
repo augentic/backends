@@ -13,7 +13,7 @@ const CONTAINER: &str = "testaugenticblob";
 
 #[tokio::main]
 pub async fn main() {
-    dotenv().expect("Failed to load .env file");
+    let _ = dotenv();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
     tracing::info!("Azure Blob Storage backend desk-test");
