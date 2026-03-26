@@ -1,41 +1,82 @@
-# Azure Table Storage Example
+# Azure Table Storage Desk Test
 
-This is a small CLI that invokes the `azure_table` backend directly so that some desk testing can be done.
+Self-seeding desk test for the `omnia-azure-table` crate's `wasi-jsondb`
+implementation. It creates the table, seeds five records covering multiple
+`OData` types, exercises every filter variant and CRUD operation, then
+cleans up after itself.
 
-It requires environment variables:
+No manual data pre-seeding is required.
 
-```
-AZURE_STORAGE_ACCOUNT=<storage account name>
-AZURE_STORAGE_KEY=<base64 encoded access key>
-```
+## Covered scenarios
 
-See the code for the `Customer` struct that should be a match to the data stored in a table named `testAugenticBE`.
+- **CRUD**: insert, get round-trip, put (upsert), delete, double-delete,
+  duplicate insert rejected, get non-existent returns None
+- **Filters**: `Compare` (Eq/Ne/Gt/Gte/Lte across Boolean, Int32, Float64,
+  String), `InList`, `NotInList`, `And`, `Or`, `Not`
+- **Unsupported filter rejection**: `Contains`, `StartsWith`, `EndsWith`,
+  `IsNull`, `IsNotNull` are rejected with an error (Azure Table `OData`
+  does not support string functions or null checks)
+- **Query options**: `offset`, `limit`, continuation tokens
+- **OData type annotations**: `Edm.Int64` round-trip, `Edm.Guid` and
+  `Edm.DateTime` via serde `#[serde(rename = "Field@odata.type")]` pattern
+- **Error paths**: table-only collection rejected for point operations
 
-Sample data in the table should be of the form:
+## Running with Azurite
 
-| Property Name      | Type               | Example Value                     |
-|--------------------|--------------------|-----------------------------------|
-| PartitionKey       | String             | testAugenticBE                    |
-| RowKey             | String             | yrgp8tsmxwlc5jh0ovd19wqn          |
-| Timestamp          | DateTime           | (system generated)                |
-| Id                 | String             | yrgp8tsmxwlc5jh0ovd19wqn          |
-| Name               | String             | Alice Montgomery                  |
-| IsActive           | Boolean            | true                              |
-| Created            | DateTime           | 2013-08-09T18:55:48.3402073Z      |
-| Points             | Int32              | 102                               |
-| Discount           | Double             | 0.125                             |
-| Avatar             | Binary             | VGVzdGluZy0xMjM=                  |
+1. Start Azurite (table service on port 10002):
 
-Enter the following values that match the hard-coded queries in the example (PartitionKey is `testAugenticBE` and RowKey is the same as Id):
+   ```bash
+   azurite --tableHost 127.0.0.1 --tablePort 10002
+   ```
 
-| Id                       | Name             | IsActive | Created                      | Points | Discount | Avatar           |
-|--------------------------|------------------|----------|------------------------------|--------|----------|------------------|
-| yrgp8tsmxwlc5jh0ovd19wqn | Alice Montgomery | true     | 2013-08-09T18:55:48.3402073Z | 102    | 0.125    | VGVzdGluZy0xMjM= |
-| g6fw3pouvk2hffs4bvs3kl0z | Bob Burns        | false    | 2025-10-20T06:23Z            |  56    | 0        |                  |
-| aru4fkdqjk7gv1ojdfiz0b55 | Eve Dropper      | true     | 2026-01-30T01:32:32Z         |  10    | 0.1      | QW5vdGhlciBUZXN0 |
+   Or via Docker:
 
-Run the example using
+   ```bash
+   docker run -d -p 10002:10002 mcr.microsoft.com/azure-storage/azurite \
+     azurite-table --tableHost 0.0.0.0 --skipApiVersionCheck
+   ```
+
+2. Create an `.env` file in the workspace root (or export the variables):
+
+   ```bash
+   AZURE_STORAGE_ACCOUNT=devstoreaccount1
+   AZURE_STORAGE_KEY=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==
+   AZURE_TABLE_ENDPOINT=http://127.0.0.1:10002/devstoreaccount1
+   ```
+
+   These are the well-known Azurite development credentials.
+
+3. Run the desk test:
+
+   ```bash
+   cargo run --example azure_table
+   ```
+
+## Running against Azure
+
+Set the storage account name and key. Leave `AZURE_TABLE_ENDPOINT` unset
+(defaults to `https://{account}.table.core.windows.net`):
 
 ```bash
+AZURE_STORAGE_ACCOUNT=myaccount \
+AZURE_STORAGE_KEY=<base64-key> \
 cargo run --example azure_table
+```
+
+## Expected output
+
+```
+Azure Table JSONDB desk test
+============================
+
+Table 'testJsondb': created
+Seeded 5 records
+
+  PASS  get round-trip (all fields verified)
+  PASS  query all (5 records)
+  PASS  Compare: IsActive eq true (3)
+  ...
+  PASS  table-only collection rejected for get
+
+Cleaned up 4 rows. All tests passed!
 ```

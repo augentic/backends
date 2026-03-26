@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
 
-pub mod sql;
+pub mod store;
 
 use std::fmt::Debug;
 
@@ -45,6 +45,25 @@ mod config {
         /// Storage account access key.
         #[env(from = "AZURE_STORAGE_KEY")]
         pub key: String,
+
+        /// Table service endpoint URL. When empty (the default), the Azure
+        /// public cloud URL `https://{name}.table.core.windows.net` is used.
+        /// Set to `http://127.0.0.1:10002/{name}` for Azurite, or to a
+        /// sovereign-cloud / Azure Stack endpoint as needed.
+        #[env(from = "AZURE_TABLE_ENDPOINT", default = "")]
+        pub endpoint: String,
+    }
+
+    impl ConnectOptions {
+        /// Resolved base URL for the table service (no trailing slash).
+        #[must_use]
+        pub fn base_url(&self) -> String {
+            if self.endpoint.is_empty() {
+                format!("https://{}.table.core.windows.net", self.name)
+            } else {
+                self.endpoint.trim_end_matches('/').to_owned()
+            }
+        }
     }
 }
 pub use config::ConnectOptions;
