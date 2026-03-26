@@ -274,11 +274,12 @@ pub async fn main() {
         QueryOpts::default(),
     )
     .await;
-    assert_eq!(r.documents.len(), 3);
+    // Azure Table excludes entities where the property is absent (dana has no
+    // Region), so only bob and eve match — not 3.
+    assert_eq!(r.documents.len(), 2);
     assert!(ids(&r).contains(&"bob"));
-    assert!(ids(&r).contains(&"dana"));
     assert!(ids(&r).contains(&"eve"));
-    pass("Compare: Region ne 'US-West' (3)");
+    pass("Compare: Region ne 'US-West' (2, absent fields excluded)");
 
     // ── 10. And (all server-side) ───────────────────────────────────
     let r = q(
