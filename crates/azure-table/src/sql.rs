@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use futures::future::FutureExt;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use omnia_wasi_sql::{Connection, DataType, FutureResult, Row, WasiSqlCtx};
 use query::QueryPhrases;
 use reqwest::Client as HttpClient;

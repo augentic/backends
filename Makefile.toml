@@ -18,7 +18,7 @@ skip_rust_env_info = true
 dependencies = ["audit", "fmt", "lint", "outdated", "deps"]
 
 [tasks.ci]
-dependencies = ["lint", "test", "test-doc", "vet", "outdated", "deny", "fmt"]
+dependencies = ["lint", "test", "test-docs", "vet", "outdated", "deny", "fmt"]
 
 # -------------------------------------
 # Individual Actions
@@ -111,6 +111,7 @@ if [ "${PUBLISH_FOR_REAL}" = "true" ]; then
 fi
 
 echo "=== Backend provider crates (no internal dependencies) ==="
+cargo publish -p omnia-azure-blob $DRY_RUN
 cargo publish -p omnia-azure-id $DRY_RUN
 cargo publish -p omnia-azure-table $DRY_RUN
 cargo publish -p omnia-azure-vault $DRY_RUN

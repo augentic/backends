@@ -1,6 +1,6 @@
 [package]
-name = "omnia-kafka"
-description = "Kafka messaging resource"
+name = "omnia-azure-blob"
+description = "Azure Blob Storage backend provider"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true
@@ -12,6 +12,8 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[lib]
+
 [lints]
 workspace = true
 
@@ -20,20 +22,12 @@ all-features = true
 
 [dependencies]
 anyhow.workspace = true
+azure_core.workspace = true
+azure_identity.workspace = true
+azure_storage_blob = "0.10.1"
 chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
-http.workspace = true
-jsonschema = { version = "0.45.0", default-features = false }
 omnia.workspace = true
-omnia-wasi-messaging.workspace = true
-rand = "0.10.0"
-rdkafka = { version = "0.39.0", features = ["cmake-build", "curl", "ssl-vendored", "tokio"] }
-schema-registry-client = "0.4.2"
-serde_json.workspace = true
-tokio.workspace = true
+omnia-wasi-blobstore.workspace = true
 tracing.workspace = true
-
-[dev-dependencies]
-csv = "1.4.0"
-serde.workspace = true
