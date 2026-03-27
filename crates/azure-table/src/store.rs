@@ -4,7 +4,9 @@ pub mod document;
 pub mod filter;
 pub mod query;
 
-use anyhow::{anyhow, bail};
+use std::sync::Arc;
+
+use anyhow::{Context, anyhow, bail};
 use base64ct::{Base64, Encoding};
 use futures::future::FutureExt;
 use hmac::{Hmac, KeyInit, Mac};
@@ -17,23 +19,31 @@ use sha2::Sha256;
 
 use crate::Client;
 
+const API_VERSION: &str = "2026-02-06";
+const ACCEPT_HEADER: &str = "application/json;odata=fullmetadata";
+
 /// `wasi-jsondb` implementation backed by Azure Table Storage REST API.
 impl WasiJsonDbCtx for Client {
     fn get(&self, collection: String, id: String) -> FutureResult<Option<Document>> {
-        let opts = self.options.clone();
-        let http = HttpClient::new();
+        let opts = Arc::clone(&self.options);
+        let http = self.http.clone();
+        let base = Arc::clone(&self.base_url);
+        let hmac_key = Arc::clone(&self.hmac_key);
         async move {
             let (table, pk) = parse_collection(&collection)?;
             let pk = require_pk(&collection, pk.as_ref())?;
-            let base = opts.base_url();
-            let uri = format!("{base}/{table}(PartitionKey='{pk}',RowKey='{id}')");
+            let uri = format!(
+                "{base}/{table}(PartitionKey='{pk}',RowKey='{rk}')",
+                pk = escape_entity_key(pk),
+                rk = escape_entity_key(&id),
+            );
 
             let now = now_rfc1123();
-            let auth = auth_header(&opts.name, &opts.key, "GET", "", &now, &uri)?;
+            let auth = sign_request(&opts.name, &hmac_key, "GET", "", &now, &uri)?;
 
             let response = http
                 .get(&uri)
-                .headers(azure_headers(&now, &auth))
+                .headers(azure_headers(&now, &auth)?)
                 .send()
                 .await
                 .map_err(|e| anyhow!("HTTP request error: {e}"))?;
@@ -58,26 +68,30 @@ impl WasiJsonDbCtx for Client {
     }
 
     fn insert(&self, collection: String, doc: Document) -> FutureResult<()> {
-        let opts = self.options.clone();
-        let http = HttpClient::new();
+        let opts = Arc::clone(&self.options);
+        let http = self.http.clone();
+        let base = Arc::clone(&self.base_url);
+        let hmac_key = Arc::clone(&self.hmac_key);
         async move {
             let (table, pk) = parse_collection(&collection)?;
             let pk = require_pk(&collection, pk.as_ref())?;
-            let base = opts.base_url();
             let uri = format!("{base}/{table}");
             let body = document::flatten(&doc, pk)?;
 
             let now = now_rfc1123();
-            let auth = auth_header(&opts.name, &opts.key, "POST", "application/json", &now, &uri)?;
+            let auth = sign_request(&opts.name, &hmac_key, "POST", "application/json", &now, &uri)?;
 
             let response = http
                 .post(&uri)
-                .headers(azure_headers(&now, &auth))
+                .headers(azure_headers(&now, &auth)?)
                 .json(&body)
                 .send()
                 .await
                 .map_err(|e| anyhow!("HTTP request error: {e}"))?;
 
+            if response.status().as_u16() == 409 {
+                bail!("entity already exists in '{collection}' with id '{}'", doc.id);
+            }
             if !response.status().is_success() {
                 bail!(
                     "Azure Table insert failed ({}): {}",
@@ -91,21 +105,26 @@ impl WasiJsonDbCtx for Client {
     }
 
     fn put(&self, collection: String, doc: Document) -> FutureResult<()> {
-        let opts = self.options.clone();
-        let http = HttpClient::new();
+        let opts = Arc::clone(&self.options);
+        let http = self.http.clone();
+        let base = Arc::clone(&self.base_url);
+        let hmac_key = Arc::clone(&self.hmac_key);
         async move {
             let (table, pk) = parse_collection(&collection)?;
             let pk = require_pk(&collection, pk.as_ref())?;
-            let base = opts.base_url();
-            let uri = format!("{base}/{table}(PartitionKey='{pk}',RowKey='{}')", doc.id);
+            let uri = format!(
+                "{base}/{table}(PartitionKey='{epk}',RowKey='{rk}')",
+                epk = escape_entity_key(pk),
+                rk = escape_entity_key(&doc.id),
+            );
             let body = document::flatten(&doc, pk)?;
 
             let now = now_rfc1123();
-            let auth = auth_header(&opts.name, &opts.key, "PUT", "application/json", &now, &uri)?;
+            let auth = sign_request(&opts.name, &hmac_key, "PUT", "application/json", &now, &uri)?;
 
             let response = http
                 .put(&uri)
-                .headers(azure_headers(&now, &auth))
+                .headers(azure_headers(&now, &auth)?)
                 .json(&body)
                 .send()
                 .await
@@ -124,18 +143,23 @@ impl WasiJsonDbCtx for Client {
     }
 
     fn delete(&self, collection: String, id: String) -> FutureResult<bool> {
-        let opts = self.options.clone();
-        let http = HttpClient::new();
+        let opts = Arc::clone(&self.options);
+        let http = self.http.clone();
+        let base = Arc::clone(&self.base_url);
+        let hmac_key = Arc::clone(&self.hmac_key);
         async move {
             let (table, pk) = parse_collection(&collection)?;
             let pk = require_pk(&collection, pk.as_ref())?;
-            let base = opts.base_url();
-            let uri = format!("{base}/{table}(PartitionKey='{pk}',RowKey='{id}')");
+            let uri = format!(
+                "{base}/{table}(PartitionKey='{epk}',RowKey='{rk}')",
+                epk = escape_entity_key(pk),
+                rk = escape_entity_key(&id),
+            );
 
             let now = now_rfc1123();
-            let auth = auth_header(&opts.name, &opts.key, "DELETE", "", &now, &uri)?;
+            let auth = sign_request(&opts.name, &hmac_key, "DELETE", "", &now, &uri)?;
 
-            let mut headers = azure_headers(&now, &auth);
+            let mut headers = azure_headers(&now, &auth)?;
             headers.insert("If-Match", "*".parse().expect("valid header value"));
 
             let response = http
@@ -160,32 +184,51 @@ impl WasiJsonDbCtx for Client {
         .boxed()
     }
 
+    /// Query documents with optional filtering and pagination.
+    ///
+    /// Azure Table does not support server-side offsets (`$skip`). If
+    /// `options.offset` is set, the query is rejected with an error —
+    /// consistent with how unsupported filter nodes are handled. Use
+    /// continuation tokens for pagination instead.
     fn query(
         &self, collection: String, filter: Option<FilterTree>, options: QueryOpts,
     ) -> FutureResult<QueryResult> {
-        let opts = self.options.clone();
-        let http = HttpClient::new();
+        let opts = Arc::clone(&self.options);
+        let http = self.http.clone();
+        let base = Arc::clone(&self.base_url);
+        let hmac_key = Arc::clone(&self.hmac_key);
         async move {
-            let (table, pk) = parse_collection(&collection)?;
+            if options.offset.is_some_and(|o| o > 0) {
+                bail!(
+                    "offset is not supported by Azure Table — \
+                     use continuation tokens for pagination instead"
+                );
+            }
 
+            let fetch_limit = options.limit.map(|l| l as usize);
+            if fetch_limit == Some(0) {
+                return Ok(QueryResult {
+                    documents: Vec::new(),
+                    continuation: options.continuation,
+                });
+            }
+
+            let (table, pk) = parse_collection(&collection)?;
             let user_filter = filter.as_ref().map(filter::to_odata).transpose()?;
             let odata_filter = build_odata_filter(pk.as_deref(), user_filter.as_deref());
 
             let mut all_documents: Vec<Document> = Vec::new();
             let mut next_continuation = options.continuation.clone();
-            let fetch_limit = options.limit.map(|l| l as usize);
-            let server_limit = match (fetch_limit, options.offset.map(|o| o as usize)) {
-                (Some(l), Some(o)) => Some(l.saturating_add(o)),
-                (lim, _) => lim,
-            };
 
             loop {
                 let (body, continuation) = fetch_page(
                     &http,
                     &opts,
+                    &base,
+                    &hmac_key,
                     &table,
                     odata_filter.as_deref(),
-                    server_limit,
+                    fetch_limit,
                     next_continuation.as_deref(),
                 )
                 .await?;
@@ -199,15 +242,11 @@ impl WasiJsonDbCtx for Client {
                 let has_more_pages = continuation.is_some();
                 next_continuation = continuation;
 
-                let reached_limit = server_limit.is_some_and(|lim| all_documents.len() >= lim);
+                let reached_limit = fetch_limit.is_some_and(|lim| all_documents.len() >= lim);
 
                 if !has_more_pages || reached_limit {
                     break;
                 }
-            }
-
-            if let Some(offset) = options.offset {
-                all_documents = query::apply_offset(all_documents, offset);
             }
 
             if let Some(lim) = fetch_limit {
@@ -235,21 +274,21 @@ impl Client {
     /// Returns an error if the HTTP request fails or the server responds with
     /// an unexpected status code.
     pub async fn ensure_table(&self, table: &str) -> anyhow::Result<bool> {
-        let base = self.options.base_url();
-        let uri = format!("{base}/Tables");
+        let uri = format!("{}/Tables", self.base_url);
         let now = now_rfc1123();
-        let auth = auth_header(
+        let auth = sign_request(
             &self.options.name,
-            &self.options.key,
+            &self.hmac_key,
             "POST",
             "application/json",
             &now,
             &uri,
         )?;
 
-        let response = HttpClient::new()
+        let response = self
+            .http
             .post(&uri)
-            .headers(azure_headers(&now, &auth))
+            .headers(azure_headers(&now, &auth)?)
             .json(&serde_json::json!({"TableName": table}))
             .send()
             .await
@@ -271,6 +310,13 @@ impl Client {
 
 // ── helpers ──────────────────────────────────────────────────────────
 
+/// Escape a value for use inside an `OData` entity-key predicate
+/// (e.g. `PartitionKey='...'`). Single quotes are doubled per `OData`
+/// convention and the result is percent-encoded for safe URL embedding.
+fn escape_entity_key(value: &str) -> String {
+    urlencoding::encode(&value.replace('\'', "''")).into_owned()
+}
+
 fn require_pk<'a>(collection: &str, pk: Option<&'a String>) -> anyhow::Result<&'a str> {
     pk.map(String::as_str).ok_or_else(|| {
         anyhow!(
@@ -290,12 +336,11 @@ fn build_odata_filter(pk: Option<&str>, server_filter: Option<&str>) -> Option<S
     if parts.is_empty() { None } else { Some(parts.join(" and ")) }
 }
 
-#[allow(clippy::similar_names)]
+#[allow(clippy::similar_names, clippy::too_many_arguments)]
 async fn fetch_page(
-    http: &HttpClient, opts: &crate::ConnectOptions, table: &str, odata_filter: Option<&str>,
-    fetch_limit: Option<usize>, continuation: Option<&str>,
+    http: &HttpClient, opts: &crate::ConnectOptions, base: &str, hmac_key: &[u8], table: &str,
+    odata_filter: Option<&str>, fetch_limit: Option<usize>, continuation: Option<&str>,
 ) -> anyhow::Result<(Value, Option<String>)> {
-    let base = opts.base_url();
     let base_uri = format!("{base}/{table}()");
 
     let mut query_params: Vec<String> = Vec::new();
@@ -320,11 +365,11 @@ async fn fetch_page(
     };
 
     let now = now_rfc1123();
-    let auth = auth_header(&opts.name, &opts.key, "GET", "", &now, &uri)?;
+    let auth = sign_request(&opts.name, hmac_key, "GET", "", &now, &uri)?;
 
     let response = http
         .get(&uri)
-        .headers(azure_headers(&now, &auth))
+        .headers(azure_headers(&now, &auth)?)
         .send()
         .await
         .map_err(|e| anyhow!("HTTP request error: {e}"))?;
@@ -374,8 +419,11 @@ fn now_rfc1123() -> String {
     chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string()
 }
 
-fn auth_header(
-    account_name: &str, account_key: &str, method: &str, content_type: &str, date_time: &str,
+/// Compute a `SharedKey` Lite HMAC-SHA256 authorization header value.
+///
+/// See <https://learn.microsoft.com/en-us/rest/api/storageservices/authorize-with-shared-key>.
+fn sign_request(
+    account_name: &str, hmac_key: &[u8], method: &str, content_type: &str, date_time: &str,
     uri: &str,
 ) -> anyhow::Result<String> {
     let uri_path = uri
@@ -386,8 +434,7 @@ fn auth_header(
     let uri_path = uri_path.split('?').next().unwrap_or(uri_path);
     let resource = format!("/{account_name}{uri_path}");
     let string_to_sign = format!("{method}\n\n{content_type}\n{date_time}\n{resource}");
-    let key_bytes = Base64::decode_vec(account_key)?;
-    let mut hmac = Hmac::<Sha256>::new_from_slice(&key_bytes)
+    let mut hmac = Hmac::<Sha256>::new_from_slice(hmac_key)
         .map_err(|e| anyhow!("HMAC initialization error: {e}"))?;
     hmac.update(string_to_sign.as_bytes());
     let signature = hmac.finalize().into_bytes();
@@ -395,13 +442,14 @@ fn auth_header(
     Ok(format!("SharedKey {account_name}:{encoded}"))
 }
 
-fn azure_headers(date: &str, auth: &str) -> reqwest::header::HeaderMap {
-    let mut h = reqwest::header::HeaderMap::new();
-    h.insert("x-ms-date", date.parse().expect("valid header value"));
-    h.insert("x-ms-version", "2026-02-06".parse().expect("valid header value"));
-    h.insert("Authorization", auth.parse().expect("valid header value"));
-    h.insert("Accept", "application/json;odata=fullmetadata".parse().expect("valid header value"));
-    h
+/// Build the standard Azure Table REST headers.
+fn azure_headers(date: &str, auth: &str) -> anyhow::Result<reqwest::header::HeaderMap> {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("x-ms-date", date.parse().context("invalid x-ms-date header value")?);
+    headers.insert("x-ms-version", API_VERSION.parse().expect("valid header value"));
+    headers.insert("Authorization", auth.parse().context("invalid Authorization header value")?);
+    headers.insert("Accept", ACCEPT_HEADER.parse().expect("valid header value"));
+    Ok(headers)
 }
 
 #[cfg(test)]

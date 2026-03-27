@@ -2733,9 +2733,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.36.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95b4103cffefa72eb8428cb6b47d6627161e51c2739fc5e3b734584157bc642a"
+checksum = "b1f111c8c41e7c61a49cd34e44c7619462967221a6443b0ec299e0ac30cfb9b1"
 dependencies = [
  "cc",
  "pkg-config",
@@ -3284,7 +3284,8 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "674767b6684cd148a7045dbd69372204bcac86a4eaeaa66f830f5ca1b2c4b39a"
 dependencies = [
  "anyhow",
  "clap",
@@ -3437,7 +3438,8 @@ dependencies = [
 [[package]]
 name = "omnia-otel"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a218e39ef8fc4d959292f801f49f8393f106daf926162b7055aa4beb44afe4f2"
 dependencies = [
  "anyhow",
  "http",
@@ -3486,7 +3488,8 @@ dependencies = [
 [[package]]
 name = "omnia-runtime-macro"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9e500bcb912b7622b1bed5ab397c56b614eda35232c49108a6bab2e0467e276"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3496,7 +3499,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64c3bbd409fab54bd9eaa34537fc711564d4124232a8d55960f84e003c2b1695"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3512,7 +3516,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c803314b4c646472a8e99eb93e9a55a2bb8ffc2f0ca3ffbf06d921790233477"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -3529,7 +3534,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-jsondb"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e28c34a6dfd23a324bc934df8f66eaa752d05ec10ce37ece2bf5d4b7f0d73331"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3550,7 +3556,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ef11e1c27373c7aa47bfe5388c4ed46696a82f72f44addaba51ec255e44d146"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3568,7 +3575,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db9efe2e5597e3f97a28608aedc2f50dfe331478027f540db01d3ea60b37e67a"
 dependencies = [
  "anyhow",
  "futures",
@@ -3587,7 +3595,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcdb653961fb9f32a8d722018661cfa0e3449c034210fb6ad5016f0636fa0194"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -3612,7 +3621,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel-attr"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3805f23d486a152a48dc9a40eb47ec5d511ad58902a7f0a2b0a43fce7c78b5d1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3622,7 +3632,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "934227df389c22ba54575baf42a5f9acb3194baf2d0cb30d0dfb916f12a5848b"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -3643,7 +3654,8 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.29.0"
-source = "git+https://github.com/augentic/omnia.git?branch=wasi-jsondb#a2761134f31a2a9b629e0012de027df7d34e372a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "065fdc372511fd798b526e42d108552b60b6f03724d207f424b414ec73121c65"
 dependencies = [
  "anyhow",
  "futures",
@@ -3760,9 +3772,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-otlp"
-version = "0.31.0"
+version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a2366db2dca4d2ad033cad11e6ee42844fd727007af5ad04a1730f4cb8163bf"
+checksum = "1f69cd6acbb9af919df949cd1ec9e5e7fdc2ef15d234b6b795aaa525cc02f71f"
 dependencies = [
  "http",
  "opentelemetry",
@@ -4741,9 +4753,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.38.0"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1c93dd1c9683b438c392c492109cb702b8090b2bfc8fed6f6e4eb4523f17af3"
+checksum = "a0d2b0146dd9661bf67bb107c0bb2a55064d556eeb3fc314151b957f313bcd4e"
 dependencies = [
  "bitflags",
  "fallible-iterator 0.3.0",

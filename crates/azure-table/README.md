@@ -63,13 +63,13 @@ from string values.
 | `And` / `Or` / `Not` | Yes | Supported when all children are supported |
 | `Contains` / `StartsWith` / `EndsWith` | **No** | Rejected with error |
 | `IsNull` / `IsNotNull` | **No** | Rejected with error |
-| `offset` | Yes | Client-side skip emulation |
+| `offset` | **No** | Rejected with error — use continuation tokens |
 | `continuation` | Yes | Native Azure Table continuation tokens |
 
-Unsupported filters return an error rather than silently falling back to
-client-side evaluation, which could pull unbounded data from the table
-service. Azure Table's `OData` `$filter` does not support string functions
-or null checks — see
+Unsupported filters and query options return an error rather than silently
+falling back to client-side evaluation, which could pull unbounded data from
+the table service. Azure Table's `OData` `$filter` does not support string
+functions or null checks, and there is no `$skip` — see
 [Querying tables and entities](https://learn.microsoft.com/en-us/rest/api/storageservices/querying-tables-and-entities#supported-query-options).
 
 > **Note:** `order_by` is ignored. Azure Table returns results in

@@ -78,20 +78,6 @@ omnia-wasi-otel = "0.29.0"
 omnia-wasi-sql = "0.29.0"
 omnia-wasi-vault = "0.29.0"
 
-# local crates
-omnia-azure-table = { path = "crates/azure-table", version = "0.23.0" }
-
-[patch.crates-io]
-omnia = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-omnia-wasi-blobstore = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-omnia-wasi-identity = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-omnia-wasi-jsondb = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-omnia-wasi-keyvalue = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-omnia-wasi-messaging = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-omnia-wasi-sql = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-omnia-wasi-vault = { git = "https://github.com/augentic/omnia.git", branch = "wasi-jsondb" }
-
 [profile.release]
 lto = true
 opt-level = "s"

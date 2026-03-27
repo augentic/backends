@@ -303,7 +303,7 @@ pub async fn main() {
         .expect("get charlie")
         .expect("charlie missing");
     let cb = body(&charlie);
-    assert_eq!(cb["LargeId"], "9007199254740993", "Edm.Int64 should round-trip as string");
+    assert_eq!(cb["LargeId"], 9_007_199_254_740_993_i64, "Edm.Int64 should round-trip as number");
     pass("Edm.Int64 round-trip (LargeId)");
 
     // ── 12. Duplicate insert fails ──────────────────────────────────
@@ -407,22 +407,22 @@ pub async fn main() {
     assert_eq!(r.documents.len(), 2);
     pass("limit=2");
 
-    // ── 17. Offset + limit ───────────────────────────────────────────
-    let all = q(&client, None, QueryOpts::default()).await;
-    let r = q(
-        &client,
-        None,
-        QueryOpts {
-            offset: Some(1),
-            limit: Some(2),
-            ..Default::default()
-        },
-    )
-    .await;
-    assert_eq!(r.documents.len(), 2);
-    assert_eq!(r.documents[0].id, all.documents[1].id);
-    assert_eq!(r.documents[1].id, all.documents[2].id);
-    pass("offset=1 + limit=2");
+    // ── 17. Offset rejected ─────────────────────────────────────────
+    let err = client
+        .query(
+            COLLECTION.into(),
+            None,
+            QueryOpts {
+                offset: Some(1),
+                limit: Some(2),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("offset is not supported"), "offset should be rejected: {err}");
+    pass("offset rejected");
 
     // ── 18. Edm.Guid + Edm.DateTime via serde annotations ───────────
     let typed = TypedRecord {

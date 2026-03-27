@@ -41,6 +41,12 @@ pub fn flatten(doc: &Document, partition_key: &str) -> anyhow::Result<Value> {
 /// Convert an Azure Table entity JSON (from a GET/query response) into a
 /// [`Document`], stripping system and `OData` metadata properties.
 ///
+/// Type annotations (`@odata.type`) are used to restore fidelity for
+/// `Edm.Int64` (string → i64 number) and `Edm.Double` (ensure f64
+/// representation). Nested objects and arrays that were serialized as JSON
+/// strings during [`flatten`] are **not** automatically restored — they
+/// remain as string values. See the crate README for details.
+///
 /// # Errors
 ///
 /// Returns an error if the entity is not a JSON object or is missing `RowKey`.
@@ -58,11 +64,44 @@ pub fn unflatten(entity: &Value) -> anyhow::Result<Document> {
         if is_metadata_key(key) {
             continue;
         }
-        data_map.insert(key.clone(), value.clone());
+        let restored = restore_typed_value(obj, key, value);
+        data_map.insert(key.clone(), restored);
     }
 
     let data = serde_json::to_vec(&data_map).context("serializing document body")?;
     Ok(Document { id, data })
+}
+
+/// Use `@odata.type` annotations to restore type fidelity where Azure Table
+/// serialization loses the original JSON type.
+fn restore_typed_value(obj: &Map<String, Value>, key: &str, value: &Value) -> Value {
+    let type_key = format!("{key}@odata.type");
+    let Some(edm_type) = obj.get(&type_key).and_then(Value::as_str) else {
+        return value.clone();
+    };
+
+    match edm_type {
+        "Edm.Int64" => value
+            .as_str()
+            .and_then(|s| s.parse::<i64>().ok())
+            .map_or_else(|| value.clone(), |n| Value::Number(n.into())),
+        "Edm.Double" => match value {
+            Value::Number(n) => n
+                .as_f64()
+                .map_or_else(|| value.clone(), |f| json_f64(f).unwrap_or_else(|| value.clone())),
+            Value::String(s) => {
+                s.parse::<f64>().ok().and_then(json_f64).unwrap_or_else(|| value.clone())
+            }
+            _ => value.clone(),
+        },
+        _ => value.clone(),
+    }
+}
+
+/// Create a `serde_json::Value::Number` from an f64, returning `None` for
+/// `NaN` / infinity which JSON cannot represent.
+fn json_f64(f: f64) -> Option<Value> {
+    serde_json::Number::from_f64(f).map(Value::Number)
 }
 
 fn is_metadata_key(key: &str) -> bool {
@@ -153,6 +192,46 @@ mod tests {
         let entity = flatten(&doc, "pk1").unwrap();
         let obj = entity.as_object().unwrap();
         assert_eq!(obj["nested"].as_str().unwrap(), r#"{"x":1}"#);
+    }
+
+    #[test]
+    fn unflatten_restores_edm_int64() {
+        let entity = json!({
+            "PartitionKey": "pk1",
+            "RowKey": "r1",
+            "LargeId": "9007199254740993",
+            "LargeId@odata.type": "Edm.Int64",
+        });
+        let doc = unflatten(&entity).unwrap();
+        let body: Value = serde_json::from_slice(&doc.data).unwrap();
+        assert_eq!(body["LargeId"], 9_007_199_254_740_993_i64);
+    }
+
+    #[test]
+    fn unflatten_restores_edm_double() {
+        let entity = json!({
+            "PartitionKey": "pk1",
+            "RowKey": "r1",
+            "Rating": 3,
+            "Rating@odata.type": "Edm.Double",
+        });
+        let doc = unflatten(&entity).unwrap();
+        let body: Value = serde_json::from_slice(&doc.data).unwrap();
+        assert!(body["Rating"].is_f64(), "expected f64, got {:?}", body["Rating"]);
+        assert!((body["Rating"].as_f64().unwrap() - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn nested_objects_remain_strings_after_roundtrip() {
+        let doc = Document {
+            id: "r1".into(),
+            data: serde_json::to_vec(&json!({"tags": ["a", "b"], "meta": {"x": 1}})).unwrap(),
+        };
+        let entity = flatten(&doc, "pk1").unwrap();
+        let roundtripped = unflatten(&entity).unwrap();
+        let body: Value = serde_json::from_slice(&roundtripped.data).unwrap();
+        assert_eq!(body["tags"].as_str().unwrap(), r#"["a","b"]"#);
+        assert_eq!(body["meta"].as_str().unwrap(), r#"{"x":1}"#);
     }
 
     #[test]

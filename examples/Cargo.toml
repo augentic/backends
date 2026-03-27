@@ -17,7 +17,7 @@ path = "azure_table/main.rs"
 dotenvy = "0.15.7"
 omnia.workspace = true
 omnia-azure-blob = { path = "../crates/azure-blob" }
-omnia-azure-table.workspace = true
+omnia-azure-table = { path = "../crates/azure-table" }
 omnia-wasi-blobstore.workspace = true
 omnia-wasi-jsondb.workspace = true
 serde.workspace = true

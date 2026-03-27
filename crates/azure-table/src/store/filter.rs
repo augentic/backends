@@ -15,6 +15,18 @@ use std::fmt::Write;
 use anyhow::bail;
 use omnia_wasi_jsondb::{ComparisonOp, FilterTree, ScalarValue};
 
+/// Validates that a field name is a safe `OData` property identifier
+/// (letters, digits, and underscores, starting with a letter or underscore).
+fn validate_field(field: &str) -> anyhow::Result<()> {
+    if field.is_empty()
+        || !field.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+        || !field.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        bail!("invalid OData property name: '{field}' — must match [A-Za-z_][A-Za-z0-9_]*");
+    }
+    Ok(())
+}
+
 /// Translate a [`FilterTree`] to an `OData` `$filter` string.
 ///
 /// # Errors
@@ -26,16 +38,29 @@ use omnia_wasi_jsondb::{ComparisonOp, FilterTree, ScalarValue};
 pub fn to_odata(filter: &FilterTree) -> anyhow::Result<String> {
     match filter {
         FilterTree::Compare { field, op, value } => {
-            Ok(format!("{field} {} {}", odata_op(*op), odata_value(value)))
+            validate_field(field)?;
+            Ok(format!("{field} {} {}", odata_op(*op), odata_value(value)?))
         }
         FilterTree::InList { field, values } => {
-            let parts: Vec<String> =
-                values.iter().map(|v| format!("{field} eq {}", odata_value(v))).collect();
+            validate_field(field)?;
+            if values.is_empty() {
+                bail!("InList('{field}') requires at least one value");
+            }
+            let parts: Vec<String> = values
+                .iter()
+                .map(|v| Ok(format!("{field} eq {}", odata_value(v)?)))
+                .collect::<anyhow::Result<_>>()?;
             Ok(format!("({})", parts.join(" or ")))
         }
         FilterTree::NotInList { field, values } => {
-            let parts: Vec<String> =
-                values.iter().map(|v| format!("{field} eq {}", odata_value(v))).collect();
+            validate_field(field)?;
+            if values.is_empty() {
+                bail!("NotInList('{field}') requires at least one value");
+            }
+            let parts: Vec<String> = values
+                .iter()
+                .map(|v| Ok(format!("{field} eq {}", odata_value(v)?)))
+                .collect::<anyhow::Result<_>>()?;
             Ok(format!("not ({})", parts.join(" or ")))
         }
         FilterTree::And(children) => {
@@ -88,13 +113,25 @@ const fn odata_op(op: ComparisonOp) -> &'static str {
     }
 }
 
-fn odata_value(v: &ScalarValue) -> String {
-    match v {
-        ScalarValue::Null => "null".into(),
+fn odata_value(v: &ScalarValue) -> anyhow::Result<String> {
+    Ok(match v {
+        ScalarValue::Null => {
+            bail!(
+                "null comparison is not supported by Azure Table — \
+                 use IsNull/IsNotNull filter nodes (which are also unsupported) \
+                 or omit the filter for absent properties"
+            )
+        }
         ScalarValue::Boolean(b) => b.to_string(),
         ScalarValue::Int32(i) => i.to_string(),
         ScalarValue::Int64(i) => format!("{i}L"),
-        ScalarValue::Float64(f) => format!("{f}"),
+        ScalarValue::Float64(f) => {
+            if f.fract() == 0.0 {
+                format!("{f:.1}")
+            } else {
+                format!("{f}")
+            }
+        }
         ScalarValue::Str(s) => format!("'{}'", s.replace('\'', "''")),
         ScalarValue::Binary(b) => {
             let hex = b.iter().fold(String::with_capacity(b.len() * 2), |mut acc, byte| {
@@ -103,8 +140,8 @@ fn odata_value(v: &ScalarValue) -> String {
             });
             format!("X'{hex}'")
         }
-        ScalarValue::Timestamp(t) => format!("datetime'{t}'"),
-    }
+        ScalarValue::Timestamp(t) => format!("datetime'{}'", t.replace('\'', "''")),
+    })
 }
 
 #[cfg(test)]
@@ -217,6 +254,90 @@ mod tests {
         }));
         let odata = to_odata(&f).unwrap();
         assert_eq!(odata, "not (IsActive eq true)");
+    }
+
+    #[test]
+    fn field_with_injection_rejected() {
+        let f = FilterTree::Compare {
+            field: "RowKey eq 'admin' or 1 eq 1 and Name".into(),
+            op: ComparisonOp::Eq,
+            value: ScalarValue::Str("x".into()),
+        };
+        let err = to_odata(&f).unwrap_err().to_string();
+        assert!(err.contains("invalid OData property name"), "{err}");
+    }
+
+    #[test]
+    fn empty_field_rejected() {
+        let f = FilterTree::Compare {
+            field: String::new(),
+            op: ComparisonOp::Eq,
+            value: ScalarValue::Int32(1),
+        };
+        to_odata(&f).unwrap_err();
+    }
+
+    #[test]
+    fn field_with_underscore_allowed() {
+        let f = FilterTree::Compare {
+            field: "_internal_flag".into(),
+            op: ComparisonOp::Eq,
+            value: ScalarValue::Boolean(true),
+        };
+        let odata = to_odata(&f).unwrap();
+        assert_eq!(odata, "_internal_flag eq true");
+    }
+
+    #[test]
+    fn null_comparison_rejected() {
+        let f = FilterTree::Compare {
+            field: "Region".into(),
+            op: ComparisonOp::Eq,
+            value: ScalarValue::Null,
+        };
+        let err = to_odata(&f).unwrap_err().to_string();
+        assert!(err.contains("null comparison is not supported"), "{err}");
+    }
+
+    #[test]
+    fn empty_in_list_rejected() {
+        let f = FilterTree::InList {
+            field: "Status".into(),
+            values: vec![],
+        };
+        let err = to_odata(&f).unwrap_err().to_string();
+        assert!(err.contains("requires at least one value"), "{err}");
+    }
+
+    #[test]
+    fn empty_not_in_list_rejected() {
+        let f = FilterTree::NotInList {
+            field: "Status".into(),
+            values: vec![],
+        };
+        to_odata(&f).unwrap_err();
+    }
+
+    #[test]
+    fn float_whole_number_preserves_decimal() {
+        let f = FilterTree::Compare {
+            field: "Rating".into(),
+            op: ComparisonOp::Gt,
+            value: ScalarValue::Float64(3.0),
+        };
+        let odata = to_odata(&f).unwrap();
+        assert_eq!(odata, "Rating gt 3.0");
+    }
+
+    #[test]
+    fn timestamp_with_single_quote_escaped() {
+        let f = FilterTree::Compare {
+            field: "Created".into(),
+            op: ComparisonOp::Eq,
+            value: ScalarValue::Timestamp("2026-01-01T00:00:00Z'injected".into()),
+        };
+        let odata = to_odata(&f).unwrap();
+        assert!(odata.contains("''injected"), "single quote should be doubled: {odata}");
     }
 
     #[test]

@@ -4,14 +4,24 @@
 pub mod store;
 
 use std::fmt::Debug;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
+use base64ct::{Base64, Encoding};
 use omnia::Backend;
+
+/// Default HTTP request timeout for Azure Table operations.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Backend client for Azure Table storage.
 #[derive(Clone)]
 pub struct Client {
-    options: ConnectOptions,
+    options: Arc<ConnectOptions>,
+    http: reqwest::Client,
+    base_url: Arc<str>,
+    /// Pre-decoded HMAC signing key (from base64 account key).
+    hmac_key: Arc<[u8]>,
 }
 
 impl Debug for Client {
@@ -23,10 +33,21 @@ impl Debug for Client {
 impl Backend for Client {
     type ConnectOptions = ConnectOptions;
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip(options))]
     async fn connect_with(options: Self::ConnectOptions) -> anyhow::Result<Self> {
+        let base_url: Arc<str> = options.base_url().into();
+        let hmac_key: Arc<[u8]> = Base64::decode_vec(&options.key)
+            .context("decoding storage account key from base64")?
+            .into();
+        let http = reqwest::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .context("building HTTP client")?;
         Ok(Self {
-            options: options.clone(),
+            options: Arc::new(options),
+            http,
+            base_url,
+            hmac_key,
         })
     }
 }
@@ -36,7 +57,7 @@ mod config {
     use fromenv::FromEnv;
 
     /// Azure Table connection options.
-    #[derive(Clone, Debug, FromEnv)]
+    #[derive(Clone, FromEnv)]
     pub struct ConnectOptions {
         /// Storage account name.
         #[env(from = "AZURE_STORAGE_ACCOUNT")]
@@ -52,6 +73,16 @@ mod config {
         /// sovereign-cloud / Azure Stack endpoint as needed.
         #[env(from = "AZURE_TABLE_ENDPOINT", default = "")]
         pub endpoint: String,
+    }
+
+    impl std::fmt::Debug for ConnectOptions {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("ConnectOptions")
+                .field("name", &self.name)
+                .field("endpoint", &self.endpoint)
+                .field("key", &"[REDACTED]")
+                .finish()
+        }
     }
 
     impl ConnectOptions {
