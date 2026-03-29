@@ -39,7 +39,7 @@ impl WasiJsonDbCtx for Client {
             );
 
             let now = now_rfc1123();
-            let auth = sign_request(&opts.name, &hmac_key, "GET", "", &now, &uri)?;
+            let auth = sign_request(&opts.name, &hmac_key, &now, &uri)?;
 
             let response = http
                 .get(&uri)
@@ -79,7 +79,7 @@ impl WasiJsonDbCtx for Client {
             let body = document::flatten(&doc, pk)?;
 
             let now = now_rfc1123();
-            let auth = sign_request(&opts.name, &hmac_key, "POST", "application/json", &now, &uri)?;
+            let auth = sign_request(&opts.name, &hmac_key, &now, &uri)?;
 
             let response = http
                 .post(&uri)
@@ -120,7 +120,7 @@ impl WasiJsonDbCtx for Client {
             let body = document::flatten(&doc, pk)?;
 
             let now = now_rfc1123();
-            let auth = sign_request(&opts.name, &hmac_key, "PUT", "application/json", &now, &uri)?;
+            let auth = sign_request(&opts.name, &hmac_key, &now, &uri)?;
 
             let response = http
                 .put(&uri)
@@ -157,7 +157,7 @@ impl WasiJsonDbCtx for Client {
             );
 
             let now = now_rfc1123();
-            let auth = sign_request(&opts.name, &hmac_key, "DELETE", "", &now, &uri)?;
+            let auth = sign_request(&opts.name, &hmac_key, &now, &uri)?;
 
             let mut headers = azure_headers(&now, &auth)?;
             headers.insert("If-Match", "*".parse().expect("valid header value"));
@@ -221,6 +221,8 @@ impl WasiJsonDbCtx for Client {
             let mut next_continuation = options.continuation.clone();
 
             loop {
+                let remaining = fetch_limit.map(|lim| lim - all_documents.len());
+
                 let (body, continuation) = fetch_page(
                     &http,
                     &opts,
@@ -228,7 +230,7 @@ impl WasiJsonDbCtx for Client {
                     &hmac_key,
                     &table,
                     odata_filter.as_deref(),
-                    fetch_limit,
+                    remaining,
                     next_continuation.as_deref(),
                 )
                 .await?;
@@ -247,10 +249,6 @@ impl WasiJsonDbCtx for Client {
                 if !has_more_pages || reached_limit {
                     break;
                 }
-            }
-
-            if let Some(lim) = fetch_limit {
-                all_documents.truncate(lim);
             }
 
             Ok(QueryResult {
@@ -276,14 +274,7 @@ impl Client {
     pub async fn ensure_table(&self, table: &str) -> anyhow::Result<bool> {
         let uri = format!("{}/Tables", self.base_url);
         let now = now_rfc1123();
-        let auth = sign_request(
-            &self.options.name,
-            &self.hmac_key,
-            "POST",
-            "application/json",
-            &now,
-            &uri,
-        )?;
+        let auth = sign_request(&self.options.name, &self.hmac_key, &now, &uri)?;
 
         let response = self
             .http
@@ -365,7 +356,7 @@ async fn fetch_page(
     };
 
     let now = now_rfc1123();
-    let auth = sign_request(&opts.name, hmac_key, "GET", "", &now, &uri)?;
+    let auth = sign_request(&opts.name, hmac_key, &now, &uri)?;
 
     let response = http
         .get(&uri)
@@ -400,17 +391,41 @@ async fn fetch_page(
     Ok((body, token))
 }
 
+/// Validate that `table` conforms to Azure Table naming rules: 3–63 ASCII
+/// alphanumeric characters, starting with a letter, and not the reserved
+/// name "tables".
+fn validate_table_name(table: &str) -> anyhow::Result<()> {
+    let len = table.len();
+    if !(3..=63).contains(&len) {
+        bail!("invalid table name '{table}': length must be between 3 and 63 characters");
+    }
+    if !table.starts_with(|c: char| c.is_ascii_alphabetic()) {
+        bail!("invalid table name '{table}': first character must be a letter");
+    }
+    if !table.chars().all(|c| c.is_ascii_alphanumeric()) {
+        bail!("invalid table name '{table}': only ASCII letters and digits are allowed");
+    }
+    if table.eq_ignore_ascii_case("tables") {
+        bail!("invalid table name '{table}': reserved table name");
+    }
+    Ok(())
+}
+
 /// Split `collection` on the first `/` into `(table, partition_key)`.
 fn parse_collection(collection: &str) -> anyhow::Result<(String, Option<String>)> {
     match collection.split_once('/') {
         Some((table, pk)) if !table.is_empty() && !pk.is_empty() => {
+            validate_table_name(table)?;
             Ok((table.to_owned(), Some(pk.to_owned())))
         }
         Some((table, _)) if !table.is_empty() => {
             bail!("collection '{collection}' has an empty partition key after '/'")
         }
         Some(_) => bail!("collection '{collection}' has an empty table name"),
-        None if !collection.is_empty() => Ok((collection.to_owned(), None)),
+        None if !collection.is_empty() => {
+            validate_table_name(collection)?;
+            Ok((collection.to_owned(), None))
+        }
         _ => bail!("collection must not be empty"),
     }
 }
@@ -419,12 +434,19 @@ fn now_rfc1123() -> String {
     chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string()
 }
 
-/// Compute a `SharedKey` Lite HMAC-SHA256 authorization header value.
+/// Compute a `SharedKeyLite` HMAC-SHA256 authorization header value for the
+/// Table service.
+///
+/// The canonicalized resource is built as `/{account_name}{uri_path}` where
+/// `uri_path` is the raw path from the request URL (excluding query string).
+/// For Azurite-style endpoints whose URL path already contains the account
+/// name (e.g. `http://127.0.0.1:10002/devstoreaccount1/Tables`), this
+/// intentionally produces a "doubled" account segment — Azurite's server-side
+/// auth uses the same algorithm, so both sides agree on the signature.
 ///
 /// See <https://learn.microsoft.com/en-us/rest/api/storageservices/authorize-with-shared-key>.
 fn sign_request(
-    account_name: &str, hmac_key: &[u8], method: &str, content_type: &str, date_time: &str,
-    uri: &str,
+    account_name: &str, hmac_key: &[u8], date_time: &str, uri: &str,
 ) -> anyhow::Result<String> {
     let uri_path = uri
         .split("://")
@@ -433,13 +455,13 @@ fn sign_request(
         .unwrap_or("/");
     let uri_path = uri_path.split('?').next().unwrap_or(uri_path);
     let resource = format!("/{account_name}{uri_path}");
-    let string_to_sign = format!("{method}\n\n{content_type}\n{date_time}\n{resource}");
+    let string_to_sign = format!("{date_time}\n{resource}");
     let mut hmac = Hmac::<Sha256>::new_from_slice(hmac_key)
         .map_err(|e| anyhow!("HMAC initialization error: {e}"))?;
     hmac.update(string_to_sign.as_bytes());
     let signature = hmac.finalize().into_bytes();
     let encoded = Base64::encode_string(&signature);
-    Ok(format!("SharedKey {account_name}:{encoded}"))
+    Ok(format!("SharedKeyLite {account_name}:{encoded}"))
 }
 
 /// Build the standard Azure Table REST headers.
@@ -478,5 +500,62 @@ mod tests {
     #[test]
     fn parse_collection_empty_pk_errors() {
         parse_collection("users/").unwrap_err();
+    }
+
+    #[test]
+    fn parse_collection_rejects_short_table_name() {
+        parse_collection("ab/pk").unwrap_err();
+    }
+
+    #[test]
+    fn parse_collection_rejects_special_chars_in_table() {
+        parse_collection("my-table/pk").unwrap_err();
+    }
+
+    #[test]
+    fn parse_collection_rejects_reserved_table_name() {
+        parse_collection("Tables/pk").unwrap_err();
+    }
+
+    #[test]
+    fn sign_request_uses_shared_key_lite_format() {
+        let key = Base64::encode_string(b"fake-key-for-unit-test-1234567!");
+        let hmac_key = Base64::decode_vec(&key).unwrap();
+        let auth = sign_request(
+            "myaccount",
+            &hmac_key,
+            "Mon, 01 Jan 2026 00:00:00 GMT",
+            "https://myaccount.table.core.windows.net/Tables",
+        )
+        .unwrap();
+        assert!(auth.starts_with("SharedKeyLite myaccount:"), "{auth}");
+    }
+
+    #[test]
+    fn sign_request_azurite_preserves_account_in_path() {
+        let key = Base64::encode_string(b"fake-key-for-unit-test-1234567!");
+        let hmac_key = Base64::decode_vec(&key).unwrap();
+        // Azurite and cloud produce DIFFERENT signatures because the
+        // Azurite URI path includes the account name. Both sides of
+        // the auth handshake use the same raw-path algorithm so
+        // signatures still match on each respective endpoint.
+        let auth_azurite = sign_request(
+            "devstoreaccount1",
+            &hmac_key,
+            "Mon, 01 Jan 2026 00:00:00 GMT",
+            "http://127.0.0.1:10002/devstoreaccount1/myTable",
+        )
+        .unwrap();
+        let auth_cloud = sign_request(
+            "devstoreaccount1",
+            &hmac_key,
+            "Mon, 01 Jan 2026 00:00:00 GMT",
+            "https://devstoreaccount1.table.core.windows.net/myTable",
+        )
+        .unwrap();
+        assert_ne!(
+            auth_azurite, auth_cloud,
+            "Azurite and cloud should differ — Azurite canonicalized resource includes account in URI path"
+        );
     }
 }

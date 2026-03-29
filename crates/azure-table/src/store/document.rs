@@ -32,6 +32,9 @@ pub fn flatten(doc: &Document, partition_key: &str) -> anyhow::Result<Value> {
     entity.insert("RowKey".into(), Value::String(doc.id.clone()));
 
     for (key, value) in src {
+        if is_metadata_key(key) {
+            continue;
+        }
         insert_typed_property(&mut entity, key, value)?;
     }
 
@@ -122,11 +125,23 @@ fn insert_typed_property(
             if n.is_f64() && !n.is_i64() {
                 entity.insert(key.into(), value.clone());
                 entity.insert(format!("{key}@odata.type"), Value::String("Edm.Double".into()));
-            } else if let Some(v) = n.as_i64()
-                && !(i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&v)
-            {
-                entity.insert(key.into(), Value::String(v.to_string()));
-                entity.insert(format!("{key}@odata.type"), Value::String("Edm.Int64".into()));
+            } else if let Some(v) = n.as_i64() {
+                if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&v) {
+                    entity.insert(key.into(), value.clone());
+                } else {
+                    entity.insert(key.into(), Value::String(v.to_string()));
+                    entity.insert(format!("{key}@odata.type"), Value::String("Edm.Int64".into()));
+                }
+            } else if let Some(u) = n.as_u64() {
+                #[allow(clippy::cast_possible_wrap)]
+                if i64::try_from(u).is_ok() {
+                    entity.insert(key.into(), Value::String((u as i64).to_string()));
+                    entity.insert(format!("{key}@odata.type"), Value::String("Edm.Int64".into()));
+                } else {
+                    return Err(anyhow!(
+                        "numeric value for key `{key}` exceeds Azure Table integer range"
+                    ));
+                }
             } else {
                 entity.insert(key.into(), value.clone());
             }
@@ -254,5 +269,36 @@ mod tests {
         assert!(!obj.contains_key("odata.etag"));
         assert!(!obj.contains_key("Name@odata.type"));
         assert_eq!(obj["Name"], "Alice");
+    }
+
+    #[test]
+    fn flatten_ignores_reserved_keys_in_body() {
+        let doc = Document {
+            id: "r1".into(),
+            data: serde_json::to_vec(&json!({
+                "PartitionKey": "evil",
+                "RowKey": "evil",
+                "Timestamp": "evil",
+                "Name": "Alice"
+            }))
+            .unwrap(),
+        };
+        let entity = flatten(&doc, "pk1").unwrap();
+        let obj = entity.as_object().unwrap();
+        assert_eq!(obj["PartitionKey"], "pk1", "injected PartitionKey must not be overwritten");
+        assert_eq!(obj["RowKey"], "r1", "injected RowKey must not be overwritten");
+        assert_eq!(obj["Name"], "Alice");
+    }
+
+    #[test]
+    fn flatten_handles_u64_within_i64_range() {
+        let val: u64 = (i32::MAX as u64) + 1;
+        let doc = Document {
+            id: "r1".into(),
+            data: serde_json::to_vec(&json!({ "bigU": val })).unwrap(),
+        };
+        let entity = flatten(&doc, "pk1").unwrap();
+        let obj = entity.as_object().unwrap();
+        assert_eq!(obj["bigU@odata.type"], "Edm.Int64");
     }
 }

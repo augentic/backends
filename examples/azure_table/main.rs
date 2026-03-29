@@ -17,7 +17,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 ///
 /// Azure Table cannot infer `Edm.Guid`, `Edm.DateTime`, or `Edm.Binary` from
 /// raw JSON strings.  Include a sibling `{field}@odata.type` key in the
-/// serialized output so that [`document::flatten`] passes it through verbatim.
+/// serialized output so that [`omnia_azure_table::store::document::flatten`] passes it through verbatim.
 #[derive(Debug, Serialize, Deserialize)]
 struct TypedRecord {
     #[serde(rename = "Name")]

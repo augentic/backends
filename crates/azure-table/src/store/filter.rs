@@ -64,11 +64,17 @@ pub fn to_odata(filter: &FilterTree) -> anyhow::Result<String> {
             Ok(format!("not ({})", parts.join(" or ")))
         }
         FilterTree::And(children) => {
+            if children.is_empty() {
+                bail!("And requires at least one child filter");
+            }
             let parts: Vec<String> =
                 children.iter().map(to_odata).collect::<anyhow::Result<_>>()?;
             Ok(parts.join(" and "))
         }
         FilterTree::Or(children) => {
+            if children.is_empty() {
+                bail!("Or requires at least one child filter");
+            }
             let parts: Vec<String> =
                 children.iter().map(to_odata).collect::<anyhow::Result<_>>()?;
             Ok(format!("({})", parts.join(" or ")))
@@ -356,5 +362,19 @@ mod tests {
         ]);
         let odata = to_odata(&f).unwrap();
         assert_eq!(odata, "(Points eq 200 or Points eq 150)");
+    }
+
+    #[test]
+    fn empty_and_rejected() {
+        let f = FilterTree::And(vec![]);
+        let err = to_odata(&f).unwrap_err().to_string();
+        assert!(err.contains("at least one child"), "{err}");
+    }
+
+    #[test]
+    fn empty_or_rejected() {
+        let f = FilterTree::Or(vec![]);
+        let err = to_odata(&f).unwrap_err().to_string();
+        assert!(err.contains("at least one child"), "{err}");
     }
 }
