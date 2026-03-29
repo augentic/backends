@@ -10,15 +10,15 @@ Omnia provides a thin wrapper around wasmtime for ergonomic integration of host-
 ┌─────────────────────────────────────────────────────────────────────┐
 │                           Host Runtime                              │
 │                                                                     │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐    │
-│  │  Backend   │  │  Backend   │  │  Backend   │  │  Backend   │    │
-│  │  (Redis)   │  │  (Kafka)   │  │  (Azure)   │  │  (NATS)    │    │
-│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘    │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐     │
+│  │  Backend   │  │  Backend   │  │  Backend   │  │  Backend   │     │
+│  │  (Redis)   │  │  (Kafka)   │  │  (Azure)   │  │  (NATS)    │     │
+│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘     │
 │        │               │               │               │            │
-│  ┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐    │
-│  │ wasi-kv    │  │ wasi-msg   │  │ wasi-vault │  │ wasi-blob  │    │
-│  │ (WASI API) │  │ (WASI API) │  │ (WASI API) │  │ (WASI API) │    │
-│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘    │
+│  ┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐     │
+│  │ wasi-kv    │  │ wasi-msg   │  │ wasi-vault │  │ wasi-blob  │     │
+│  │ (WASI API) │  │ (WASI API) │  │ (WASI API) │  │ (WASI API) │     │
+│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘     │
 │        │               │               │               │            │
 │        └───────────────┴───────┬───────┴───────────────┘            │
 │                                │                                    │
@@ -99,18 +99,18 @@ pub trait Backend: Sized + Sync + Send {
 
 Backend crates provide concrete implementations connecting to external services:
 
-| Crate           | Service           | Supports                       |
-| --------------- | ----------------- | ------------------------------ |
-| `redis`         | Redis             | keyvalue                       |
-| `nats`          | NATS              | keyvalue, messaging, blobstore |
-| `kafka`         | Apache Kafka      | messaging                      |
-| `mongodb`       | MongoDB           | blobstore                      |
-| `postgres`      | PostgreSQL        | sql                            |
+| Crate           | Service            | Supports                       |
+| --------------- | ------------------ | ------------------------------ |
+| `redis`         | Redis              | keyvalue                       |
+| `nats`          | NATS               | keyvalue, messaging, blobstore |
+| `kafka`         | Apache Kafka       | messaging                      |
+| `mongodb`       | MongoDB            | blobstore                      |
+| `postgres`      | PostgreSQL         | sql                            |
 | `azure_blob`    | Azure Blob Storage | blobstore                      |
-| `azure_id`      | Azure Identity    | identity.                      |
-| `azure_vault`   | Azure Key Vault   | vault                          |
-| `azure_table`   | Azure Table Store | sql                            |
-| `opentelemetry` | OTEL Collector    | otel                           |
+| `azure_id`      | Azure Identity     | identity.                      |
+| `azure_vault`   | Azure Key Vault    | vault                          |
+| `azure_table`   | Azure Table Store  | jsondb                         |
+| `opentelemetry` | OTEL Collector     | otel                           |
 
 Each backend:
 

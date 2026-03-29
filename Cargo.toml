@@ -68,25 +68,17 @@ tracing = "0.1.44"
 urlencoding = "2.1.3"
 
 # omnia registry
-omnia = "0.28.0"
-omnia-wasi-blobstore = "0.28.0"
-omnia-wasi-identity = "0.28.0"
-omnia-wasi-keyvalue = "0.28.0"
-omnia-wasi-messaging = "0.28.0"
-omnia-wasi-otel = "0.28.0"
-omnia-wasi-sql = "0.28.0"
-omnia-wasi-vault = "0.28.0"
-
-# local crates
-omnia-azure-table = { path = "crates/azure-table", version = "0.23.0" }
+omnia = "0.29.0"
+omnia-wasi-blobstore = "0.29.0"
+omnia-wasi-identity = "0.29.0"
+omnia-wasi-jsondb = "0.29.0"
+omnia-wasi-keyvalue = "0.29.0"
+omnia-wasi-messaging = "0.29.0"
+omnia-wasi-otel = "0.29.0"
+omnia-wasi-sql = "0.29.0"
+omnia-wasi-vault = "0.29.0"
 
 [profile.release]
 lto = true
 opt-level = "s"
 strip = true
-
-# [package.metadata.cargo-udeps.ignore]
-# normal = ["openssl"]
-
-# [package.metadata.cargo-machete]
-# ignored = ["openssl"]

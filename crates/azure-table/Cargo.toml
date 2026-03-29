@@ -1,6 +1,6 @@
 [package]
 name = "omnia-azure-table"
-description = "Azure backend table storage provider (not a full featured SQL database)"
+description = "Azure backend table storage provider implementing wasi-jsondb"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true
@@ -26,9 +26,11 @@ base64ct.workspace = true
 chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true
+# hmac 0.13.0-rc.6 pairs with sha2 0.11.0 (RustCrypto release cycle).
+# sha2 0.11.0 is stable; hmac 0.13.0 stable is expected shortly.
 hmac = "0.13.0-rc.6"
 omnia.workspace = true
-omnia-wasi-sql.workspace = true
+omnia-wasi-jsondb.workspace = true
 reqwest = { version = "0.13.2", features = ["json", "rustls"] }
 serde_json.workspace = true
 sha2 = "0.11.0"
