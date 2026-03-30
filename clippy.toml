@@ -27,6 +27,7 @@ allowed-duplicate-crates = [
   "jni-sys",
   "jsonschema",
   "linux-raw-sys",
+  "md-5",
   "openssl-probe",
   "prost",
   "prost-derive",
