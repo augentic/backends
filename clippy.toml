@@ -10,6 +10,7 @@ doc-valid-idents = [
 ]
 
 allowed-duplicate-crates = [
+  "const-oid",
   "core-foundation",
   "cpufeatures",
   "darling",

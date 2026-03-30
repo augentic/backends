@@ -646,6 +646,10 @@ criteria = "safe-to-deploy"
 version = "0.10.6"
 criteria = "safe-to-deploy"
 
+[[exemptions.md-5]]
+version = "0.11.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.mime_guess]]
 version = "2.0.4"
 criteria = "safe-to-deploy"
@@ -875,11 +879,11 @@ version = "1.13.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.postgres-protocol]]
-version = "0.6.10"
+version = "0.6.11"
 criteria = "safe-to-deploy"
 
 [[exemptions.postgres-types]]
-version = "0.2.12"
+version = "0.2.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.ppv-lite86]]
@@ -1195,7 +1199,7 @@ version = "0.4.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-postgres]]
-version = "0.7.16"
+version = "0.7.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-postgres-rustls]]
