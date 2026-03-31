@@ -58,7 +58,11 @@ impl WasiBlobstoreCtx for Client {
 
             let created_at = now_unix_secs();
 
-            Ok(Arc::new(AzureBlobContainer { name, service, created_at }) as Arc<dyn Container>)
+            Ok(Arc::new(AzureBlobContainer {
+                name,
+                service,
+                created_at,
+            }) as Arc<dyn Container>)
         }
         .boxed()
     }
@@ -75,13 +79,14 @@ impl WasiBlobstoreCtx for Client {
                 .context("getting container properties")?;
 
             #[allow(clippy::cast_sign_loss)]
-            let created_at = props
-                .last_modified()
-                .ok()
-                .flatten()
-                .map_or(0, |t| t.unix_timestamp() as u64);
+            let created_at =
+                props.last_modified().ok().flatten().map_or(0, |t| t.unix_timestamp() as u64);
 
-            Ok(Arc::new(AzureBlobContainer { name, service, created_at }) as Arc<dyn Container>)
+            Ok(Arc::new(AzureBlobContainer {
+                name,
+                service,
+                created_at,
+            }) as Arc<dyn Container>)
         }
         .boxed()
     }
