@@ -1258,9 +1258,9 @@ dependencies = [
 
 [[package]]
 name = "curl-sys"
-version = "0.4.86+curl-8.19.0"
+version = "0.4.87+curl-8.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1dd6a487cf4532ce0d801634b82aa2deb7c9c3ed930b9dadfce904df000745"
+checksum = "61a460380f0ef783703dcbe909107f39c162adeac050d73c850055118b5b6327"
 dependencies = [
  "cc",
  "libc",
@@ -1683,7 +1683,7 @@ dependencies = [
 
 [[package]]
 name = "examples"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "dotenvy",
  "omnia",
@@ -2235,9 +2235,9 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hybrid-array"
-version = "0.4.8"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8655f91cd07f2b9d0c24137bd650fe69617773435ee5ec83022377777ce65ef1"
+checksum = "1a79f2aff40c18ab8615ddc5caa9eb5b96314aef18fe5823090f204ad988e813"
 dependencies = [
  "typenum",
 ]
@@ -3335,7 +3335,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-azure-blob"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "azure_core",
@@ -3351,7 +3351,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-azure-id"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "azure_core",
@@ -3365,7 +3365,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-azure-table"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -3384,7 +3384,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-azure-vault"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "azure_core",
@@ -3401,7 +3401,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-kafka"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3423,7 +3423,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-mongodb"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3439,7 +3439,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-nats"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -3457,7 +3457,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-opentelemetry"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -3489,7 +3489,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-postgres"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3508,7 +3508,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-redis"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -7261,9 +7261,9 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winnow"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a90e88e4667264a994d34e6d1ab2d26d398dcdca8b7f52bec8668957517fc7d8"
+checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
 dependencies = [
  "memchr",
 ]
