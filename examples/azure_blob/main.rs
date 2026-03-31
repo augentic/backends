@@ -66,7 +66,7 @@ pub async fn main() {
 
     // --- get_data ---
     let data = container
-        .get_data("greeting.txt".to_string(), 0, 0)
+        .get_data("greeting.txt".to_string(), 0, u64::MAX)
         .await
         .expect("Failed to get greeting.txt");
     tracing::info!(
@@ -111,7 +111,7 @@ pub async fn main() {
         .expect("Failed to write chunk-test blob");
 
     let read_back = container
-        .get_data(CHUNK_TEST_BLOB.to_string(), 0, 0)
+        .get_data(CHUNK_TEST_BLOB.to_string(), 0, u64::MAX)
         .await
         .expect("Failed to read chunk-test blob")
         .expect("chunk-test blob should exist");

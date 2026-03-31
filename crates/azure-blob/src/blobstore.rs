@@ -1,12 +1,14 @@
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use azure_core::http::RequestContent;
 use azure_storage_blob::BlobServiceClient;
 use azure_storage_blob::models::{
-    BlobClientGetPropertiesResultHeaders, BlobContainerClientCreateOptions,
-    BlobContainerClientDeleteOptions,
+    BlobClientDownloadOptions, BlobClientGetPropertiesResultHeaders,
+    BlobContainerClientCreateOptions, BlobContainerClientDeleteOptions,
+    BlobContainerClientGetPropertiesResultHeaders,
 };
 use futures::{FutureExt, TryStreamExt};
 use omnia_wasi_blobstore::{
@@ -14,6 +16,32 @@ use omnia_wasi_blobstore::{
 };
 
 use crate::Client;
+
+fn now_unix_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+}
+
+/// Build download options with an HTTP `Range` header for partial reads.
+///
+/// Returns `None` for full-object reads (the convention is `start=0, end=0` or
+/// `start=0, end=u64::MAX`). When `end` is `0` or `u64::MAX` but `start > 0`,
+/// an open-ended range (`bytes=start-`) is used.
+fn range_options(start: u64, end: u64) -> Option<BlobClientDownloadOptions<'static>> {
+    if start == 0 && (end == 0 || end == u64::MAX) {
+        return None;
+    }
+
+    let range = if end == 0 || end == u64::MAX {
+        format!("bytes={start}-")
+    } else {
+        format!("bytes={start}-{end}")
+    };
+
+    Some(BlobClientDownloadOptions {
+        range: Some(range),
+        ..Default::default()
+    })
+}
 
 /// `wasi-blobstore` implementation backed by Azure Blob Storage.
 impl WasiBlobstoreCtx for Client {
@@ -28,7 +56,9 @@ impl WasiBlobstoreCtx for Client {
                 .await
                 .context("creating container")?;
 
-            Ok(Arc::new(AzureBlobContainer { name, service }) as Arc<dyn Container>)
+            let created_at = now_unix_secs();
+
+            Ok(Arc::new(AzureBlobContainer { name, service, created_at }) as Arc<dyn Container>)
         }
         .boxed()
     }
@@ -37,8 +67,23 @@ impl WasiBlobstoreCtx for Client {
         tracing::trace!("getting container: {name}");
         let service = Arc::clone(&self.service);
 
-        async move { Ok(Arc::new(AzureBlobContainer { name, service }) as Arc<dyn Container>) }
-            .boxed()
+        async move {
+            let container_client = service.blob_container_client(&name);
+            let props = container_client
+                .get_properties(None)
+                .await
+                .context("getting container properties")?;
+
+            #[allow(clippy::cast_sign_loss)]
+            let created_at = props
+                .last_modified()
+                .ok()
+                .flatten()
+                .map_or(0, |t| t.unix_timestamp() as u64);
+
+            Ok(Arc::new(AzureBlobContainer { name, service, created_at }) as Arc<dyn Container>)
+        }
+        .boxed()
     }
 
     fn delete_container(&self, name: String) -> FutureResult<()> {
@@ -75,6 +120,7 @@ impl WasiBlobstoreCtx for Client {
 struct AzureBlobContainer {
     name: String,
     service: Arc<BlobServiceClient>,
+    created_at: u64,
 }
 
 impl Debug for AzureBlobContainer {
@@ -93,16 +139,19 @@ impl Container for AzureBlobContainer {
         tracing::trace!("getting container info");
         Ok(ContainerMetadata {
             name: self.name.clone(),
-            created_at: 0,
+            created_at: self.created_at,
         })
     }
 
-    fn get_data(&self, name: String, _start: u64, _end: u64) -> FutureResult<Option<Vec<u8>>> {
+    fn get_data(&self, name: String, start: u64, end: u64) -> FutureResult<Option<Vec<u8>>> {
         tracing::trace!("getting object data: {name}");
         let blob_client = self.service.blob_client(&self.name, &name);
 
         async move {
-            let response = blob_client.download(None).await.context("downloading blob")?;
+            let response = blob_client
+                .download(range_options(start, end))
+                .await
+                .context("downloading blob")?;
             let data: Vec<u8> =
                 response.into_body().collect().await.context("reading blob body")?.to_vec();
             Ok(Some(data))
@@ -268,5 +317,39 @@ mod tests {
 
         assert_eq!(meta.size, 5_368_709_120);
         assert_eq!(meta.created_at, 1_000_000_000);
+    }
+
+    #[test]
+    fn range_options_full_read_zero_zero() {
+        assert!(range_options(0, 0).is_none());
+    }
+
+    #[test]
+    fn range_options_full_read_zero_max() {
+        assert!(range_options(0, u64::MAX).is_none());
+    }
+
+    #[test]
+    fn range_options_offset_with_unbounded_end() {
+        let opts = range_options(100, u64::MAX).expect("should produce options");
+        assert_eq!(opts.range.as_deref(), Some("bytes=100-"));
+    }
+
+    #[test]
+    fn range_options_offset_with_zero_end() {
+        let opts = range_options(100, 0).expect("should produce options");
+        assert_eq!(opts.range.as_deref(), Some("bytes=100-"));
+    }
+
+    #[test]
+    fn range_options_bounded_range() {
+        let opts = range_options(10, 99).expect("should produce options");
+        assert_eq!(opts.range.as_deref(), Some("bytes=10-99"));
+    }
+
+    #[test]
+    fn range_options_single_byte() {
+        let opts = range_options(5, 5).expect("should produce options");
+        assert_eq!(opts.range.as_deref(), Some("bytes=5-5"));
     }
 }
