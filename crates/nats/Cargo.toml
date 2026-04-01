@@ -20,7 +20,7 @@ all-features = true
 
 [dependencies]
 anyhow.workspace = true
-async-nats = "0.46.0"
+async-nats = "0.47.0"
 chrono.workspace = true
 fromenv.workspace = true
 futures.workspace = true

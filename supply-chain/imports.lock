@@ -474,13 +474,6 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
-[[publisher.openssl-probe]]
-version = "0.1.6"
-when = "2025-01-23"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
 [[publisher.openssl-src]]
 version = "300.5.5+3.5.5"
 when = "2026-01-27"

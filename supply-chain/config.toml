@@ -51,7 +51,7 @@ version = "3.4.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.async-nats]]
-version = "0.46.0"
+version = "0.47.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.async-recursion]]
@@ -646,10 +646,6 @@ criteria = "safe-to-deploy"
 version = "0.10.6"
 criteria = "safe-to-deploy"
 
-[[exemptions.md-5]]
-version = "0.11.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.mime_guess]]
 version = "2.0.4"
 criteria = "safe-to-deploy"
@@ -743,51 +739,51 @@ version = "0.37.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-otel]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-runtime-macro]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-blobstore]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-identity]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-jsondb]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-keyvalue]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-messaging]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-otel]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-otel-attr]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-sql]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-vault]]
-version = "0.29.0"
+version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.once_cell]]
@@ -879,7 +875,7 @@ version = "1.13.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.postgres-protocol]]
-version = "0.6.11"
+version = "0.6.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.postgres-types]]
@@ -1027,15 +1023,7 @@ version = "0.23.37"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-native-certs]]
-version = "0.7.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-native-certs]]
 version = "0.8.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-pemfile]]
-version = "2.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-pki-types]]
@@ -1048,10 +1036,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rustls-platform-verifier-android]]
 version = "0.1.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.rustls-webpki]]
-version = "0.102.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-webpki]]
@@ -1072,10 +1056,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.sea-query]]
 version = "0.32.7"
-criteria = "safe-to-deploy"
-
-[[exemptions.security-framework]]
-version = "2.11.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.security-framework]]
