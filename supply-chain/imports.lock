@@ -1267,8 +1267,8 @@ user-login = "kennykerr"
 user-name = "Kenny Kerr"
 
 [[publisher.winnow]]
-version = "1.0.0"
-when = "2026-03-17"
+version = "1.0.1"
+when = "2026-03-30"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"

@@ -275,7 +275,7 @@ version = "0.4.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.curl-sys]]
-version = "0.4.86+curl-8.19.0"
+version = "0.4.87+curl-8.19.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.curve25519-dalek]]
@@ -519,7 +519,7 @@ version = "0.13.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.hybrid-array]]
-version = "0.4.8"
+version = "0.4.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.hyper-rustls]]
