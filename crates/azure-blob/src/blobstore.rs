@@ -8,7 +8,6 @@ use azure_storage_blob::BlobServiceClient;
 use azure_storage_blob::models::{
     BlobClientDownloadOptions, BlobClientGetPropertiesResultHeaders,
     BlobContainerClientCreateOptions, BlobContainerClientDeleteOptions,
-    BlobContainerClientGetPropertiesResultHeaders,
 };
 use futures::{FutureExt, TryStreamExt};
 use omnia_wasi_blobstore::{
@@ -23,24 +22,31 @@ fn now_unix_secs() -> u64 {
 
 /// Build download options with an HTTP `Range` header for partial reads.
 ///
-/// Returns `None` for full-object reads (the convention is `start=0, end=0` or
-/// `start=0, end=u64::MAX`). When `end` is `0` or `u64::MAX` but `start > 0`,
+/// Returns `Ok(None)` for full-object reads (the convention is `start=0, end=0`
+/// or `start=0, end=u64::MAX`). When `end` is `0` or `u64::MAX` but `start > 0`,
 /// an open-ended range (`bytes=start-`) is used.
-fn range_options(start: u64, end: u64) -> Option<BlobClientDownloadOptions<'static>> {
+///
+/// Returns `Err` when `end` is a concrete (non-sentinel) value that is less than
+/// `start`, which would produce an invalid HTTP Range header.
+fn range_options(
+    start: u64, end: u64,
+) -> anyhow::Result<Option<BlobClientDownloadOptions<'static>>> {
     if start == 0 && (end == 0 || end == u64::MAX) {
-        return None;
+        return Ok(None);
     }
 
-    let range = if end == 0 || end == u64::MAX {
-        format!("bytes={start}-")
-    } else {
-        format!("bytes={start}-{end}")
-    };
+    let unbounded = end == 0 || end == u64::MAX;
 
-    Some(BlobClientDownloadOptions {
+    if !unbounded && end < start {
+        anyhow::bail!("invalid byte range: end ({end}) < start ({start})");
+    }
+
+    let range = if unbounded { format!("bytes={start}-") } else { format!("bytes={start}-{end}") };
+
+    Ok(Some(BlobClientDownloadOptions {
         range: Some(range),
         ..Default::default()
-    })
+    }))
 }
 
 /// `wasi-blobstore` implementation backed by Azure Blob Storage.
@@ -72,20 +78,10 @@ impl WasiBlobstoreCtx for Client {
         let service = Arc::clone(&self.service);
 
         async move {
-            let container_client = service.blob_container_client(&name);
-            let props = container_client
-                .get_properties(None)
-                .await
-                .context("getting container properties")?;
-
-            #[allow(clippy::cast_sign_loss)]
-            let created_at =
-                props.last_modified().ok().flatten().map_or(0, |t| t.unix_timestamp() as u64);
-
             Ok(Arc::new(AzureBlobContainer {
                 name,
                 service,
-                created_at,
+                created_at: 0,
             }) as Arc<dyn Container>)
         }
         .boxed()
@@ -154,7 +150,7 @@ impl Container for AzureBlobContainer {
 
         async move {
             let response = blob_client
-                .download(range_options(start, end))
+                .download(range_options(start, end)?)
                 .await
                 .context("downloading blob")?;
             let data: Vec<u8> =
@@ -220,9 +216,11 @@ impl Container for AzureBlobContainer {
 
             let size = response.content_length().ok().flatten().unwrap_or(0);
 
-            #[allow(clippy::cast_sign_loss)]
-            let created_at =
-                response.creation_time().ok().flatten().map_or(0, |t| t.unix_timestamp() as u64);
+            let created_at = response
+                .creation_time()
+                .ok()
+                .flatten()
+                .map_or(0, |t| u64::try_from(t.unix_timestamp()).unwrap_or(0));
 
             Ok(ObjectMetadata {
                 name,
@@ -250,8 +248,8 @@ mod tests {
     ) -> ObjectMetadata {
         let size = props.content_length.unwrap_or(0);
 
-        #[allow(clippy::cast_sign_loss)]
-        let created_at = props.creation_time.map_or(0, |t| t.unix_timestamp() as u64);
+        let created_at =
+            props.creation_time.map_or(0, |t| u64::try_from(t.unix_timestamp()).unwrap_or(0));
 
         ObjectMetadata {
             name,
@@ -325,36 +323,51 @@ mod tests {
     }
 
     #[test]
+    fn metadata_from_properties_negative_timestamp_defaults_to_zero() {
+        let props = blob_props(Some(256), Some(-86_400));
+
+        let meta = object_metadata_from_properties("old.dat".into(), "archive".into(), &props);
+
+        assert_eq!(meta.created_at, 0);
+    }
+
+    #[test]
     fn range_options_full_read_zero_zero() {
-        assert!(range_options(0, 0).is_none());
+        assert!(range_options(0, 0).unwrap().is_none());
     }
 
     #[test]
     fn range_options_full_read_zero_max() {
-        assert!(range_options(0, u64::MAX).is_none());
+        assert!(range_options(0, u64::MAX).unwrap().is_none());
     }
 
     #[test]
     fn range_options_offset_with_unbounded_end() {
-        let opts = range_options(100, u64::MAX).expect("should produce options");
+        let opts = range_options(100, u64::MAX).unwrap().expect("should produce options");
         assert_eq!(opts.range.as_deref(), Some("bytes=100-"));
     }
 
     #[test]
     fn range_options_offset_with_zero_end() {
-        let opts = range_options(100, 0).expect("should produce options");
+        let opts = range_options(100, 0).unwrap().expect("should produce options");
         assert_eq!(opts.range.as_deref(), Some("bytes=100-"));
     }
 
     #[test]
     fn range_options_bounded_range() {
-        let opts = range_options(10, 99).expect("should produce options");
+        let opts = range_options(10, 99).unwrap().expect("should produce options");
         assert_eq!(opts.range.as_deref(), Some("bytes=10-99"));
     }
 
     #[test]
     fn range_options_single_byte() {
-        let opts = range_options(5, 5).expect("should produce options");
+        let opts = range_options(5, 5).unwrap().expect("should produce options");
         assert_eq!(opts.range.as_deref(), Some("bytes=5-5"));
+    }
+
+    #[test]
+    fn range_options_rejects_end_less_than_start() {
+        let err = range_options(10, 5).unwrap_err();
+        assert!(err.to_string().contains("end (5) < start (10)"));
     }
 }
