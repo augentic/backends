@@ -79,6 +79,20 @@ omnia-wasi-otel = "0.30.0"
 omnia-wasi-sql = "0.30.0"
 omnia-wasi-vault = "0.30.0"
 
+[patch.crates-io]
+omnia = { git = "https://github.com/augentic/omnia", branch = "main" }
+omnia-wasi-blobstore = { git = "https://github.com/augentic/omnia", branch = "main" }
+omnia-wasi-identity = { git = "https://github.com/augentic/omnia", branch = "main" }
+omnia-wasi-jsondb = { git = "https://github.com/augentic/omnia", branch = "main" }
+omnia-wasi-keyvalue = { git = "https://github.com/augentic/omnia", branch = "main" }
+omnia-wasi-messaging = { git = "https://github.com/augentic/omnia", branch = "main" }
+omnia-wasi-otel = { git = "https://github.com/augentic/omnia", branch = "main" }
+omnia-wasi-sql = { git = "https://github.com/augentic/omnia", branch = "main" }
+omnia-wasi-vault = { git = "https://github.com/augentic/omnia", branch = "main" }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-44.0.0" }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-44.0.0" }
+wasmtime-wasi-io = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-44.0.0" }
+
 [profile.release]
 lto = true
 opt-level = "s"
