@@ -46,7 +46,8 @@ fn range_options(
         start..usize::MAX
     } else {
         let end = usize::try_from(end).context("end offset out of range")?;
-        start..(end + 1)
+        let exclusive_end = end.saturating_add(1);
+        start..exclusive_end
     };
 
     Ok(Some(BlobClientDownloadOptions {
