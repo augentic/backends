@@ -11,7 +11,7 @@ keywords = ["wasi", "wasm", "backend", "runtime", "omnia"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/backends"
 rust-version = "1.93"
-version = "0.24.0"
+version = "0.25.0"
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -53,9 +53,9 @@ unused_result_ok = "warn"
 
 [workspace.dependencies]
 anyhow = "1.0.102"
-azure_core = "0.33.0"
-azure_identity = "0.33.0"
-azure_storage_blob = "0.10.1"
+azure_core = "0.34.0"
+azure_identity = "0.34.0"
+azure_storage_blob = "0.11.0"
 base64ct = { version = "1.8.3", features = ["std"] }
 chrono = "0.4.44"
 fromenv = "0.1.0"
@@ -69,29 +69,15 @@ tracing = "0.1.44"
 urlencoding = "2.1.3"
 
 # omnia registry
-omnia = "0.30.0"
-omnia-wasi-blobstore = "0.30.0"
-omnia-wasi-identity = "0.30.0"
-omnia-wasi-jsondb = "0.30.0"
-omnia-wasi-keyvalue = "0.30.0"
-omnia-wasi-messaging = "0.30.0"
-omnia-wasi-otel = "0.30.0"
-omnia-wasi-sql = "0.30.0"
-omnia-wasi-vault = "0.30.0"
-
-[patch.crates-io]
-omnia = { git = "https://github.com/augentic/omnia", branch = "main" }
-omnia-wasi-blobstore = { git = "https://github.com/augentic/omnia", branch = "main" }
-omnia-wasi-identity = { git = "https://github.com/augentic/omnia", branch = "main" }
-omnia-wasi-jsondb = { git = "https://github.com/augentic/omnia", branch = "main" }
-omnia-wasi-keyvalue = { git = "https://github.com/augentic/omnia", branch = "main" }
-omnia-wasi-messaging = { git = "https://github.com/augentic/omnia", branch = "main" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia", branch = "main" }
-omnia-wasi-sql = { git = "https://github.com/augentic/omnia", branch = "main" }
-omnia-wasi-vault = { git = "https://github.com/augentic/omnia", branch = "main" }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-44.0.0" }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-44.0.0" }
-wasmtime-wasi-io = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-44.0.0" }
+omnia = "0.31.0"
+omnia-wasi-blobstore = "0.31.0"
+omnia-wasi-identity = "0.31.0"
+omnia-wasi-jsondb = "0.31.0"
+omnia-wasi-keyvalue = "0.31.0"
+omnia-wasi-messaging = "0.31.0"
+omnia-wasi-otel = "0.31.0"
+omnia-wasi-sql = "0.31.0"
+omnia-wasi-vault = "0.31.0"
 
 [profile.release]
 lto = true

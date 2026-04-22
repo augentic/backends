@@ -25,7 +25,7 @@ impl WasiKeyValueCtx for Client {
                     .create_key_value(Config {
                         bucket: identifier,
                         history: 1,
-                        max_age: Duration::from_secs(10 * 60),
+                        max_age: Duration::from_mins(10),
                         max_bytes: 100 * 1024 * 1024, // 100 MiB
                         ..Config::default()
                     })
