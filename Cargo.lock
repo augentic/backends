@@ -1717,7 +1717,7 @@ dependencies = [
 
 [[package]]
 name = "examples"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "dotenvy",
  "omnia",
@@ -3395,7 +3395,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-azure-blob"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "azure_core",
@@ -3410,7 +3410,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-azure-id"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "azure_core",
@@ -3424,7 +3424,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-azure-table"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -3443,7 +3443,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-azure-vault"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "azure_core",
@@ -3460,7 +3460,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-kafka"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3482,7 +3482,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-mongodb"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3498,7 +3498,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-nats"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -3516,7 +3516,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-opentelemetry"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -3548,7 +3548,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-postgres"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3567,7 +3567,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-redis"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "anyhow",
  "fromenv",
