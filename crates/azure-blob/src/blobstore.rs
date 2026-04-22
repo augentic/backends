@@ -41,7 +41,13 @@ fn range_options(
         anyhow::bail!("invalid byte range: end ({end}) < start ({start})");
     }
 
-    let range = if unbounded { format!("bytes={start}-") } else { format!("bytes={start}-{end}") };
+    let start = usize::try_from(start).context("start offset out of range")?;
+    let range = if unbounded {
+        start..usize::MAX
+    } else {
+        let end = usize::try_from(end).context("end offset out of range")?;
+        start..(end + 1)
+    };
 
     Ok(Some(BlobClientDownloadOptions {
         range: Some(range),
@@ -154,7 +160,7 @@ impl Container for AzureBlobContainer {
                 .await
                 .context("downloading blob")?;
             let data: Vec<u8> =
-                response.into_body().collect().await.context("reading blob body")?.to_vec();
+                response.body.collect().await.context("reading blob body")?.to_vec();
             Ok(Some(data))
         }
         .boxed()
@@ -344,25 +350,25 @@ mod tests {
     #[test]
     fn range_options_offset_with_unbounded_end() {
         let opts = range_options(100, u64::MAX).unwrap().expect("should produce options");
-        assert_eq!(opts.range.as_deref(), Some("bytes=100-"));
+        assert_eq!(opts.range, Some(100..usize::MAX));
     }
 
     #[test]
     fn range_options_offset_with_zero_end() {
         let opts = range_options(100, 0).unwrap().expect("should produce options");
-        assert_eq!(opts.range.as_deref(), Some("bytes=100-"));
+        assert_eq!(opts.range, Some(100..usize::MAX));
     }
 
     #[test]
     fn range_options_bounded_range() {
         let opts = range_options(10, 99).unwrap().expect("should produce options");
-        assert_eq!(opts.range.as_deref(), Some("bytes=10-99"));
+        assert_eq!(opts.range, Some(10..100));
     }
 
     #[test]
     fn range_options_single_byte() {
         let opts = range_options(5, 5).unwrap().expect("should produce options");
-        assert_eq!(opts.range.as_deref(), Some("bytes=5-5"));
+        assert_eq!(opts.range, Some(5..6));
     }
 
     #[test]
