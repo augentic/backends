@@ -30,12 +30,12 @@ impl WasiJsonDbCtx for Client {
         let base = Arc::clone(&self.base_url);
         let hmac_key = Arc::clone(&self.hmac_key);
         async move {
-            let (table, pk) = parse_collection(&collection)?;
-            let pk = require_pk(&collection, pk.as_ref())?;
+            let (table, _scope_pk) = parse_collection(&collection)?;
+            let (pk, rk) = document::decode_id(&id)?;
             let uri = format!(
                 "{base}/{table}(PartitionKey='{pk}',RowKey='{rk}')",
                 pk = escape_entity_key(pk),
-                rk = escape_entity_key(&id),
+                rk = escape_entity_key(rk),
             );
 
             let now = now_rfc1123();
@@ -73,10 +73,9 @@ impl WasiJsonDbCtx for Client {
         let base = Arc::clone(&self.base_url);
         let hmac_key = Arc::clone(&self.hmac_key);
         async move {
-            let (table, pk) = parse_collection(&collection)?;
-            let pk = require_pk(&collection, pk.as_ref())?;
+            let (table, _scope_pk) = parse_collection(&collection)?;
             let uri = format!("{base}/{table}");
-            let body = document::flatten(&doc, pk)?;
+            let body = document::flatten(&doc)?;
 
             let now = now_rfc1123();
             let auth = sign_request(&opts.name, &hmac_key, &now, &uri)?;
@@ -110,14 +109,14 @@ impl WasiJsonDbCtx for Client {
         let base = Arc::clone(&self.base_url);
         let hmac_key = Arc::clone(&self.hmac_key);
         async move {
-            let (table, pk) = parse_collection(&collection)?;
-            let pk = require_pk(&collection, pk.as_ref())?;
+            let (table, _scope_pk) = parse_collection(&collection)?;
+            let (pk, rk) = document::decode_id(&doc.id)?;
             let uri = format!(
-                "{base}/{table}(PartitionKey='{epk}',RowKey='{rk}')",
+                "{base}/{table}(PartitionKey='{epk}',RowKey='{erk}')",
                 epk = escape_entity_key(pk),
-                rk = escape_entity_key(&doc.id),
+                erk = escape_entity_key(rk),
             );
-            let body = document::flatten(&doc, pk)?;
+            let body = document::flatten(&doc)?;
 
             let now = now_rfc1123();
             let auth = sign_request(&opts.name, &hmac_key, &now, &uri)?;
@@ -148,12 +147,12 @@ impl WasiJsonDbCtx for Client {
         let base = Arc::clone(&self.base_url);
         let hmac_key = Arc::clone(&self.hmac_key);
         async move {
-            let (table, pk) = parse_collection(&collection)?;
-            let pk = require_pk(&collection, pk.as_ref())?;
+            let (table, _scope_pk) = parse_collection(&collection)?;
+            let (pk, rk) = document::decode_id(&id)?;
             let uri = format!(
-                "{base}/{table}(PartitionKey='{epk}',RowKey='{rk}')",
+                "{base}/{table}(PartitionKey='{epk}',RowKey='{erk}')",
                 epk = escape_entity_key(pk),
-                rk = escape_entity_key(&id),
+                erk = escape_entity_key(rk),
             );
 
             let now = now_rfc1123();
@@ -306,14 +305,6 @@ impl Client {
 /// convention and the result is percent-encoded for safe URL embedding.
 fn escape_entity_key(value: &str) -> String {
     urlencoding::encode(&value.replace('\'', "''")).into_owned()
-}
-
-fn require_pk<'a>(collection: &str, pk: Option<&'a String>) -> anyhow::Result<&'a str> {
-    pk.map(String::as_str).ok_or_else(|| {
-        anyhow!(
-            "operation requires collection format '{{table}}/{{partitionKey}}', got '{collection}'"
-        )
-    })
 }
 
 fn build_odata_filter(pk: Option<&str>, server_filter: Option<&str>) -> Option<String> {

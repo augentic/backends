@@ -2,6 +2,7 @@ use std::env;
 
 use dotenvy::dotenv;
 use omnia::Backend;
+use omnia_azure_table::store::document::{decode_id, encode_id};
 use omnia_azure_table::{Client, ConnectOptions};
 use omnia_wasi_jsondb::{
     ComparisonOp, Document, FilterTree, QueryOpts, QueryResult, ScalarValue, WasiJsonDbCtx,
@@ -35,11 +36,14 @@ struct TypedRecord {
 }
 
 const TABLE: &str = "testJsondb";
-const COLLECTION: &str = "testJsondb/desk";
+const PK_DESK: &str = "desk";
+const PK_MOBILE: &str = "mobile";
+const SCOPE_DESK: &str = "testJsondb/desk";
+const SCOPE_MOBILE: &str = "testJsondb/mobile";
 
-fn doc(id: &str, data: Value) -> Document {
+fn doc(pk: &str, rk: &str, data: Value) -> Document {
     Document {
-        id: id.into(),
+        id: encode_id(pk, rk),
         data: serde_json::to_vec(&data).expect("serialize"),
     }
 }
@@ -48,8 +52,9 @@ fn body(d: &Document) -> Value {
     serde_json::from_slice(&d.data).expect("deserialize")
 }
 
-fn ids(r: &QueryResult) -> Vec<&str> {
-    r.documents.iter().map(|d| d.id.as_str()).collect()
+/// Extract just the RowKey portion from composite document IDs for readable assertions.
+fn row_keys(r: &QueryResult) -> Vec<&str> {
+    r.documents.iter().map(|d| decode_id(&d.id).expect("valid composite id").1).collect()
 }
 
 fn cmp(field: &str, op: ComparisonOp, value: ScalarValue) -> FilterTree {
@@ -60,13 +65,15 @@ fn cmp(field: &str, op: ComparisonOp, value: ScalarValue) -> FilterTree {
     }
 }
 
-async fn q(client: &Client, filter: Option<FilterTree>, opts: QueryOpts) -> QueryResult {
-    client.query(COLLECTION.into(), filter, opts).await.expect("query")
+async fn q(
+    client: &Client, collection: &str, filter: Option<FilterTree>, opts: QueryOpts,
+) -> QueryResult {
+    client.query(collection.into(), filter, opts).await.expect("query")
 }
 
 async fn q_err(client: &Client, filter: FilterTree) -> String {
     client
-        .query(COLLECTION.into(), Some(filter), QueryOpts::default())
+        .query(SCOPE_DESK.into(), Some(filter), QueryOpts::default())
         .await
         .unwrap_err()
         .to_string()
@@ -76,9 +83,10 @@ fn pass(label: &str) {
     println!("  PASS  {label}");
 }
 
-fn seed() -> Vec<(&'static str, Value)> {
+fn seed() -> Vec<(&'static str, &'static str, Value)> {
     vec![
         (
+            PK_DESK,
             "alice",
             json!({
                 "Name": "Alice Montgomery",
@@ -90,6 +98,7 @@ fn seed() -> Vec<(&'static str, Value)> {
             }),
         ),
         (
+            PK_DESK,
             "bob",
             json!({
                 "Name": "Bob Burns",
@@ -101,6 +110,7 @@ fn seed() -> Vec<(&'static str, Value)> {
             }),
         ),
         (
+            PK_DESK,
             "charlie",
             json!({
                 "Name": "Charlie Delta",
@@ -113,6 +123,7 @@ fn seed() -> Vec<(&'static str, Value)> {
             }),
         ),
         (
+            PK_MOBILE,
             "dana",
             json!({
                 "Name": "Dana Null",
@@ -123,6 +134,7 @@ fn seed() -> Vec<(&'static str, Value)> {
             }),
         ),
         (
+            PK_MOBILE,
             "eve",
             json!({
                 "Name": "Eve Eavesdrop",
@@ -155,29 +167,31 @@ pub async fn main() {
     let created = client.ensure_table(TABLE).await.expect("ensure_table");
     println!("Table '{TABLE}': {}", if created { "created" } else { "already exists" });
 
-    let existing = q(&client, None, QueryOpts::default()).await;
+    let existing = q(&client, TABLE, None, QueryOpts::default()).await;
     for d in &existing.documents {
-        client.delete(COLLECTION.into(), d.id.clone()).await.expect("cleanup delete");
+        client.delete(TABLE.into(), d.id.clone()).await.expect("cleanup delete");
     }
     if !existing.documents.is_empty() {
         println!("Cleaned {} leftover rows", existing.documents.len());
     }
 
     let records = seed();
-    for (id, data) in &records {
+    for (pk, rk, data) in &records {
         client
-            .insert(COLLECTION.into(), doc(id, data.clone()))
+            .insert(TABLE.into(), doc(pk, rk, data.clone()))
             .await
-            .unwrap_or_else(|e| panic!("insert {id}: {e}"));
+            .unwrap_or_else(|e| panic!("insert {pk}/{rk}: {e}"));
     }
-    println!("Seeded {} records\n", records.len());
+    println!("Seeded {} records (2 partitions)\n", records.len());
 
     // ── 1. Get round-trip ────────────────────────────────────────────
+    let alice_id = encode_id(PK_DESK, "alice");
     let alice = client
-        .get(COLLECTION.into(), "alice".into())
+        .get(TABLE.into(), alice_id.clone())
         .await
         .expect("get alice")
         .expect("alice missing");
+    assert_eq!(alice.id, alice_id);
     let ab = body(&alice);
     assert_eq!(ab["Name"], "Alice Montgomery");
     assert_eq!(ab["IsActive"], true);
@@ -187,73 +201,102 @@ pub async fn main() {
     assert_eq!(ab["Region"], "US-West");
     pass("get round-trip (all fields verified)");
 
-    // ── 2. Query all ─────────────────────────────────────────────────
-    let r = q(&client, None, QueryOpts::default()).await;
+    // ── 2. Cross-partition query returns all 5 docs ──────────────────
+    let r = q(&client, TABLE, None, QueryOpts::default()).await;
     assert_eq!(r.documents.len(), 5, "expected 5, got {}", r.documents.len());
-    pass("query all (5 records)");
+    for d in &r.documents {
+        assert!(d.id.contains('\0'), "composite id should contain \\0: {:?}", d.id);
+    }
+    pass("cross-partition query (5 records, all composite ids)");
 
-    // ── 3. Compare: Eq Boolean ───────────────────────────────────────
+    // ── 3. Partition-scoped query: desk ──────────────────────────────
+    let r = q(&client, SCOPE_DESK, None, QueryOpts::default()).await;
+    assert_eq!(r.documents.len(), 3, "desk partition should have 3");
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"alice"));
+    assert!(rks.contains(&"bob"));
+    assert!(rks.contains(&"charlie"));
+    pass("partition-scoped query: desk (3 records)");
+
+    // ── 4. Partition-scoped query: mobile ────────────────────────────
+    let r = q(&client, SCOPE_MOBILE, None, QueryOpts::default()).await;
+    assert_eq!(r.documents.len(), 2, "mobile partition should have 2");
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"dana"));
+    assert!(rks.contains(&"eve"));
+    pass("partition-scoped query: mobile (2 records)");
+
+    // ── 5. Compare: Eq Boolean (within desk partition) ───────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         Some(cmp("IsActive", ComparisonOp::Eq, ScalarValue::Boolean(true))),
         QueryOpts::default(),
     )
     .await;
-    assert_eq!(r.documents.len(), 3);
-    pass("Compare: IsActive eq true (3)");
+    assert_eq!(r.documents.len(), 2);
+    pass("Compare: IsActive eq true in desk (2)");
 
-    // ── 4. Compare: Gt Int32 ─────────────────────────────────────────
+    // ── 6. Compare: Gt Int32 (within desk partition) ─────────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         Some(cmp("Points", ComparisonOp::Gt, ScalarValue::Int32(500))),
         QueryOpts::default(),
     )
     .await;
     assert_eq!(r.documents.len(), 2);
-    assert!(ids(&r).contains(&"alice"));
-    assert!(ids(&r).contains(&"charlie"));
-    pass("Compare: Points gt 500 (2)");
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"alice"));
+    assert!(rks.contains(&"charlie"));
+    pass("Compare: Points gt 500 in desk (2)");
 
-    // ── 5. Compare: Lte Float64 ──────────────────────────────────────
+    // ── 7. Compare: Lte Float64 (within desk partition) ──────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         Some(cmp("Rating", ComparisonOp::Lte, ScalarValue::Float64(3.9))),
         QueryOpts::default(),
     )
     .await;
-    assert_eq!(r.documents.len(), 3);
-    pass("Compare: Rating le 3.9 (3)");
+    assert_eq!(r.documents.len(), 1);
+    pass("Compare: Rating le 3.9 in desk (1)");
 
-    // ── 6. Compare: Gte String (timestamp) ───────────────────────────
+    // ── 8. Compare: Gte String (timestamp, cross-partition) ──────────
     let r = q(
         &client,
+        TABLE,
         Some(cmp("Created", ComparisonOp::Gte, ScalarValue::Str("2026-02-01T00:00:00Z".into()))),
         QueryOpts::default(),
     )
     .await;
     assert_eq!(r.documents.len(), 2);
-    assert!(ids(&r).contains(&"bob"));
-    assert!(ids(&r).contains(&"dana"));
-    pass("Compare: Created ge '2026-02-01' (2)");
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"bob"));
+    assert!(rks.contains(&"dana"));
+    pass("Compare: Created ge '2026-02-01' cross-partition (2)");
 
-    // ── 7. InList ────────────────────────────────────────────────────
+    // ── 9. InList (within desk partition) ────────────────────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         Some(FilterTree::InList {
             field: "Points".into(),
-            values: vec![ScalarValue::Int32(200), ScalarValue::Int32(500)],
+            values: vec![ScalarValue::Int32(200), ScalarValue::Int32(950)],
         }),
         QueryOpts::default(),
     )
     .await;
     assert_eq!(r.documents.len(), 2);
-    assert!(ids(&r).contains(&"bob"));
-    assert!(ids(&r).contains(&"dana"));
-    pass("InList: Points in [200, 500] (2)");
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"alice"));
+    assert!(rks.contains(&"bob"));
+    pass("InList: Points in [200, 950] in desk (2)");
 
-    // ── 8. NotInList ─────────────────────────────────────────────────
+    // ── 10. NotInList (within desk partition) ────────────────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         Some(FilterTree::NotInList {
             field: "Name".into(),
             values: vec![
@@ -264,26 +307,26 @@ pub async fn main() {
         QueryOpts::default(),
     )
     .await;
-    assert_eq!(r.documents.len(), 3);
-    pass("NotInList: Name not in [Alice, Bob] (3)");
+    assert_eq!(r.documents.len(), 1);
+    pass("NotInList: Name not in [Alice, Bob] in desk (1)");
 
-    // ── 9. Compare: Ne ──────────────────────────────────────────────
+    // ── 11. Compare: Ne (within desk partition) ─────────────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         Some(cmp("Region", ComparisonOp::Ne, ScalarValue::Str("US-West".into()))),
         QueryOpts::default(),
     )
     .await;
-    // Azure Table excludes entities where the property is absent (dana has no
-    // Region), so only bob and eve match — not 3.
-    assert_eq!(r.documents.len(), 2);
-    assert!(ids(&r).contains(&"bob"));
-    assert!(ids(&r).contains(&"eve"));
-    pass("Compare: Region ne 'US-West' (2, absent fields excluded)");
+    assert_eq!(r.documents.len(), 1);
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"bob"));
+    pass("Compare: Region ne 'US-West' in desk (1)");
 
-    // ── 10. And (all server-side) ───────────────────────────────────
+    // ── 12. And (all server-side, within desk partition) ─────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         Some(FilterTree::And(vec![
             cmp("IsActive", ComparisonOp::Eq, ScalarValue::Boolean(true)),
             cmp("Points", ComparisonOp::Gt, ScalarValue::Int32(500)),
@@ -292,36 +335,34 @@ pub async fn main() {
     )
     .await;
     assert_eq!(r.documents.len(), 2);
-    assert!(ids(&r).contains(&"alice"));
-    assert!(ids(&r).contains(&"charlie"));
-    pass("And: IsActive=true AND Points gt 500 (2)");
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"alice"));
+    assert!(rks.contains(&"charlie"));
+    pass("And: IsActive=true AND Points gt 500 in desk (2)");
 
-    // ── 11. Edm.Int64 round-trip ────────────────────────────────────
-    let charlie = client
-        .get(COLLECTION.into(), "charlie".into())
-        .await
-        .expect("get charlie")
-        .expect("charlie missing");
+    // ── 13. Edm.Int64 round-trip ────────────────────────────────────
+    let charlie_id = encode_id(PK_DESK, "charlie");
+    let charlie =
+        client.get(TABLE.into(), charlie_id).await.expect("get charlie").expect("charlie missing");
     let cb = body(&charlie);
     assert_eq!(cb["LargeId"], 9_007_199_254_740_993_i64, "Edm.Int64 should round-trip as number");
     pass("Edm.Int64 round-trip (LargeId)");
 
-    // ── 12. Duplicate insert fails ──────────────────────────────────
-    let dup = client.insert(COLLECTION.into(), doc("alice", json!({"Name": "Duplicate"}))).await;
+    // ── 14. Duplicate insert fails ──────────────────────────────────
+    let dup =
+        client.insert(TABLE.into(), doc(PK_DESK, "alice", json!({"Name": "Duplicate"}))).await;
     assert!(dup.is_err(), "inserting duplicate id should fail");
     pass("duplicate insert rejected");
 
-    // ── 13. Get non-existent returns None ────────────────────────────
+    // ── 15. Get non-existent returns None ────────────────────────────
     let missing = client
-        .get(COLLECTION.into(), "no-such-id".into())
+        .get(TABLE.into(), encode_id(PK_DESK, "no-such-id"))
         .await
         .expect("get non-existent should not error");
     assert!(missing.is_none(), "non-existent id should return None");
     pass("get non-existent returns None");
 
-    // ── 14–18. Unsupported filters are rejected ─────────────────────
-    // Azure Table OData does not support string functions or null checks.
-    // See: https://learn.microsoft.com/en-us/rest/api/storageservices/querying-tables-and-entities
+    // ── 16–20. Unsupported filters are rejected ─────────────────────
     let err = q_err(
         &client,
         FilterTree::Contains {
@@ -363,9 +404,10 @@ pub async fn main() {
     assert!(err.contains("not supported"), "IsNotNull should be rejected: {err}");
     pass("IsNotNull rejected");
 
-    // ── 14. Not (server-side) ────────────────────────────────────────
+    // ── 21. Not (server-side, within desk partition) ─────────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         Some(FilterTree::Not(Box::new(cmp(
             "IsActive",
             ComparisonOp::Eq,
@@ -374,14 +416,15 @@ pub async fn main() {
         QueryOpts::default(),
     )
     .await;
-    assert_eq!(r.documents.len(), 2);
-    assert!(ids(&r).contains(&"bob"));
-    assert!(ids(&r).contains(&"eve"));
-    pass("Not: NOT(IsActive eq true) (2)");
+    assert_eq!(r.documents.len(), 1);
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"bob"));
+    pass("Not: NOT(IsActive eq true) in desk (1)");
 
-    // ── 15. Or (server-side) ─────────────────────────────────────────
+    // ── 22. Or (server-side, cross-partition) ────────────────────────
     let r = q(
         &client,
+        TABLE,
         Some(FilterTree::Or(vec![
             cmp("Points", ComparisonOp::Eq, ScalarValue::Int32(200)),
             cmp("Points", ComparisonOp::Eq, ScalarValue::Int32(150)),
@@ -390,13 +433,15 @@ pub async fn main() {
     )
     .await;
     assert_eq!(r.documents.len(), 2);
-    assert!(ids(&r).contains(&"bob"));
-    assert!(ids(&r).contains(&"eve"));
-    pass("Or: Points=200 OR Points=150 (2)");
+    let rks = row_keys(&r);
+    assert!(rks.contains(&"bob"));
+    assert!(rks.contains(&"eve"));
+    pass("Or: Points=200 OR Points=150 cross-partition (2)");
 
-    // ── 16. Limit ────────────────────────────────────────────────────
+    // ── 23. Limit (within desk partition) ────────────────────────────
     let r = q(
         &client,
+        SCOPE_DESK,
         None,
         QueryOpts {
             limit: Some(2),
@@ -407,10 +452,10 @@ pub async fn main() {
     assert_eq!(r.documents.len(), 2);
     pass("limit=2");
 
-    // ── 17. Offset rejected ─────────────────────────────────────────
+    // ── 24. Offset rejected ─────────────────────────────────────────
     let err = client
         .query(
-            COLLECTION.into(),
+            SCOPE_DESK.into(),
             None,
             QueryOpts {
                 offset: Some(1),
@@ -424,7 +469,7 @@ pub async fn main() {
     assert!(err.contains("offset is not supported"), "offset should be rejected: {err}");
     pass("offset rejected");
 
-    // ── 18. Edm.Guid + Edm.DateTime via serde annotations ───────────
+    // ── 25. Edm.Guid + Edm.DateTime via serde annotations ───────────
     let typed = TypedRecord {
         name: "Frank Typed".into(),
         session_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890".into(),
@@ -433,11 +478,12 @@ pub async fn main() {
         expires_at_type: "Edm.DateTime".into(),
     };
     let typed_json = serde_json::to_vec(&typed).expect("serialize TypedRecord");
+    let frank_id = encode_id(PK_DESK, "frank");
     client
         .insert(
-            COLLECTION.into(),
+            TABLE.into(),
             Document {
-                id: "frank".into(),
+                id: frank_id.clone(),
                 data: typed_json,
             },
         )
@@ -445,7 +491,7 @@ pub async fn main() {
         .expect("insert frank");
 
     let frank = client
-        .get(COLLECTION.into(), "frank".into())
+        .get(TABLE.into(), frank_id.clone())
         .await
         .expect("get frank")
         .expect("frank missing");
@@ -459,13 +505,14 @@ pub async fn main() {
     );
     pass("Edm.Guid + Edm.DateTime via serde annotations (round-trip)");
 
-    client.delete(COLLECTION.into(), "frank".into()).await.expect("delete frank");
+    client.delete(TABLE.into(), frank_id).await.expect("delete frank");
 
-    // ── 19. Put + get (verify change) ────────────────────────────────
+    // ── 26. Put + get (verify change) ────────────────────────────────
     client
         .put(
-            COLLECTION.into(),
+            TABLE.into(),
             doc(
+                PK_DESK,
                 "alice",
                 json!({
                     "Name": "Alice Montgomery",
@@ -480,34 +527,82 @@ pub async fn main() {
         .await
         .expect("put alice");
     let updated = client
-        .get(COLLECTION.into(), "alice".into())
+        .get(TABLE.into(), encode_id(PK_DESK, "alice"))
         .await
         .expect("get alice after put")
         .expect("alice missing after put");
     assert_eq!(body(&updated)["Points"], 999);
     pass("put + get (verify Points changed to 999)");
 
-    // ── 20. Delete + get (verify gone) ───────────────────────────────
-    let deleted = client.delete(COLLECTION.into(), "eve".into()).await.expect("delete eve");
-    assert!(deleted, "eve should have existed");
-    let gone = client.get(COLLECTION.into(), "eve".into()).await.expect("get eve after delete");
-    assert!(gone.is_none(), "eve should be gone");
-    pass("delete + get (verify gone)");
+    // ── 27. Round-trip update from cross-partition query ─────────────
+    let all = q(&client, TABLE, None, QueryOpts::default()).await;
+    let dana = all.documents.iter().find(|d| d.id == encode_id(PK_MOBILE, "dana")).expect("dana");
+    let mut dana_body: Value = serde_json::from_slice(&dana.data).expect("parse dana");
+    dana_body["Points"] = json!(777);
+    let updated_dana = Document {
+        id: dana.id.clone(),
+        data: serde_json::to_vec(&dana_body).unwrap(),
+    };
+    client.put(TABLE.into(), updated_dana).await.expect("put dana from query result");
+    let fetched_dana = client
+        .get(TABLE.into(), encode_id(PK_MOBILE, "dana"))
+        .await
+        .expect("get dana")
+        .expect("dana missing");
+    assert_eq!(body(&fetched_dana)["Points"], 777);
+    pass("cross-partition round-trip update (put from query result)");
 
-    // ── 21. Double-delete returns false ──────────────────────────────
-    let again = client.delete(COLLECTION.into(), "eve".into()).await.expect("double-delete eve");
+    // ── 28. Round-trip delete from cross-partition query ─────────────
+    let eve_id = encode_id(PK_MOBILE, "eve");
+    let deleted = client.delete(TABLE.into(), eve_id.clone()).await.expect("delete eve");
+    assert!(deleted, "eve should have existed");
+    let gone = client.get(TABLE.into(), eve_id.clone()).await.expect("get eve after delete");
+    assert!(gone.is_none(), "eve should be gone");
+    pass("cross-partition round-trip delete (delete from query result)");
+
+    // ── 29. Double-delete returns false ──────────────────────────────
+    let again = client.delete(TABLE.into(), eve_id).await.expect("double-delete eve");
     assert!(!again, "double-delete should return false");
     pass("double-delete returns false");
 
-    // ── 22. Table-only collection rejected for get ───────────────────
+    // ── 30. Same RowKey in different partitions ─────────────────────
+    client
+        .insert(
+            TABLE.into(),
+            doc(PK_MOBILE, "alice", json!({"Name": "Mobile Alice", "Points": 111})),
+        )
+        .await
+        .expect("insert mobile/alice");
+    let desk_alice = client
+        .get(TABLE.into(), encode_id(PK_DESK, "alice"))
+        .await
+        .expect("get desk/alice")
+        .expect("desk/alice missing");
+    let mobile_alice = client
+        .get(TABLE.into(), encode_id(PK_MOBILE, "alice"))
+        .await
+        .expect("get mobile/alice")
+        .expect("mobile/alice missing");
+    assert_ne!(desk_alice.id, mobile_alice.id, "composite ids must differ");
+    assert_eq!(body(&desk_alice)["Name"], "Alice Montgomery");
+    assert_eq!(body(&mobile_alice)["Name"], "Mobile Alice");
+    client.delete(TABLE.into(), encode_id(PK_MOBILE, "alice")).await.expect("cleanup mobile/alice");
+    pass("same RowKey in different partitions (distinct composite ids)");
+
+    // ── 31. Bare RowKey (no separator) rejected for get ──────────────
     let err = client.get(TABLE.into(), "alice".into()).await;
-    assert!(err.is_err(), "get on table-only collection should fail");
-    pass("table-only collection rejected for get");
+    assert!(err.is_err(), "bare RowKey without partition separator should fail");
+    pass("bare RowKey rejected for get");
+
+    // ── 32. Table-only collection works with composite id ────────────
+    let ok = client.get(TABLE.into(), encode_id(PK_DESK, "alice")).await;
+    assert!(ok.is_ok(), "table-only collection should work with composite id");
+    pass("table-only collection accepted for get with composite id");
 
     // ── Teardown ─────────────────────────────────────────────────────
-    let remaining = q(&client, None, QueryOpts::default()).await;
+    let remaining = q(&client, TABLE, None, QueryOpts::default()).await;
     for d in &remaining.documents {
-        client.delete(COLLECTION.into(), d.id.clone()).await.expect("teardown delete");
+        client.delete(TABLE.into(), d.id.clone()).await.expect("teardown delete");
     }
     println!("\nCleaned up {} rows. All tests passed!", remaining.documents.len());
 }

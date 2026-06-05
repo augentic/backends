@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use azure_core::credentials::TokenCredential;
+use azure_core::http::Url;
 use azure_identity::{ClientSecretCredential, DeveloperToolsCredential};
 use azure_storage_blob::BlobServiceClient;
 use omnia::Backend;
@@ -41,7 +42,8 @@ impl Backend for Client {
             DeveloperToolsCredential::new(None).context("could not create credential")?
         };
 
-        let service = BlobServiceClient::new(&options.endpoint, Some(credential), None)
+        let endpoint: Url = options.endpoint.parse().context("invalid blob endpoint URL")?;
+        let service = BlobServiceClient::new(endpoint, Some(credential), None)
             .context("failed to create blob service client")?;
         tracing::info!("connected to azure blob storage");
 

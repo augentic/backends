@@ -27,6 +27,7 @@ allowed-duplicate-crates = [
   "foldhash",
   "getrandom",
   "hashbrown",
+  "itertools",
   "jni-sys",
   "jsonschema",
   "linux-raw-sys",

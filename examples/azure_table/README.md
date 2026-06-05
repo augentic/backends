@@ -1,9 +1,10 @@
 # Azure Table Storage Desk Test
 
 Self-seeding desk test for the `omnia-azure-table` crate's `wasi-jsondb`
-implementation. It creates the table, seeds five records covering multiple
-`OData` types, exercises every filter variant and CRUD operation, then
-cleans up after itself.
+implementation. It creates the table, seeds five records across two partitions
+(`desk` and `mobile`) covering multiple `OData` types, exercises every filter
+variant, CRUD operation, and cross-partition identity, then cleans up after
+itself.
 
 No manual data pre-seeding is required.
 
@@ -11,6 +12,11 @@ No manual data pre-seeding is required.
 
 - **CRUD**: insert, get round-trip, put (upsert), delete, double-delete,
   duplicate insert rejected, get non-existent returns None
+- **Multi-partition identity**: same RowKey in different partitions coexists
+  with distinct composite IDs; partition-scoped vs cross-partition queries
+  return correct subsets
+- **Cross-partition round-trip**: query all → put/delete using only the
+  document's composite id (no partition key in the collection string)
 - **Filters**: `Compare` (Eq/Ne/Gt/Gte/Lte across Boolean, Int32, Float64,
   String), `InList`, `NotInList`, `And`, `Or`, `Not`
 - **Unsupported filter rejection**: `Contains`, `StartsWith`, `EndsWith`,
@@ -19,7 +25,8 @@ No manual data pre-seeding is required.
 - **Query options**: `offset`, `limit`, continuation tokens
 - **OData type annotations**: `Edm.Int64` round-trip, `Edm.Guid` and
   `Edm.DateTime` via serde `#[serde(rename = "Field@odata.type")]` pattern
-- **Error paths**: table-only collection rejected for point operations
+- **Error paths**: bare RowKey (missing partition separator) rejected for
+  point operations; table-only collection accepted with composite id
 
 ## Running with Azurite
 
@@ -70,13 +77,19 @@ Azure Table JSONDB desk test
 ============================
 
 Table 'testJsondb': created
-Seeded 5 records
+Seeded 5 records (2 partitions)
 
   PASS  get round-trip (all fields verified)
-  PASS  query all (5 records)
-  PASS  Compare: IsActive eq true (3)
+  PASS  cross-partition query (5 records, all composite ids)
+  PASS  partition-scoped query: desk (3 records)
+  PASS  partition-scoped query: mobile (2 records)
+  PASS  Compare: IsActive eq true in desk (2)
   ...
-  PASS  table-only collection rejected for get
+  PASS  cross-partition round-trip update (put from query result)
+  PASS  cross-partition round-trip delete (delete from query result)
+  PASS  same RowKey in different partitions (distinct composite ids)
+  PASS  bare RowKey rejected for get
+  PASS  table-only collection accepted for get with composite id
 
-Cleaned up 4 rows. All tests passed!
+Cleaned up N rows. All tests passed!
 ```

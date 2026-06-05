@@ -25,5 +25,5 @@ futures.workspace = true
 omnia.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto = { version = "0.31.0", features = ["gen-tonic"] }
-tonic = "0.14.5"
+tonic = "0.14.6"
 tracing.workspace = true
