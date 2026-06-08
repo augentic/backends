@@ -57,7 +57,7 @@ azure_core = "1.0.0"
 azure_identity = "1.0.0"
 azure_storage_blob = "1.0.0"
 base64ct = { version = "1.8.3", features = ["std"] }
-chrono = "0.4.44"
+chrono = "0.4.45"
 fromenv = "0.1.0"
 futures = "0.3.32"
 http = "1.4.1"
@@ -69,15 +69,15 @@ tracing = "0.1.44"
 urlencoding = "2.1.3"
 
 # omnia registry
-omnia = "0.31.0"
-omnia-wasi-blobstore = "0.31.0"
-omnia-wasi-identity = "0.31.0"
-omnia-wasi-jsondb = "0.31.0"
-omnia-wasi-keyvalue = "0.31.0"
-omnia-wasi-messaging = "0.31.0"
-omnia-wasi-otel = "0.31.0"
-omnia-wasi-sql = "0.31.0"
-omnia-wasi-vault = "0.31.0"
+omnia = "0.32.0"
+omnia-wasi-blobstore = "0.32.0"
+omnia-wasi-identity = "0.32.0"
+omnia-wasi-jsondb = "0.32.0"
+omnia-wasi-keyvalue = "0.32.0"
+omnia-wasi-messaging = "0.32.0"
+omnia-wasi-otel = "0.32.0"
+omnia-wasi-sql = "0.32.0"
+omnia-wasi-vault = "0.32.0"
 
 [profile.release]
 lto = true

@@ -9,7 +9,7 @@ feature-depth = 1
 
 [advisories]
 unmaintained = 'workspace'
-ignore = ["RUSTSEC-2026-0114", "RUSTSEC-2026-0149"]
+ignore = []
 
 [licenses]
 allow = [

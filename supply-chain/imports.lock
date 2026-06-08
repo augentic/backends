@@ -99,13 +99,6 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
-[[publisher.cap-rand]]
-version = "3.4.5"
-when = "2025-10-24"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
 [[publisher.cap-std]]
 version = "3.4.5"
 when = "2025-10-24"
@@ -176,68 +169,68 @@ user-login = "jrmuizel"
 user-name = "Jeff Muizelaar"
 
 [[publisher.cranelift-assembler-x64]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-assembler-x64-meta]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-bforest]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-bitset]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen-meta]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen-shared]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-control]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-entity]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-frontend]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-isle]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-native]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-srcgen]]
-version = "0.131.0"
-when = "2026-04-20"
+version = "0.132.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.derive_more]]
@@ -271,13 +264,6 @@ user-name = "Henri Sivonen"
 [[publisher.errno]]
 version = "0.3.14"
 when = "2025-09-09"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.fd-lock]]
-version = "4.0.4"
-when = "2025-03-10"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -404,13 +390,6 @@ user-id = 55123
 user-login = "rust-lang-owner"
 
 [[publisher.linux-raw-sys]]
-version = "0.4.15"
-when = "2025-01-08"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
-[[publisher.linux-raw-sys]]
 version = "0.12.1"
 when = "2025-12-23"
 user-id = 6825
@@ -502,13 +481,13 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.pulley-interpreter]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.pulley-macros]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.quote]]
@@ -579,13 +558,6 @@ version = "0.1.27"
 when = "2026-01-15"
 user-id = 55123
 user-login = "rust-lang-owner"
-
-[[publisher.rustix]]
-version = "0.38.44"
-when = "2025-01-21"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
 
 [[publisher.rustix]]
 version = "1.1.4"
@@ -677,13 +649,6 @@ when = "2026-02-20"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
-
-[[publisher.system-interface]]
-version = "0.27.3"
-when = "2024-12-04"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
 
 [[publisher.target-lexicon]]
 version = "0.13.5"
@@ -866,13 +831,13 @@ when = "2026-01-06"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasm-encoder]]
-version = "0.246.2"
-when = "2026-04-03"
+version = "0.247.0"
+when = "2026-04-17"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasm-encoder]]
-version = "0.247.0"
-when = "2026-04-17"
+version = "0.248.0"
+when = "2026-04-28"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasm-metadata]]
@@ -892,108 +857,108 @@ when = "2026-01-06"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasmparser]]
-version = "0.246.2"
-when = "2026-04-03"
-trusted-publisher = "github:bytecodealliance/wasm-tools"
-
-[[publisher.wasmparser]]
 version = "0.247.0"
 when = "2026-04-17"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
+[[publisher.wasmparser]]
+version = "0.248.0"
+when = "2026-04-28"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+
 [[publisher.wasmprinter]]
-version = "0.246.2"
-when = "2026-04-03"
+version = "0.248.0"
+when = "2026-04-28"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wasmtime]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-environ]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-component-macro]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-component-util]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-core]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-cranelift]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-fiber]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-debug]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-icache-coherence]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-unwinder]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-versioned-export-macros]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-winch]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-wit-bindgen]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-io]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle-generate]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle-macro]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.winapi-util]]
@@ -1004,8 +969,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.winch-codegen]]
-version = "44.0.0"
-when = "2026-04-20"
+version = "45.0.1"
+when = "2026-06-05"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.windows-core]]
@@ -1344,13 +1309,13 @@ when = "2026-01-06"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wit-parser]]
-version = "0.246.2"
-when = "2026-04-03"
+version = "0.247.0"
+when = "2026-04-17"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.wit-parser]]
-version = "0.247.0"
-when = "2026-04-17"
+version = "0.248.0"
+when = "2026-04-28"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [[publisher.witx]]
@@ -3509,31 +3474,6 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.14.5 -> 0.14.6"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.hashlink]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "0.7.0 -> 0.8.1"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.hashlink]]
-who = "Mark Hammond <mhammond@mozilla.com>"
-criteria = "safe-to-deploy"
-delta = "0.8.1 -> 0.9.1"
-notes = "New CursorMut struct and other relatively straight-forward changes."
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.hashlink]]
-who = "Erich Gubler <erichdongubler@gmail.com>"
-criteria = "safe-to-deploy"
-delta = "0.9.1 -> 0.10.0"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.hashlink]]
-who = "Erich Gubler <erichdongubler@gmail.com>"
-criteria = "safe-to-deploy"
-delta = "0.10.0 -> 0.11.0"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.hex]]
