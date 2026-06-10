@@ -799,51 +799,51 @@ version = "0.39.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-otel]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-runtime-macro]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-blobstore]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-identity]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-jsondb]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-keyvalue]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-messaging]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-otel]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-otel-attr]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-sql]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.omnia-wasi-vault]]
-version = "0.32.0"
+version = "0.33.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.once_cell]]
@@ -963,7 +963,7 @@ version = "0.13.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost]]
-version = "0.14.3"
+version = "0.14.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost-build]]
@@ -975,7 +975,7 @@ version = "0.13.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost-derive]]
-version = "0.14.3"
+version = "0.14.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost-reflect]]

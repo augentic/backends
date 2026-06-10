@@ -308,8 +308,8 @@ user-id = 55123
 user-login = "rust-lang-owner"
 
 [[publisher.http]]
-version = "1.4.1"
-when = "2026-05-25"
+version = "1.4.2"
+when = "2026-06-08"
 user-id = 359
 user-login = "seanmonstar"
 user-name = "Sean McArthur"

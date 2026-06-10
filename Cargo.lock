@@ -2221,9 +2221,9 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.4.1"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8be7462df143984c4598a256ef469b251d7d7f9e271135073e78fc535414f3d0"
+checksum = "6970f50e31d6fc17d3fa27329444bfa74e196cf62e95052a3f6fee181dba6425"
 dependencies = [
  "bytes",
  "itoa",
@@ -3364,9 +3364,9 @@ dependencies = [
 
 [[package]]
 name = "omnia"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f5b6ac30a5c62e27a643bbf27440f74bf6d2ef7736565ea4a2fb3a6b365c9a4"
+checksum = "db8aa98b1b84073295724f0fe1412e857c46fbf84b07732113b39617e90c3d5b"
 dependencies = [
  "anyhow",
  "clap",
@@ -3517,9 +3517,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-otel"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ff798e78c8f2c0aea10293ab7c88f4631cf510a1becaa0ba752a7fab28823db"
+checksum = "b2cf7a31d74746e502a5c205281f2c69448b666c31af099f73750a1aa0b6e713"
 dependencies = [
  "anyhow",
  "http",
@@ -3567,9 +3567,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-runtime-macro"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70bae938e7e5505aea57d4fe95ee2ec4e6b58ddf6d8576a6be84851034f121bb"
+checksum = "ba059efef7a42fd102b0f83452d0317d536e26377d7cffaf7b7b1760f9e1995e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3578,9 +3578,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-blobstore"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff0511bc9e67ec285a00a5c20022a4936de951f5dd3d0848cfb7e186eed018a3"
+checksum = "fcc3f21b44336440ce8d237916f4c27975f1d1dcde151af260610fc6b86a51dd"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3595,9 +3595,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-identity"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3834fdb64be093902f79485c9827556e9ee60db55683711418f83610f66cd023"
+checksum = "ac3ffc8acb8e750bdcacad9a3a76a475ba4c1abd45732884478016d3f0b0f58c"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -3613,9 +3613,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-jsondb"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5d83ce538b40f1ec9b4ba75b42824d88dfef890cb95c37d3dde508cd29fd409"
+checksum = "9e61049068fdbeab79791f1fcf19a6b693a800782b38e6ad9b6eb8ec6b42c6a6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3635,9 +3635,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-keyvalue"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be1952d0069a1fef329b5c060459f6bbf0572306b75b2d3fc4a44d52641641d4"
+checksum = "d618e94f155ca9524ec206d8ce85b1b28b6bdec8d811980ad5e7d33578711a2f"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3654,9 +3654,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-messaging"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8db5140fe345b11328f36432e11b9704de7388ca18578430daa312268e806495"
+checksum = "9dc2eb1941fa420b92b65f5773bb7b8c7042356345fc106ba106e3cd0d7c1a24"
 dependencies = [
  "anyhow",
  "futures",
@@ -3674,9 +3674,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-otel"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddf74b37cb848b29a7f76f4520425cd2bea1a85b2d757d5fdacabedcd753146d"
+checksum = "42f3938818467c281de9d41fc804ef0d9e9952d032adb29184af464f6a6ad660"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -3689,7 +3689,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-proto",
  "opentelemetry_sdk",
- "prost 0.14.3",
+ "prost 0.14.4",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -3700,9 +3700,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-otel-attr"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f935bec16aec5303a4bba3a0748a1ba11219979d9565a98717ab32766b386e57"
+checksum = "fe384b7fee596449e20e1faef96902a4e57ec3da6833d9a529783cdf72317eda"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3711,9 +3711,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-sql"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53e3eebb59e492ac925a373c554e6fa662c923f87cf13000c44f35b0304c6c98"
+checksum = "b2c7e418712a6d7472b06f369e7cf8c912c483419fa677ce7f4c190c966ce116"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -3733,9 +3733,9 @@ dependencies = [
 
 [[package]]
 name = "omnia-wasi-vault"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abc56dd145ca72c022c6a9119d692c7b7cec95d4c8256c2bbe797e8e11817c2b"
+checksum = "1c6f7d97332af897959b48f6cdd275ecc89bcfd62e141a79960d652025f43cdc"
 dependencies = [
  "anyhow",
  "futures",
@@ -3829,7 +3829,7 @@ dependencies = [
  "opentelemetry-http",
  "opentelemetry-proto",
  "opentelemetry_sdk",
- "prost 0.14.3",
+ "prost 0.14.4",
  "reqwest 0.13.4",
  "thiserror 2.0.18",
  "tokio",
@@ -3847,7 +3847,7 @@ dependencies = [
  "const-hex",
  "opentelemetry",
  "opentelemetry_sdk",
- "prost 0.14.3",
+ "prost 0.14.4",
  "serde",
  "tonic",
  "tonic-prost",
@@ -4183,12 +4183,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2ea70524a2f82d518bce41317d0fae74151505651af45faf1ffbd6fd33f0568"
+checksum = "528ac67416ff8646872a3c02cad9cc4ee5dc9f9540c9b10771855c95cb2e5ae1"
 dependencies = [
  "bytes",
- "prost-derive 0.14.3",
+ "prost-derive 0.14.4",
 ]
 
 [[package]]
@@ -4226,9 +4226,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
+checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
  "itertools 0.14.0",
@@ -4287,7 +4287,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8991c4cbdb8bc5b11f0b074ffe286c30e523de90fee5ba8132f1399f23cb3dd7"
 dependencies = [
- "prost 0.14.3",
+ "prost 0.14.4",
 ]
 
 [[package]]
@@ -5898,7 +5898,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a55376a0bbaa4975a3f10d009ad763d8f4108f067c7c2e74f3001fb49778d309"
 dependencies = [
  "bytes",
- "prost 0.14.3",
+ "prost 0.14.4",
  "tonic",
 ]
 
@@ -5908,7 +5908,7 @@ version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73ab1b02061f83d519bba3caa167f88f261ef05720ab8ebc954ade70de3348e8"
 dependencies = [
- "prost 0.14.3",
+ "prost 0.14.4",
  "prost-types 0.14.3",
  "tonic",
 ]
