@@ -12,24 +12,48 @@ use serde_json::{Map, Value};
 /// Azure Table system / `OData` metadata properties stripped during unflatten.
 const SYSTEM_KEYS: &[&str] = &["PartitionKey", "RowKey", "Timestamp"];
 
-/// Build an Azure Table entity JSON body from a [`Document`] and partition key.
-///
-/// Top-level JSON fields become entity properties. `PartitionKey` and `RowKey`
-/// are injected from the collection string and `doc.id` respectively. `OData`
-/// type annotations (`@odata.type`) are added for types that Azure Table
-/// cannot infer from the JSON representation alone.
+/// Separator for composite document IDs. U+0000 is forbidden in Azure Table
+/// partition and row keys (control characters U+0000–U+001F are disallowed),
+/// so it is unambiguous.
+const ID_SEP: char = '\0';
+
+/// Encode a partition key and row key into a composite document ID.
+#[must_use]
+pub fn encode_id(partition_key: &str, row_key: &str) -> String {
+    format!("{partition_key}{ID_SEP}{row_key}")
+}
+
+/// Decode a composite document ID into `(partition_key, row_key)`.
 ///
 /// # Errors
 ///
-/// Returns an error if the document body is not valid JSON or not a JSON object.
-pub fn flatten(doc: &Document, partition_key: &str) -> anyhow::Result<Value> {
+/// Returns an error if `id` does not contain the `\0` separator.
+pub fn decode_id(id: &str) -> anyhow::Result<(&str, &str)> {
+    id.split_once(ID_SEP).ok_or_else(|| {
+        anyhow!("invalid document id {id:?}: expected '{{PartitionKey}}\\0{{RowKey}}'")
+    })
+}
+
+/// Build an Azure Table entity JSON body from a [`Document`].
+///
+/// The document's composite `id` (`{PartitionKey}\0{RowKey}`) is split to
+/// recover both Azure Table keys. Top-level JSON fields become entity
+/// properties. `OData` type annotations (`@odata.type`) are added for types
+/// that Azure Table cannot infer from the JSON representation alone.
+///
+/// # Errors
+///
+/// Returns an error if the document id is not a valid composite id, the body
+/// is not valid JSON, or the body is not a JSON object.
+pub fn flatten(doc: &Document) -> anyhow::Result<Value> {
+    let (pk, rk) = decode_id(&doc.id)?;
     let body: Value =
         serde_json::from_slice(&doc.data).context("document body is not valid JSON")?;
     let src = body.as_object().ok_or_else(|| anyhow!("document body must be a JSON object"))?;
 
     let mut entity = Map::new();
-    entity.insert("PartitionKey".into(), Value::String(partition_key.into()));
-    entity.insert("RowKey".into(), Value::String(doc.id.clone()));
+    entity.insert("PartitionKey".into(), Value::String(pk.to_owned()));
+    entity.insert("RowKey".into(), Value::String(rk.to_owned()));
 
     for (key, value) in src {
         if is_metadata_key(key) {
@@ -44,6 +68,9 @@ pub fn flatten(doc: &Document, partition_key: &str) -> anyhow::Result<Value> {
 /// Convert an Azure Table entity JSON (from a GET/query response) into a
 /// [`Document`], stripping system and `OData` metadata properties.
 ///
+/// The returned document's `id` is a composite `{PartitionKey}\0{RowKey}`
+/// string that uniquely identifies the entity across all partitions.
+///
 /// Type annotations (`@odata.type`) are used to restore fidelity for
 /// `Edm.Int64` (string → i64 number) and `Edm.Double` (ensure f64
 /// representation). Nested objects and arrays that were serialized as JSON
@@ -52,15 +79,20 @@ pub fn flatten(doc: &Document, partition_key: &str) -> anyhow::Result<Value> {
 ///
 /// # Errors
 ///
-/// Returns an error if the entity is not a JSON object or is missing `RowKey`.
+/// Returns an error if the entity is not a JSON object or is missing
+/// `PartitionKey` or `RowKey`.
 pub fn unflatten(entity: &Value) -> anyhow::Result<Document> {
     let obj = entity.as_object().ok_or_else(|| anyhow!("entity must be a JSON object"))?;
 
-    let id = obj
+    let pk = obj
+        .get("PartitionKey")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("entity missing PartitionKey"))?;
+    let rk = obj
         .get("RowKey")
         .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("entity missing RowKey"))?
-        .to_owned();
+        .ok_or_else(|| anyhow!("entity missing RowKey"))?;
+    let id = encode_id(pk, rk);
 
     let mut data_map = Map::new();
     for (key, value) in obj {
@@ -161,13 +193,39 @@ mod tests {
 
     use super::*;
 
+    // ── encode_id / decode_id ────────────────────────────────────────
+
+    #[test]
+    fn encode_decode_id_roundtrip() {
+        let id = encode_id("pk1", "rk1");
+        let (pk, rk) = decode_id(&id).unwrap();
+        assert_eq!(pk, "pk1");
+        assert_eq!(rk, "rk1");
+    }
+
+    #[test]
+    fn decode_id_rejects_bare_rowkey() {
+        let err = decode_id("just-a-rowkey").unwrap_err().to_string();
+        assert!(err.contains("invalid document id"), "{err}");
+    }
+
+    #[test]
+    fn decode_id_with_special_chars() {
+        let id = encode_id("tenant/a", "row'key");
+        let (pk, rk) = decode_id(&id).unwrap();
+        assert_eq!(pk, "tenant/a");
+        assert_eq!(rk, "row'key");
+    }
+
+    // ── flatten ──────────────────────────────────────────────────────
+
     #[test]
     fn flatten_adds_keys_and_preserves_fields() {
         let doc = Document {
-            id: "r1".into(),
+            id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"Name": "Alice", "Points": 42})).unwrap(),
         };
-        let entity = flatten(&doc, "pk1").unwrap();
+        let entity = flatten(&doc).unwrap();
         let obj = entity.as_object().unwrap();
         assert_eq!(obj["PartitionKey"], "pk1");
         assert_eq!(obj["RowKey"], "r1");
@@ -178,10 +236,10 @@ mod tests {
     #[test]
     fn flatten_annotates_large_int() {
         let doc = Document {
-            id: "r1".into(),
+            id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"big": 9_223_372_036_854_775_807_i64})).unwrap(),
         };
-        let entity = flatten(&doc, "pk1").unwrap();
+        let entity = flatten(&doc).unwrap();
         let obj = entity.as_object().unwrap();
         assert_eq!(obj["big@odata.type"], "Edm.Int64");
     }
@@ -189,10 +247,10 @@ mod tests {
     #[test]
     fn flatten_skips_null_fields() {
         let doc = Document {
-            id: "r1".into(),
+            id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"a": null, "b": "ok"})).unwrap(),
         };
-        let entity = flatten(&doc, "pk1").unwrap();
+        let entity = flatten(&doc).unwrap();
         let obj = entity.as_object().unwrap();
         assert!(!obj.contains_key("a"));
         assert_eq!(obj["b"], "ok");
@@ -201,13 +259,56 @@ mod tests {
     #[test]
     fn flatten_serializes_nested_objects_as_strings() {
         let doc = Document {
-            id: "r1".into(),
+            id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"nested": {"x": 1}})).unwrap(),
         };
-        let entity = flatten(&doc, "pk1").unwrap();
+        let entity = flatten(&doc).unwrap();
         let obj = entity.as_object().unwrap();
         assert_eq!(obj["nested"].as_str().unwrap(), r#"{"x":1}"#);
     }
+
+    #[test]
+    fn flatten_ignores_reserved_keys_in_body() {
+        let doc = Document {
+            id: encode_id("pk1", "r1"),
+            data: serde_json::to_vec(&json!({
+                "PartitionKey": "evil",
+                "RowKey": "evil",
+                "Timestamp": "evil",
+                "Name": "Alice"
+            }))
+            .unwrap(),
+        };
+        let entity = flatten(&doc).unwrap();
+        let obj = entity.as_object().unwrap();
+        assert_eq!(obj["PartitionKey"], "pk1", "injected PartitionKey must not be overwritten");
+        assert_eq!(obj["RowKey"], "r1", "injected RowKey must not be overwritten");
+        assert_eq!(obj["Name"], "Alice");
+    }
+
+    #[test]
+    fn flatten_handles_u64_within_i64_range() {
+        let val: u64 = (i32::MAX as u64) + 1;
+        let doc = Document {
+            id: encode_id("pk1", "r1"),
+            data: serde_json::to_vec(&json!({ "bigU": val })).unwrap(),
+        };
+        let entity = flatten(&doc).unwrap();
+        let obj = entity.as_object().unwrap();
+        assert_eq!(obj["bigU@odata.type"], "Edm.Int64");
+    }
+
+    #[test]
+    fn flatten_rejects_bare_rowkey_id() {
+        let doc = Document {
+            id: "no-separator".into(),
+            data: serde_json::to_vec(&json!({"a": 1})).unwrap(),
+        };
+        let err = flatten(&doc).unwrap_err().to_string();
+        assert!(err.contains("invalid document id"), "{err}");
+    }
+
+    // ── unflatten ────────────────────────────────────────────────────
 
     #[test]
     fn unflatten_restores_edm_int64() {
@@ -218,6 +319,7 @@ mod tests {
             "LargeId@odata.type": "Edm.Int64",
         });
         let doc = unflatten(&entity).unwrap();
+        assert_eq!(doc.id, encode_id("pk1", "r1"));
         let body: Value = serde_json::from_slice(&doc.data).unwrap();
         assert_eq!(body["LargeId"], 9_007_199_254_740_993_i64);
     }
@@ -231,22 +333,10 @@ mod tests {
             "Rating@odata.type": "Edm.Double",
         });
         let doc = unflatten(&entity).unwrap();
+        assert_eq!(doc.id, encode_id("pk1", "r1"));
         let body: Value = serde_json::from_slice(&doc.data).unwrap();
         assert!(body["Rating"].is_f64(), "expected f64, got {:?}", body["Rating"]);
         assert!((body["Rating"].as_f64().unwrap() - 3.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn nested_objects_remain_strings_after_roundtrip() {
-        let doc = Document {
-            id: "r1".into(),
-            data: serde_json::to_vec(&json!({"tags": ["a", "b"], "meta": {"x": 1}})).unwrap(),
-        };
-        let entity = flatten(&doc, "pk1").unwrap();
-        let roundtripped = unflatten(&entity).unwrap();
-        let body: Value = serde_json::from_slice(&roundtripped.data).unwrap();
-        assert_eq!(body["tags"].as_str().unwrap(), r#"["a","b"]"#);
-        assert_eq!(body["meta"].as_str().unwrap(), r#"{"x":1}"#);
     }
 
     #[test]
@@ -260,7 +350,7 @@ mod tests {
             "Name@odata.type": "Edm.String",
         });
         let doc = unflatten(&entity).unwrap();
-        assert_eq!(doc.id, "r1");
+        assert_eq!(doc.id, encode_id("pk1", "r1"));
         let body: Value = serde_json::from_slice(&doc.data).unwrap();
         let obj = body.as_object().unwrap();
         assert!(!obj.contains_key("PartitionKey"));
@@ -272,33 +362,28 @@ mod tests {
     }
 
     #[test]
-    fn flatten_ignores_reserved_keys_in_body() {
-        let doc = Document {
-            id: "r1".into(),
-            data: serde_json::to_vec(&json!({
-                "PartitionKey": "evil",
-                "RowKey": "evil",
-                "Timestamp": "evil",
-                "Name": "Alice"
-            }))
-            .unwrap(),
-        };
-        let entity = flatten(&doc, "pk1").unwrap();
-        let obj = entity.as_object().unwrap();
-        assert_eq!(obj["PartitionKey"], "pk1", "injected PartitionKey must not be overwritten");
-        assert_eq!(obj["RowKey"], "r1", "injected RowKey must not be overwritten");
-        assert_eq!(obj["Name"], "Alice");
+    fn unflatten_missing_partition_key() {
+        let entity = json!({
+            "RowKey": "r1",
+            "Name": "Alice",
+        });
+        let err = unflatten(&entity).unwrap_err().to_string();
+        assert!(err.contains("missing PartitionKey"), "{err}");
     }
 
+    // ── round-trip ───────────────────────────────────────────────────
+
     #[test]
-    fn flatten_handles_u64_within_i64_range() {
-        let val: u64 = (i32::MAX as u64) + 1;
+    fn nested_objects_remain_strings_after_roundtrip() {
         let doc = Document {
-            id: "r1".into(),
-            data: serde_json::to_vec(&json!({ "bigU": val })).unwrap(),
+            id: encode_id("pk1", "r1"),
+            data: serde_json::to_vec(&json!({"tags": ["a", "b"], "meta": {"x": 1}})).unwrap(),
         };
-        let entity = flatten(&doc, "pk1").unwrap();
-        let obj = entity.as_object().unwrap();
-        assert_eq!(obj["bigU@odata.type"], "Edm.Int64");
+        let entity = flatten(&doc).unwrap();
+        let roundtripped = unflatten(&entity).unwrap();
+        assert_eq!(roundtripped.id, doc.id);
+        let body: Value = serde_json::from_slice(&roundtripped.data).unwrap();
+        assert_eq!(body["tags"].as_str().unwrap(), r#"["a","b"]"#);
+        assert_eq!(body["meta"].as_str().unwrap(), r#"{"x":1}"#);
     }
 }

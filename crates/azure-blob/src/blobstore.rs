@@ -7,7 +7,7 @@ use azure_core::http::RequestContent;
 use azure_storage_blob::BlobServiceClient;
 use azure_storage_blob::models::{
     BlobClientDownloadOptions, BlobClientGetPropertiesResultHeaders,
-    BlobContainerClientCreateOptions, BlobContainerClientDeleteOptions,
+    BlobContainerClientCreateOptions, BlobContainerClientDeleteOptions, HttpRange,
 };
 use futures::{FutureExt, TryStreamExt};
 use omnia_wasi_blobstore::{
@@ -41,13 +41,10 @@ fn range_options(
         anyhow::bail!("invalid byte range: end ({end}) < start ({start})");
     }
 
-    let start = usize::try_from(start).context("start offset out of range")?;
     let range = if unbounded {
-        start..usize::MAX
+        HttpRange::from_offset(start)
     } else {
-        let end = usize::try_from(end).context("end offset out of range")?;
-        let exclusive_end = end.saturating_add(1);
-        start..exclusive_end
+        HttpRange::new(start, end - start + 1)
     };
 
     Ok(Some(BlobClientDownloadOptions {
@@ -242,7 +239,7 @@ impl Container for AzureBlobContainer {
 
 #[cfg(test)]
 mod tests {
-    use azure_storage_blob::models::{BlobItem, BlobProperties};
+    use azure_storage_blob::models::{BlobItem, BlobProperties, HttpRange};
 
     use super::*;
 
@@ -351,25 +348,25 @@ mod tests {
     #[test]
     fn range_options_offset_with_unbounded_end() {
         let opts = range_options(100, u64::MAX).unwrap().expect("should produce options");
-        assert_eq!(opts.range, Some(100..usize::MAX));
+        assert_eq!(opts.range, Some(HttpRange::from_offset(100)));
     }
 
     #[test]
     fn range_options_offset_with_zero_end() {
         let opts = range_options(100, 0).unwrap().expect("should produce options");
-        assert_eq!(opts.range, Some(100..usize::MAX));
+        assert_eq!(opts.range, Some(HttpRange::from_offset(100)));
     }
 
     #[test]
     fn range_options_bounded_range() {
         let opts = range_options(10, 99).unwrap().expect("should produce options");
-        assert_eq!(opts.range, Some(10..100));
+        assert_eq!(opts.range, Some(HttpRange::new(10, 90)));
     }
 
     #[test]
     fn range_options_single_byte() {
         let opts = range_options(5, 5).unwrap().expect("should produce options");
-        assert_eq!(opts.range, Some(5..6));
+        assert_eq!(opts.range, Some(HttpRange::new(5, 1)));
     }
 
     #[test]

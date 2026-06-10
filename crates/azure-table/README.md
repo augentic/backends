@@ -11,17 +11,49 @@ MSRV: Rust 1.93
 
 ## Key Mapping
 
-The `collection` string encodes `{table}/{partitionKey}` (split on the first `/`). The document `id` maps to the Azure Table `RowKey`.
+The document `id` is a composite `{PartitionKey}\0{RowKey}` string (null-byte
+separated) that uniquely identifies an entity across all partitions. The
+`collection` string carries the table name and an optional `/{PartitionKey}`
+suffix for query scoping.
 
 | jsondb concept | Azure Table equivalent |
 |----------------|------------------------|
-| `collection` | `{table}/{PartitionKey}` |
-| `id` | `RowKey` |
+| `collection` | Table name (+ optional `/{PartitionKey}` for query scoping) |
+| `id` | `{PartitionKey}\0{RowKey}` (composite) |
 | `document.data` | Flattened entity properties |
 
-Example: `get("users/tenant-a", "user-123")` → table=`users`, PK=`tenant-a`, RK=`user-123`.
+Example: `get("users", "tenant-a\0user-123")` → table=`users`, PK=`tenant-a`, RK=`user-123`.
 
-A table-only collection (`"users"` without a `/`) is allowed for `query()` (cross-partition scan) but rejected for point operations (`get`, `insert`, `put`, `delete`).
+A table-only collection (`"users"` without a `/`) is valid for all operations.
+For `query()`, appending `/{PartitionKey}` scopes the scan to a single
+partition. The partition key for point operations is always derived from the
+composite `id`, never from the collection string.
+
+## Composite ID Format
+
+Azure Table entities are keyed by `(PartitionKey, RowKey)`. A `RowKey` is only
+unique within its partition — two different partitions can share the same
+`RowKey`. To ensure that `Document.id` is globally unique and self-sufficient
+for CRUD round-trips, this crate encodes both keys into a single string:
+
+```text
+{PartitionKey}\0{RowKey}
+```
+
+The null byte (`\0`, U+0000) is used as the separator because it is
+[forbidden in Azure Table key fields](https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-the-table-service-data-model#characters-disallowed-in-key-fields)
+(control characters U+0000–U+001F are disallowed), making the split
+unambiguous. The same separator is already used for continuation tokens.
+
+Construct and parse composite IDs with the helpers in
+`omnia_azure_table::store::document`:
+
+```rust,ignore
+use omnia_azure_table::store::document::{encode_id, decode_id};
+
+let id = encode_id("tenant-a", "user-123");   // "tenant-a\0user-123"
+let (pk, rk) = decode_id(&id).unwrap();       // ("tenant-a", "user-123")
+```
 
 ## `OData` Type Mapping
 
