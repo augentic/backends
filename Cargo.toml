@@ -69,15 +69,15 @@ tracing = "0.1.44"
 urlencoding = "2.1.3"
 
 # omnia registry
-omnia = "0.33.0"
-omnia-wasi-blobstore = "0.33.0"
-omnia-wasi-identity = "0.33.0"
-omnia-wasi-jsondb = "0.33.0"
-omnia-wasi-keyvalue = "0.33.0"
-omnia-wasi-messaging = "0.33.0"
-omnia-wasi-otel = "0.33.0"
-omnia-wasi-sql = "0.33.0"
-omnia-wasi-vault = "0.33.0"
+omnia = "0.34.0"
+omnia-wasi-blobstore = "0.34.0"
+omnia-wasi-identity = "0.34.0"
+omnia-wasi-jsondb = "0.34.0"
+omnia-wasi-keyvalue = "0.34.0"
+omnia-wasi-messaging = "0.34.0"
+omnia-wasi-otel = "0.34.0"
+omnia-wasi-sql = "0.34.0"
+omnia-wasi-vault = "0.34.0"
 
 [profile.release]
 lto = true
