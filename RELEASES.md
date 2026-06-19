@@ -12,6 +12,7 @@ Release notes for previous releases can be found on the respective release
 branches of the repository.
 
 <!-- ARCHIVE_START -->
+* [0.28.x](https://github.com/augentic/backends/blob/release-0.28.0/RELEASES.md)
 * [0.27.x](https://github.com/augentic/backends/blob/release-0.27.0/RELEASES.md)
 * [0.26.x](https://github.com/augentic/backends/blob/release-0.26.0/RELEASES.md)
 
