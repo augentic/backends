@@ -3633,6 +3633,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-cursor"
+version = "0.28.0"
+dependencies = [
+ "anyhow",
+ "fromenv",
+ "futures",
+ "omnia 0.35.0",
+ "omnia-wasi-model",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "omnia-genai"
 version = "0.28.0"
 dependencies = [
