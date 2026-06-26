@@ -7,9 +7,9 @@
 //! deterministically under [`ModelDefault`] — proving record/replay works at the
 //! typed boundary for the spawned-agent shape, with no guest or contract change.
 //!
-//! It is skipped unless `OMNI_CURSOR_LIVE=1` is set (alongside an installed,
+//! It is skipped unless `OMNIA_CURSOR_LIVE=1` is set (alongside an installed,
 //! authenticated `cursor-agent` — `CURSOR_API_KEY` or a prior `cursor-agent
-//! login` — and optionally `OMNI_MODEL` / `OMNI_WORKSPACE`), so it never runs or
+//! login` — and optionally `OMNIA_MODEL` / `OMNIA_WORKSPACE`), so it never runs or
 //! spawns a process in CI.
 
 #![cfg(not(target_arch = "wasm32"))]
@@ -106,17 +106,17 @@ fn verdict_prompt() -> Prompt {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_cursor_completes_then_replays() -> Result<()> {
-    if std::env::var_os("OMNI_CURSOR_LIVE").is_none() {
+    if std::env::var_os("OMNIA_CURSOR_LIVE").is_none() {
         eprintln!(
-            "skipping live cursor run 3: set OMNI_CURSOR_LIVE=1 (plus an installed, authenticated \
-             cursor-agent and optionally OMNI_MODEL / OMNI_WORKSPACE) to record and replay the \
+            "skipping live cursor run 3: set OMNIA_CURSOR_LIVE=1 (plus an installed, authenticated \
+             cursor-agent and optionally OMNIA_MODEL / OMNIA_WORKSPACE) to record and replay the \
              spawned-agent gate"
         );
         return Ok(());
     }
 
-    // Workspace the agent runs in: an explicit `OMNI_WORKSPACE` or a temp dir.
-    let workspace = std::env::var_os("OMNI_WORKSPACE").map_or_else(
+    // Workspace the agent runs in: an explicit `OMNIA_WORKSPACE` or a temp dir.
+    let workspace = std::env::var_os("OMNIA_WORKSPACE").map_or_else(
         || std::env::temp_dir().join(format!("omnia-cursor-live-ws-{}", std::process::id())),
         PathBuf::from,
     );
@@ -129,7 +129,7 @@ async fn live_cursor_completes_then_replays() -> Result<()> {
     // the run-1 fixture as a side effect of the live completion. Connect with
     // explicit options so the workspace is controlled regardless of env.
     let client = Client::connect_with(ConnectOptions {
-        model: std::env::var("OMNI_MODEL").ok(),
+        model: std::env::var("OMNIA_MODEL").ok(),
         workspace: Some(workspace.to_string_lossy().into_owned()),
         timeout_secs: 300,
     })

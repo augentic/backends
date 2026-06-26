@@ -16,9 +16,9 @@ MSRV: Rust 1.95
 
 ## Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `OMNI_MODEL` | no | `gpt-5.5` | Provider model id; genai routes to the provider by prefix |
+| Variable      | Required | Default   | Description                                               |
+| ------------- | -------- | --------- | --------------------------------------------------------- |
+| `OMNIA_MODEL` | no       | `gpt-5.5` | Provider model id; genai routes to the provider by prefix |
 
 Provider API keys are read by genai from the ambient environment
 (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …) and are never

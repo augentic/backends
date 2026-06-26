@@ -59,7 +59,7 @@ mod config {
     pub struct ConnectOptions {
         /// Provider model id (e.g. `gpt-5.5`, `claude-…`, `gemini-…`). genai
         /// routes to the provider by the model id's prefix.
-        #[env(from = "OMNI_MODEL", default = "gpt-5.5")]
+        #[env(from = "OMNIA_MODEL", default = "gpt-5.5")]
         pub model: String,
     }
 }

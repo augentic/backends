@@ -98,16 +98,16 @@ mod config {
         /// Optional model id forwarded to `cursor-agent --model`. Unset lets the
         /// agent choose its own default (cursor model ids differ from genai's, so
         /// there is no portable default to pin here).
-        #[env(from = "OMNI_MODEL")]
+        #[env(from = "OMNIA_MODEL")]
         pub model: Option<String>,
         /// Stopgap working-tree path lent to the agent via `--workspace`, standing
         /// in for the RFC-55 `local-path` face until that host lands. When unset,
         /// `complete` reports the "no local tree on this node" capability signal.
-        #[env(from = "OMNI_WORKSPACE")]
+        #[env(from = "OMNIA_WORKSPACE")]
         pub workspace: Option<String>,
         /// Wall-clock bound (seconds) on one `cursor-agent` spawn; a hung agent
         /// run fails loudly rather than blocking the completion indefinitely.
-        #[env(from = "OMNI_CURSOR_TIMEOUT_SECS", default = "120")]
+        #[env(from = "OMNIA_CURSOR_TIMEOUT_SECS", default = "120")]
         pub timeout_secs: u64,
     }
 }

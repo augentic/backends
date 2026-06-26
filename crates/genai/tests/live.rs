@@ -9,8 +9,8 @@
 //! against a real provider, then shows the recorded fixture replays
 //! deterministically under [`ModelDefault`].
 //!
-//! It is skipped unless `OMNI_GENAI_LIVE=1` is set (alongside a provider key
-//! such as `OPENAI_API_KEY` and an `OMNI_MODEL`), so it never runs or touches
+//! It is skipped unless `OMNIA_GENAI_LIVE=1` is set (alongside a provider key
+//! such as `OPENAI_API_KEY` and an `OMNIA_MODEL`), so it never runs or touches
 //! the network in CI.
 
 #![cfg(not(target_arch = "wasm32"))]
@@ -97,10 +97,10 @@ fn resolve_prompt() -> Prompt {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_genai_resolves_then_replays() -> Result<()> {
-    if std::env::var_os("OMNI_GENAI_LIVE").is_none() {
+    if std::env::var_os("OMNIA_GENAI_LIVE").is_none() {
         eprintln!(
-            "skipping live genai run 2: set OMNI_GENAI_LIVE=1 (plus a provider key such as \
-             OPENAI_API_KEY and OMNI_MODEL) to record and replay the resolve gate"
+            "skipping live genai run 2: set OMNIA_GENAI_LIVE=1 (plus a provider key such as \
+             OPENAI_API_KEY and OMNIA_MODEL) to record and replay the resolve gate"
         );
         return Ok(());
     }
@@ -114,7 +114,7 @@ async fn live_genai_resolves_then_replays() -> Result<()> {
     let prompt = resolve_prompt();
     let answer: BackendAnswer =
         recording.complete(prompt.clone(), Arc::new(LiveShelf)).await.map_err(|e| {
-            anyhow::anyhow!("live genai completion failed (is OMNI_MODEL/the API key valid?): {e}")
+            anyhow::anyhow!("live genai completion failed (is OMNIA_MODEL/the API key valid?): {e}")
         })?;
 
     // The model drove a `resolve` tool call, and the shelf bytes round-tripped
