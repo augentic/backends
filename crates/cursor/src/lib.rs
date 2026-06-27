@@ -34,8 +34,9 @@ pub struct Client {
     /// Optional model id passed to `cursor-agent --model`; `None` lets the agent
     /// pick its own default.
     model: Option<Arc<str>>,
-    /// Stopgap node-local working-tree path lent via `--workspace`. `None` is the
-    /// "no local tree on this node" capability signal (§5.3).
+    /// Optional dev/test working-tree override (`OMNIA_WORKSPACE`). The lent
+    /// `grants.working-tree` is the primary source for the agent's `--workspace`
+    /// (RFC-55); this is consulted only when no tree was lent on this node.
     workspace: Option<Arc<Path>>,
     /// Wall-clock bound on one `cursor-agent` spawn.
     timeout: Duration,
@@ -100,9 +101,9 @@ mod config {
         /// there is no portable default to pin here).
         #[env(from = "OMNIA_MODEL")]
         pub model: Option<String>,
-        /// Stopgap working-tree path lent to the agent via `--workspace`, standing
-        /// in for the RFC-55 `local-path` face until that host lands. When unset,
-        /// `complete` reports the "no local tree on this node" capability signal.
+        /// Optional dev/test override for the agent's `--workspace`. The workspace
+        /// is normally the lent working tree's `local-path` face (RFC-55); when
+        /// both are unset, `complete` reports "no local tree on this node".
         #[env(from = "OMNIA_WORKSPACE")]
         pub workspace: Option<String>,
         /// Wall-clock bound (seconds) on one `cursor-agent` spawn; a hung agent

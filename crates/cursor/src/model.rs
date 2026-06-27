@@ -5,9 +5,11 @@
 //! response-format instruction, launch a fresh headless `cursor-agent` scoped to
 //! the lent working tree, and parse its aggregated `.result` back into the
 //! validated answer the boundary returns. The agent owns its own tool loop and
-//! reads/writes the tree directly, so this backend ignores the [`ToolHost`]
-//! (unlike genai). The floor's `complete` binding re-validates the answer
-//! (§3.1.3), so this backend only has to produce the parsed value.
+//! reads/writes the tree directly, so this backend uses the [`ToolHost`] only
+//! for its `local-path` face ([`ToolHost::local_path`], RFC-55) — the agent's
+//! `--workspace` — never its `read`/`list`/`write` (unlike genai). The floor's
+//! `complete` binding re-validates the answer (§3.1.3), so this backend only
+//! has to produce the parsed value.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -25,13 +27,20 @@ use crate::{CURSOR_AGENT_BIN, Client};
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, prompt: Prompt, _tool_host: Arc<dyn ToolHost>,
+        &self, prompt: Prompt, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<BackendAnswer> {
         // cursor owns its own loop and edits the tree directly, so the per-call
-        // `ToolHost` is unused here (§5.3). Clone the cheap handles into the
-        // 'static future.
+        // `ToolHost` is consulted only for its `local-path` face (§5.3): the
+        // agent's `--workspace` is the working tree the floor resolved from the
+        // lent `grants.working-tree` descriptor (RFC-55). `OMNIA_WORKSPACE`
+        // (carried on `self.workspace`) is demoted to a dev/test override, used
+        // only when no tree was lent on this node. Resolve to an owned `PathBuf`
+        // and clone the cheap handles into the 'static future.
         let model = self.model.clone();
-        let workspace = self.workspace.clone();
+        let workspace = tool_host
+            .local_path()
+            .map(Path::to_path_buf)
+            .or_else(|| self.workspace.as_deref().map(Path::to_path_buf));
         let timeout = self.timeout;
 
         async move {
@@ -44,9 +53,9 @@ impl WasiModelCtx for Client {
                 assemble(&prompt).map_err(|e| anyhow::anyhow!("prompt assembly failed: {e:?}"))?;
             let agent_prompt = build_prompt(&assembled, &prompt.response_format);
 
-            // Capability signal: an agent-driven build needs a node-local tree.
-            // Stopgap for the RFC-55 `local-path` face — sourced from config
-            // rather than the lent `grants.working-tree` descriptor for now.
+            // Capability signal: an agent-driven build needs a node-local tree
+            // — the lent working tree's `local-path` (RFC-55), or the dev/test
+            // `OMNIA_WORKSPACE` override.
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
             };
@@ -310,8 +319,9 @@ mod tests {
 
     #[tokio::test]
     async fn no_local_tree_is_a_capability_signal() {
-        // Without a workspace, `complete` must fail loud before any spawn — the
-        // §5.3 capability signal (here keyed on the config stopgap).
+        // With neither a lent working tree (the default `ToolHost::local_path`
+        // is `None`) nor an `OMNIA_WORKSPACE` override, `complete` must fail
+        // loud before any spawn — the §5.3 capability signal.
         let err = client(None)
             .complete(schema_prompt(), Arc::new(NoopToolHost))
             .await
