@@ -42,7 +42,7 @@ impl WasiModelCtx for Client {
             // parses.
             let assembled =
                 assemble(&prompt).map_err(|e| anyhow::anyhow!("prompt assembly failed: {e:?}"))?;
-            let agent_prompt = build_agent_prompt(&assembled, &prompt.response_format);
+            let agent_prompt = build_prompt(&assembled, &prompt.response_format);
 
             // Capability signal: an agent-driven build needs a node-local tree.
             // Stopgap for the RFC-55 `local-path` face — sourced from config
@@ -69,7 +69,7 @@ impl WasiModelCtx for Client {
 /// Fold the assembled channels (§3.1.1) into the single prompt string handed to
 /// `cursor-agent`, with a trailing instruction pinning the agent's final answer
 /// to the floor's `response-format` so `.result` parses (§5.3).
-fn build_agent_prompt(assembled: &Assembled, response_format: &ResponseFormat) -> String {
+fn build_prompt(assembled: &Assembled, response_format: &ResponseFormat) -> String {
     let mut parts: Vec<String> = Vec::new();
     if let Some(system) = &assembled.system {
         parts.push(system.clone());
@@ -230,7 +230,7 @@ mod tests {
     };
     use serde_json::json;
 
-    use super::{answer_instruction, build_agent_prompt, extract_result, parse_result};
+    use super::{answer_instruction, build_prompt, extract_result, parse_result};
     use crate::Client;
 
     /// A no-op `ToolHost`: cursor ignores it, so every method just errors.
@@ -323,7 +323,7 @@ mod tests {
     fn build_agent_prompt_includes_channels_and_schema() {
         let prompt = schema_prompt();
         let assembled = assemble(&prompt).expect("assemble");
-        let text = build_agent_prompt(&assembled, &prompt.response_format);
+        let text = build_prompt(&assembled, &prompt.response_format);
         // The assembled system + user channels survive into the agent prompt.
         assert!(text.contains("a terse judge"), "missing system channel: {text}");
         assert!(text.contains("decide pass or fail"), "missing user channel: {text}");
