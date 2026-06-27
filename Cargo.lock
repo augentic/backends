@@ -3535,8 +3535,8 @@ dependencies = [
  "anyhow",
  "clap",
  "futures",
- "omnia-otel 0.34.0",
- "omnia-runtime-macro 0.34.0",
+ "omnia-otel",
+ "omnia-runtime-macro",
  "serde",
  "tokio",
  "tracing",
@@ -3554,13 +3554,18 @@ dependencies = [
  "clap",
  "fromenv",
  "futures",
- "omnia-otel 0.35.0",
- "omnia-runtime-macro 0.35.0",
+ "http",
+ "omnia-host-macros",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
  "serde",
  "tokio",
  "tokio-util",
  "toml",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "wasmtime 46.0.1",
  "wasmtime-wasi 46.0.1",
  "wrpc-transport",
@@ -3662,6 +3667,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-host-macros"
+version = "0.35.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "omnia-kafka"
 version = "0.28.0"
 dependencies = [
@@ -3750,22 +3764,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omnia-otel"
-version = "0.35.0"
-dependencies = [
- "anyhow",
- "http",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "rand 0.10.1",
- "tower",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "omnia-postgres"
 version = "0.28.0"
 dependencies = [
@@ -3802,15 +3800,6 @@ name = "omnia-runtime-macro"
 version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88a813deaeddf01e89336199bdba8ffa8c3d86f004c12044531f46b369835388"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "omnia-runtime-macro"
-version = "0.35.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3940,7 +3929,7 @@ dependencies = [
  "hex",
  "num-traits",
  "omnia 0.34.0",
- "omnia-otel 0.34.0",
+ "omnia-otel",
  "omnia-wasi-otel-attr",
  "opentelemetry",
  "opentelemetry-proto",
