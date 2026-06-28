@@ -18,7 +18,7 @@ use tracing::instrument;
 ///
 /// Wraps a [`genai::Client`] (the swappable, key-reading vendor SDK, confined to
 /// this crate per RFC wasi-model §7.5) plus the configured default model id. It
-/// implements [`omnia_wasi_model::WasiModelCtx`] in [`model`], turning a typed
+/// implements [`omnia_wasi_model::WasiModelCtx`] in `model`, turning a typed
 /// `Prompt` into a provider chat request, driving the in-process tool loop, and
 /// dispatching `resolve` through the lent `ToolHost`.
 #[derive(Clone)]
