@@ -24,7 +24,7 @@ fromenv.workspace = true
 futures.workspace = true
 # Pinned to the local omnia 0.35.0 line via the workspace `[patch.crates-io]`
 # override (the `omnia-wasi-model` host crate is unreleased on crates.io).
-omnia = "0.35.0"
+omnia.workspace = true
 omnia-wasi-model.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["process", "time"] }
@@ -34,9 +34,4 @@ tracing.workspace = true
 # dependencies, so the ones the live run-3 test (`tests/live.rs`) drives are
 # repeated here.
 [dev-dependencies]
-anyhow.workspace = true
-futures.workspace = true
-omnia = "0.35.0"
-omnia-wasi-model.workspace = true
-serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "time"] }
