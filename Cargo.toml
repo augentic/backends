@@ -93,8 +93,10 @@ omnia-wasi-vault = "0.34.0"
 # omnia release carrying Phase 2a is out. Paths assume omnia is checked out
 # alongside this repo (../omnia).
 [patch.crates-io]
-omnia = { path = "../omnia/crates/omnia" }
-omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+omnia = { git = "https://github.com/augentic/omnia.git" }
+omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
+# omnia = { path = "../omnia/crates/omnia" }
+# omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
 
 [profile.release]
 lto = true
