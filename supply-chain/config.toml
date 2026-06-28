@@ -602,10 +602,6 @@ criteria = "safe-to-deploy"
 version = "1.2.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.inherent]]
-version = "1.0.13"
-criteria = "safe-to-deploy"
-
 [[exemptions.integer-encoding]]
 version = "4.1.0"
 criteria = "safe-to-deploy"
@@ -828,54 +824,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.object]]
 version = "0.39.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-otel]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-runtime-macro]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-blobstore]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-identity]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-jsondb]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-keyvalue]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-messaging]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-otel]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-otel-attr]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-sql]]
-version = "0.34.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.omnia-wasi-vault]]
-version = "0.34.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.once_cell]]
@@ -1163,7 +1111,7 @@ version = "1.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.sea-query]]
-version = "0.32.7"
+version = "1.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.security-framework]]
