@@ -1,6 +1,5 @@
 #![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
-
 // The genai SDK's dependency tree pulls duplicate transitive crates (e.g.
 // `schemars`, `indexmap`); these are outside this crate's control and cannot be
 // unified without patching upstream, so silence the workspace `cargo` lint here.
