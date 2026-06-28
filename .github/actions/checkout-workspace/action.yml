@@ -1,11 +1,9 @@
-name: Checkout workspace
-description: Check out backends and the local omnia dependency used by [patch.crates-io]
+name: Checkout omnia
+description: Check out the local omnia dependency used by [patch.crates-io] (requires backends checkout first)
 
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v6
-
     - uses: actions/checkout@v6
       with:
         repository: augentic/omnia
