@@ -3547,6 +3547,7 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3671,6 +3672,7 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3907,6 +3909,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
 dependencies = [
  "anyhow",
  "cap-fs-ext",
