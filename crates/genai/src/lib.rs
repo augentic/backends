@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![cfg(not(target_arch = "wasm32"))]
+
 // The genai SDK's dependency tree pulls duplicate transitive crates (e.g.
 // `schemars`, `indexmap`); these are outside this crate's control and cannot be
 // unified without patching upstream, so silence the workspace `cargo` lint here.
@@ -15,12 +16,6 @@ use omnia::Backend;
 use tracing::instrument;
 
 /// Multi-provider generative-AI model backend.
-///
-/// Wraps a [`genai::Client`] (the swappable, key-reading vendor SDK, confined to
-/// this crate per RFC wasi-model §7.5) plus the configured default model id. It
-/// implements [`omnia_wasi_model::WasiModelCtx`] in `model`, turning a typed
-/// `Prompt` into a provider chat request, driving the in-process tool loop, and
-/// dispatching `resolve` through the lent `ToolHost`.
 #[derive(Clone)]
 pub struct Client {
     inner: genai::Client,

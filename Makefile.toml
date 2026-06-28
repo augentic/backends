@@ -56,8 +56,9 @@ script = "cargo +nightly fmt --all"
 # Lint
 [tasks.lint]
 command = "cargo"
-args = ["clippy", "--all-features"]
+args = ["clippy", "--workspace", "--all-targets", "--all-features"]
 install_crate = { rustup_component_name = "clippy" }
+# cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
 # Miri
 [tasks.miri]

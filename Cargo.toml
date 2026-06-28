@@ -52,7 +52,7 @@ unneeded_field_pattern = "warn"
 unused_result_ok = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 azure_core = "1.0.0"
 azure_identity = "1.0.0"
 azure_storage_blob = "1.0.0"
@@ -61,37 +61,26 @@ chrono = "0.4.45"
 fromenv = "0.1.0"
 futures = "0.3.32"
 http = "1.4.2"
-rustls = { version = "0.23.40", default-features = false, features = ["logging", "ring", "std"] }
+rustls = { version = "0.23.41", default-features = false, features = ["logging", "ring", "std"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.143"
+serde_json = "1.0.150"
 tokio = { version = "1.52.3", default-features = false }
 tracing = "0.1.44"
 urlencoding = "2.1.3"
 
 # omnia registry
-omnia = "0.34.0"
+omnia = "0.35.0"
 omnia-wasi-blobstore = "0.34.0"
 omnia-wasi-identity = "0.34.0"
 omnia-wasi-jsondb = "0.34.0"
 omnia-wasi-keyvalue = "0.34.0"
 omnia-wasi-messaging = "0.34.0"
-# `omnia-genai` (RFC wasi-model Phase 2a) consumes the host→guest `resolve`
-# API that is unreleased on crates.io. It pins the local omnia line (0.35.0)
-# supplied by the temporary `[patch.crates-io]` override below; the other
-# backends stay on the published 0.34.0 line. This split is dropped at the
-# release-gate once an omnia release carrying Phase 2a is published.
-omnia-wasi-model = "0.35.0"
 omnia-wasi-otel = "0.34.0"
 omnia-wasi-sql = "0.34.0"
 omnia-wasi-vault = "0.34.0"
 
-# TEMPORARY (RFC wasi-model Phase 2a): build `omnia-genai` against the local
-# omnia checkout, which carries the unreleased host→guest `resolve` entry point
-# (`omnia::HostDispatch`) and the `omnia-wasi-model` crate. Only the 0.35.0 line
-# is patched, so the other backends keep resolving the published 0.34.0 crates.
-# Drop this block (and bump `omnia-wasi-model` to the published version) once an
-# omnia release carrying Phase 2a is out. Paths assume omnia is checked out
-# alongside this repo (../omnia).
+omnia-wasi-model = "0.35.0"
+
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
