@@ -1,13 +1,13 @@
 //! `wasi-model` implementation backed by the multi-provider genai SDK.
 //!
-//! Maps the floor's typed [`Prompt`] onto a genai [`ChatRequest`]/[`ChatOptions`]
+//! Maps the host-side [`Prompt`] onto a genai [`ChatRequest`]/[`ChatOptions`]
 //! (§3.1.1 assembly precedence, reusing [`assemble`]), drives the in-process
-//! tool loop — dispatching the floor's `resolve` tool into the caller's
+//! tool loop — dispatching the host-injected `resolve` tool into the caller's
 //! `references` shelf through the lent [`ToolHost`] — self-checks the answer
 //! against `response-format`, and returns a host-only [`BackendAnswer`] (the
 //! parsed value plus a tool transcript for record/replay). The guest only ever
 //! sees the validated answer string the `complete` binding derives from `value`;
-//! the floor re-validates as the single authority (§3.1.3), so this self-check
+//! the host re-validates as the single authority (§3.1.3), so this self-check
 //! is an optimization, not the gate.
 
 use std::sync::Arc;
@@ -87,8 +87,8 @@ impl WasiModelCtx for Client {
                                 transcript: Some(transcript),
                             });
                         }
-                        // Budget spent: hand the value back so the floor's single
-                        // validation authority produces the canonical error.
+                        // Budget spent: hand the value back so the host validation gate
+                        // remains the single authority and produces the canonical error.
                         Err(_) if last_turn => {
                             return Ok(BackendAnswer {
                                 value,
@@ -120,9 +120,9 @@ impl WasiModelCtx for Client {
     }
 }
 
-/// Assemble the floor [`Prompt`] into a genai [`ChatRequest`] (§3.1.1): explicit
+/// Assemble the host-side [`Prompt`] into a genai [`ChatRequest`] (§3.1.1): explicit
 /// turns beat the section template, `system` is always its own channel, and the
-/// floor `resolve` tool is advertised only when a reference target is granted.
+/// host-injected `resolve` tool is advertised only when a reference target is granted.
 fn build_request(prompt: &Prompt) -> Result<ChatRequest> {
     let assembled =
         assemble(prompt).map_err(|e| anyhow::anyhow!("prompt assembly failed: {e:?}"))?;
@@ -133,7 +133,7 @@ fn build_request(prompt: &Prompt) -> Result<ChatRequest> {
         .map(|m| match m.role.as_str() {
             "system" => ChatMessage::system(m.content.clone()),
             "assistant" => ChatMessage::assistant(m.content.clone()),
-            // The floor's roles are system/user/assistant; anything else is
+            // The boundary's roles are system/user/assistant; anything else is
             // treated as a user turn rather than dropped.
             _ => ChatMessage::user(m.content.clone()),
         })
@@ -165,8 +165,8 @@ fn build_request(prompt: &Prompt) -> Result<ChatRequest> {
     Ok(request)
 }
 
-/// The floor `resolve` tool advertised to the model (§4). Its single `name`
-/// argument mirrors [`Reference`]; the body is opaque to the floor and is
+/// The host-injected `resolve` tool advertised to the model (§4). Its single `name`
+/// argument mirrors [`Reference`]; the body is opaque to the runtime core and is
 /// interpreted only by the caller's `references` shelf.
 fn resolve_tool() -> Tool {
     Tool::new("resolve")
@@ -187,7 +187,7 @@ fn resolve_tool() -> Tool {
         }))
 }
 
-/// Translate the floor's `response-format` and `generation` controls into genai
+/// Translate the boundary's `response-format` and `generation` controls into genai
 /// [`ChatOptions`].
 fn build_options(prompt: &Prompt) -> Result<ChatOptions> {
     let mut options = ChatOptions::default();
@@ -229,7 +229,7 @@ fn build_options(prompt: &Prompt) -> Result<ChatOptions> {
 }
 
 /// Execute one model tool call. Phase 2a wires only `resolve` (host-mediated
-/// dynamic linking into the caller's `references` shelf); the other floor tools
+/// dynamic linking into the caller's `references` shelf); the other host-injected tools
 /// (`read`/`list`/`write`/`verify`) and guest-declared tools are not executable
 /// here yet, so the backend fails loudly rather than fabricating a result.
 async fn dispatch_tool(

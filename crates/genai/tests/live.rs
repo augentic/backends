@@ -58,7 +58,7 @@ impl ToolHost for LiveShelf {
 }
 
 /// A prompt that forces a `resolve` tool call (a reference target is granted, so
-/// the floor `resolve` tool is advertised) and a JSON-object answer embedding
+/// the host-injected `resolve` tool is advertised) and a JSON-object answer embedding
 /// the resolved value.
 fn resolve_prompt() -> Prompt {
     Prompt {
@@ -124,14 +124,14 @@ async fn live_genai_resolves_then_replays() -> Result<()> {
         .turns
         .iter()
         .find(|turn| turn.tool == "resolve")
-        .expect("the model must call the floor `resolve` tool");
+        .expect("the model must call the host-injected `resolve` tool");
     assert_eq!(
         resolve_turn.result,
         Value::String("shelf:alpha".to_owned()),
         "the resolve tool result must round-trip the shelf bytes"
     );
 
-    // The answer is a JSON object (the floor's run-time gate for `json-object`)
+    // The answer is a JSON object (the host validation gate for `json-object`)
     // and carries the resolved value the model fetched via the tool.
     assert!(answer.value.is_object(), "run-2 answer must be a JSON object: {:?}", answer.value);
     assert!(

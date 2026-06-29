@@ -1,13 +1,13 @@
 //! `wasi-model` implementation backed by a spawned `cursor-agent` session.
 //!
-//! The spawned-agent backend (RFC wasi-model §5.3): assemble the floor [`Prompt`]
+//! The spawned-agent backend (RFC wasi-model §5.3): assemble the host-side [`Prompt`]
 //! into a single agent prompt (§3.1.1, reusing [`assemble`]) with a trailing
 //! response-format instruction, launch a fresh headless `cursor-agent` scoped to
 //! the lent working tree, and parse its aggregated `.result` back into the
 //! validated answer the boundary returns. The agent owns its own tool loop and
 //! reads/writes the tree directly, so this backend uses the [`ToolHost`] only
 //! for its `local-path` face ([`ToolHost::local_path`], RFC-55) — the agent's
-//! `--workspace` — never its `read`/`list`/`write` (unlike genai). The floor's
+//! `--workspace` — never its `read`/`list`/`write` (unlike genai). The runtime core's
 //! `complete` binding re-validates the answer (§3.1.3), so this backend only
 //! has to produce the parsed value.
 
@@ -31,7 +31,7 @@ impl WasiModelCtx for Client {
     ) -> FutureResult<BackendAnswer> {
         // cursor owns its own loop and edits the tree directly, so the per-call
         // `ToolHost` is consulted only for its `local-path` face (§5.3): the
-        // agent's `--workspace` is the working tree the floor resolved from the
+        // agent's `--workspace` is the working tree the host resolved from the
         // lent `grants.working-tree` descriptor (RFC-55). `OMNIA_WORKSPACE`
         // (carried on `self.workspace`) is demoted to a dev/test override, used
         // only when no tree was lent on this node. Resolve to an owned `PathBuf`
@@ -77,7 +77,7 @@ impl WasiModelCtx for Client {
 
 /// Fold the assembled channels (§3.1.1) into the single prompt string handed to
 /// `cursor-agent`, with a trailing instruction pinning the agent's final answer
-/// to the floor's `response-format` so `.result` parses (§5.3).
+/// to the boundary's `response-format` so `.result` parses (§5.3).
 fn build_prompt(assembled: &Assembled, response_format: &ResponseFormat) -> String {
     let mut parts: Vec<String> = Vec::new();
     if let Some(system) = &assembled.system {
@@ -202,7 +202,7 @@ fn parse_json_envelope(stdout: &[u8]) -> Option<Value> {
 
 /// Interpret the agent's `result` text as the answer value for `kind`, mirroring
 /// the genai backend: `text` wraps the string; JSON kinds parse (tolerating a
-/// Markdown code fence the agent may add despite instructions). The floor
+/// Markdown code fence the agent may add despite instructions). The runtime core
 /// re-validates the shape (§3.1.3).
 fn parse_result(result: &str, kind: ResponseFormatKind) -> Result<Value> {
     match kind {
