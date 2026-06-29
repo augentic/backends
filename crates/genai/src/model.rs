@@ -1,6 +1,6 @@
 //! `wasi-model` implementation backed by the multi-provider genai SDK.
 //!
-//! Maps the host-assembled [`CompletionRequest`] onto a genai
+//! Maps the host-assembled [`PreparedPrompt`] onto a genai
 //! [`ChatRequest`]/[`ChatOptions`] — the host applies §3.1.1, so the prepared
 //! `system`/`messages` channels are consumed directly — drives the in-process
 //! tool loop — dispatching the host-injected `resolve` tool into the caller's
@@ -20,7 +20,7 @@ use genai::chat::{
     ToolResponse,
 };
 use omnia_wasi_model::{
-    BackendAnswer, CompletionRequest, FutureResult, Prompt, Reference, ResponseFormatKind,
+    BackendAnswer, PreparedPrompt, FutureResult, Prompt, Reference, ResponseFormatKind,
     ToolHost, ToolTurn, Transcript, WasiModelCtx,
 };
 use serde_json::{Value, json};
@@ -34,7 +34,7 @@ const MAX_TURNS: usize = 8;
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, request: CompletionRequest, tool_host: Arc<dyn ToolHost>,
+        &self, request: PreparedPrompt, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<BackendAnswer> {
         // Clone the swappable vendor handle + model id into the 'static future;
         // the genai client is cheap to clone (an `Arc` inside).
@@ -121,10 +121,10 @@ impl WasiModelCtx for Client {
     }
 }
 
-/// Map the host-assembled [`CompletionRequest`] onto a genai [`ChatRequest`]: the
+/// Map the host-assembled [`PreparedPrompt`] onto a genai [`ChatRequest`]: the
 /// host already applied §3.1.1, so `system`/`messages` are consumed directly, and
 /// the host-injected `resolve` tool is advertised only when a reference target is granted.
-fn build_request(request: &CompletionRequest) -> Result<ChatRequest> {
+fn build_request(request: &PreparedPrompt) -> Result<ChatRequest> {
     let messages = request
         .messages
         .iter()

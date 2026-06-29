@@ -1,7 +1,7 @@
 //! `wasi-model` implementation backed by a spawned `cursor-agent` session.
 //!
 //! The spawned-agent backend (RFC wasi-model §5.3): fold the host-assembled
-//! [`CompletionRequest`] channels into a single agent prompt (the host applies
+//! [`PreparedPrompt`] channels into a single agent prompt (the host applies
 //! §3.1.1) with a trailing
 //! response-format instruction, launch a fresh headless `cursor-agent` scoped to
 //! the lent working tree, and parse its aggregated `.result` back into the
@@ -19,7 +19,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use futures::FutureExt as _;
 use omnia_wasi_model::{
-    BackendAnswer, CompletionRequest, FutureResult, ResponseFormat, ResponseFormatKind, ToolHost,
+    BackendAnswer, PreparedPrompt, FutureResult, ResponseFormat, ResponseFormatKind, ToolHost,
     WasiModelCtx,
 };
 use serde_json::Value;
@@ -28,7 +28,7 @@ use crate::{CURSOR_AGENT_BIN, Client};
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, request: CompletionRequest, tool_host: Arc<dyn ToolHost>,
+        &self, request: PreparedPrompt, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<BackendAnswer> {
         // cursor owns its own loop and edits the tree directly, so the per-call
         // `ToolHost` is consulted only for its `local-path` face (§5.3): the
@@ -76,7 +76,7 @@ impl WasiModelCtx for Client {
 /// Fold the host-assembled channels (§3.1.1) into the single prompt string handed
 /// to `cursor-agent`, with a trailing instruction pinning the agent's final answer
 /// to the boundary's `response-format` so `.result` parses (§5.3).
-fn build_prompt(request: &CompletionRequest) -> String {
+fn build_prompt(request: &PreparedPrompt) -> String {
     let mut parts: Vec<String> = Vec::new();
     if let Some(system) = &request.system {
         parts.push(system.clone());
@@ -232,7 +232,7 @@ mod tests {
 
     use futures::FutureExt as _;
     use omnia_wasi_model::{
-        CompletionRequest, DirEntry, FutureResult, Prompt, Reference, ResponseFormat,
+        PreparedPrompt, DirEntry, FutureResult, Prompt, Reference, ResponseFormat,
         ResponseFormatKind, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
     };
     use serde_json::json;
@@ -322,7 +322,7 @@ mod tests {
         // loud before any spawn — the §5.3 capability signal.
         let err = client(None)
             .complete(
-                CompletionRequest::try_from(schema_prompt()).expect("assemble"),
+                PreparedPrompt::try_from(schema_prompt()).expect("assemble"),
                 Arc::new(NoopToolHost),
             )
             .await
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn build_agent_prompt_includes_channels_and_schema() {
-        let request = CompletionRequest::try_from(schema_prompt()).expect("assemble");
+        let request = PreparedPrompt::try_from(schema_prompt()).expect("assemble");
         let text = build_prompt(&request);
         // The assembled system + user channels survive into the agent prompt.
         assert!(text.contains("a terse judge"), "missing system channel: {text}");

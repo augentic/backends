@@ -22,7 +22,7 @@ use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_genai::Client;
 use omnia_wasi_model::{
-    BackendAnswer, CompletionRequest, ConnectOptions as ReplayConnectOptions, DirEntry,
+    BackendAnswer, PreparedPrompt, ConnectOptions as ReplayConnectOptions, DirEntry,
     FutureResult, ModelDefault, Prompt, Recording, Reference, ResponseFormat, ResponseFormatKind,
     Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
@@ -112,7 +112,7 @@ async fn live_genai_resolves_then_replays() -> Result<()> {
     // run-1 fixture as a side effect of the live completion.
     let recording = Recording::new(Client::connect().await?, dir.clone());
     let prompt = resolve_prompt();
-    let request = CompletionRequest::try_from(prompt.clone()).expect("assemble resolve prompt");
+    let request = PreparedPrompt::try_from(prompt.clone()).expect("assemble resolve prompt");
     let answer: BackendAnswer =
         recording.complete(request, Arc::new(LiveShelf)).await.map_err(|e| {
             anyhow::anyhow!("live genai completion failed (is OMNIA_MODEL/the API key valid?): {e}")
@@ -147,7 +147,7 @@ async fn live_genai_resolves_then_replays() -> Result<()> {
         replay_dir: dir.clone(),
     })
     .await?;
-    let replay_request = CompletionRequest::try_from(prompt).expect("assemble replay prompt");
+    let replay_request = PreparedPrompt::try_from(prompt).expect("assemble replay prompt");
     let replayed = replay.complete(replay_request, Arc::new(LiveShelf)).await?;
     assert_eq!(replayed.value, answer.value, "ModelDefault must replay the exact recorded answer");
 

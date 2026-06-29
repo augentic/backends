@@ -22,7 +22,7 @@ use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_cursor::{Client, ConnectOptions};
 use omnia_wasi_model::{
-    BackendAnswer, CompletionRequest, ConnectOptions as ReplayConnectOptions, DirEntry,
+    BackendAnswer, PreparedPrompt, ConnectOptions as ReplayConnectOptions, DirEntry,
     FutureResult, JsonSchemaSpec, ModelDefault, Prompt, Recording, Reference, ResponseFormat,
     ResponseFormatKind, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
@@ -137,7 +137,7 @@ async fn live_cursor_completes_then_replays() -> Result<()> {
     let recording = Recording::new(client, dir.clone());
 
     let prompt = verdict_prompt();
-    let request = CompletionRequest::try_from(prompt.clone()).expect("assemble verdict prompt");
+    let request = PreparedPrompt::try_from(prompt.clone()).expect("assemble verdict prompt");
     let answer: BackendAnswer =
         recording.complete(request, Arc::new(NoopToolHost)).await.map_err(|e| {
             anyhow::anyhow!(
@@ -159,7 +159,7 @@ async fn live_cursor_completes_then_replays() -> Result<()> {
         replay_dir: dir.clone(),
     })
     .await?;
-    let replay_request = CompletionRequest::try_from(prompt).expect("assemble replay prompt");
+    let replay_request = PreparedPrompt::try_from(prompt).expect("assemble replay prompt");
     let replayed = replay.complete(replay_request, Arc::new(NoopToolHost)).await?;
     assert_eq!(replayed.value, answer.value, "ModelDefault must replay the exact recorded answer");
 

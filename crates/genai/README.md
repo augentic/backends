@@ -8,7 +8,7 @@ implementing the `augentic:model/completion` boundary (`wasi-model`).
 
 Wraps the [`genai`](https://crates.io/crates/genai) SDK (`OpenAI`, Anthropic,
 Gemini, Groq, Ollama, …). The host assembles a guest's typed `Prompt` into a
-`CompletionRequest`, which this backend maps to a provider chat request; the
+`PreparedPrompt`, which this backend maps to a provider chat request; the
 in-process tool loop is driven to completion, and the runtime core's
 `resolve` tool is dispatched into the guest's `references` shelf via the lent
 `ToolHost`. The guest only ever sees the validated answer string.
