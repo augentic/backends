@@ -1,7 +1,8 @@
 //! `wasi-model` implementation backed by the multi-provider genai SDK.
 //!
-//! Maps the host-side [`Prompt`] onto a genai [`ChatRequest`]/[`ChatOptions`]
-//! (§3.1.1 assembly precedence, reusing [`assemble`]), drives the in-process
+//! Maps the host-assembled [`CompletionRequest`] onto a genai
+//! [`ChatRequest`]/[`ChatOptions`] — the host applies §3.1.1, so the prepared
+//! `system`/`messages` channels are consumed directly — drives the in-process
 //! tool loop — dispatching the host-injected `resolve` tool into the caller's
 //! `references` shelf through the lent [`ToolHost`] — self-checks the answer
 //! against `response-format`, and returns a host-only [`BackendAnswer`] (the
@@ -19,8 +20,8 @@ use genai::chat::{
     ToolResponse,
 };
 use omnia_wasi_model::{
-    BackendAnswer, FutureResult, Prompt, Reference, ResponseFormatKind, ToolHost, ToolTurn,
-    Transcript, WasiModelCtx, assemble, validate_answer,
+    BackendAnswer, CompletionRequest, FutureResult, Prompt, Reference, ResponseFormatKind,
+    ToolHost, ToolTurn, Transcript, WasiModelCtx,
 };
 use serde_json::{Value, json};
 
@@ -33,7 +34,7 @@ const MAX_TURNS: usize = 8;
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, prompt: Prompt, tool_host: Arc<dyn ToolHost>,
+        &self, request: CompletionRequest, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<BackendAnswer> {
         // Clone the swappable vendor handle + model id into the 'static future;
         // the genai client is cheap to clone (an `Arc` inside).
@@ -41,15 +42,15 @@ impl WasiModelCtx for Client {
         let model = Arc::clone(&self.model);
 
         async move {
-            let kind = prompt.response_format.kind;
-            let mut request = build_request(&prompt)?;
-            let options = build_options(&prompt)?;
+            let kind = request.prompt.response_format.kind;
+            let mut chat = build_request(&request)?;
+            let options = build_options(&request.prompt)?;
 
             let mut transcript = Transcript::default();
 
             for turn in 1..=MAX_TURNS {
                 let response = client
-                    .exec_chat(&*model, request.clone(), Some(&options))
+                    .exec_chat(&*model, chat.clone(), Some(&options))
                     .await
                     .with_context(|| format!("genai exec_chat failed for model `{model}`"))?;
 
@@ -60,15 +61,15 @@ impl WasiModelCtx for Client {
                 if !tool_calls.is_empty() {
                     // The assistant turn carries all the tool calls; each tool
                     // response follows as its own `tool`-role message.
-                    request = request.append_message(tool_calls.clone());
+                    chat = chat.append_message(tool_calls.clone());
                     for call in tool_calls {
-                        let result = dispatch_tool(&prompt, &tool_host, &call).await?;
+                        let result = dispatch_tool(&request.prompt, &tool_host, &call).await?;
                         transcript.turns.push(ToolTurn {
                             tool: call.fn_name,
                             args: call.fn_arguments,
                             result: Value::String(result.clone()),
                         });
-                        request = request.append_message(ToolResponse::new(call.call_id, result));
+                        chat = chat.append_message(ToolResponse::new(call.call_id, result));
                     }
                     continue;
                 }
@@ -80,7 +81,7 @@ impl WasiModelCtx for Client {
                 let last_turn = turn == MAX_TURNS;
 
                 match parse_answer(&text, kind) {
-                    Ok(value) => match validate_answer(&value, kind) {
+                    Ok(value) => match check_answer(&value, kind) {
                         Ok(()) => {
                             return Ok(BackendAnswer {
                                 value,
@@ -96,7 +97,7 @@ impl WasiModelCtx for Client {
                             });
                         }
                         Err(reason) => {
-                            request = append_repair(request, text, &format!("{reason:?}"));
+                            chat = append_repair(chat, text, &reason);
                         }
                     },
                     Err(reason) if last_turn => {
@@ -106,7 +107,7 @@ impl WasiModelCtx for Client {
                         );
                     }
                     Err(reason) => {
-                        request = append_repair(request, text, &reason);
+                        chat = append_repair(chat, text, &reason);
                     }
                 }
             }
@@ -120,14 +121,11 @@ impl WasiModelCtx for Client {
     }
 }
 
-/// Assemble the host-side [`Prompt`] into a genai [`ChatRequest`] (§3.1.1): explicit
-/// turns beat the section template, `system` is always its own channel, and the
-/// host-injected `resolve` tool is advertised only when a reference target is granted.
-fn build_request(prompt: &Prompt) -> Result<ChatRequest> {
-    let assembled =
-        assemble(prompt).map_err(|e| anyhow::anyhow!("prompt assembly failed: {e:?}"))?;
-
-    let messages = assembled
+/// Map the host-assembled [`CompletionRequest`] onto a genai [`ChatRequest`]: the
+/// host already applied §3.1.1, so `system`/`messages` are consumed directly, and
+/// the host-injected `resolve` tool is advertised only when a reference target is granted.
+fn build_request(request: &CompletionRequest) -> Result<ChatRequest> {
+    let messages = request
         .messages
         .iter()
         .map(|m| match m.role.as_str() {
@@ -139,16 +137,16 @@ fn build_request(prompt: &Prompt) -> Result<ChatRequest> {
         })
         .collect();
 
-    let mut request = ChatRequest::new(messages);
-    if let Some(system) = assembled.system {
-        request = request.with_system(system);
+    let mut chat = ChatRequest::new(messages);
+    if let Some(system) = &request.system {
+        chat = chat.with_system(system.clone());
     }
 
     let mut tools: Vec<Tool> = Vec::new();
-    if prompt.grants.references.is_some() {
+    if request.prompt.grants.references.is_some() {
         tools.push(resolve_tool());
     }
-    for tool in &prompt.tools {
+    for tool in &request.prompt.tools {
         let schema: Value = serde_json::from_str(&tool.parameters).with_context(|| {
             format!("guest tool `{}` has invalid JSON-Schema parameters", tool.name)
         })?;
@@ -159,10 +157,10 @@ fn build_request(prompt: &Prompt) -> Result<ChatRequest> {
         );
     }
     if !tools.is_empty() {
-        request = request.with_tools(tools);
+        chat = chat.with_tools(tools);
     }
 
-    Ok(request)
+    Ok(chat)
 }
 
 /// The host-injected `resolve` tool advertised to the model (§4). Its single `name`
@@ -273,6 +271,20 @@ fn parse_answer(text: &str, kind: ResponseFormatKind) -> Result<Value, String> {
             serde_json::from_str::<Value>(text)
                 .map_err(|e| format!("the answer was not valid JSON: {e}"))
         }
+    }
+}
+
+/// Structural self-check mirroring the host gate (§3.1.3); the host re-validates
+/// as the single authority, so this only decides whether to spend a repair turn.
+fn check_answer(value: &Value, kind: ResponseFormatKind) -> Result<(), String> {
+    match kind {
+        ResponseFormatKind::Text if !value.is_string() => {
+            Err("answer is not a JSON string".to_owned())
+        }
+        ResponseFormatKind::JsonObject if !value.is_object() => {
+            Err("answer is not a JSON object".to_owned())
+        }
+        _ => Ok(()),
     }
 }
 

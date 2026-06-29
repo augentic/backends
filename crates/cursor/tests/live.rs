@@ -22,9 +22,9 @@ use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_cursor::{Client, ConnectOptions};
 use omnia_wasi_model::{
-    BackendAnswer, ConnectOptions as ReplayConnectOptions, DirEntry, FutureResult, JsonSchemaSpec,
-    ModelDefault, Prompt, Recording, Reference, ResponseFormat, ResponseFormatKind, Sections,
-    ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
+    BackendAnswer, CompletionRequest, ConnectOptions as ReplayConnectOptions, DirEntry,
+    FutureResult, JsonSchemaSpec, ModelDefault, Prompt, Recording, Reference, ResponseFormat,
+    ResponseFormatKind, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
 use serde_json::json;
 
@@ -137,8 +137,9 @@ async fn live_cursor_completes_then_replays() -> Result<()> {
     let recording = Recording::new(client, dir.clone());
 
     let prompt = verdict_prompt();
+    let request = CompletionRequest::try_from(prompt.clone()).expect("assemble verdict prompt");
     let answer: BackendAnswer =
-        recording.complete(prompt.clone(), Arc::new(NoopToolHost)).await.map_err(|e| {
+        recording.complete(request, Arc::new(NoopToolHost)).await.map_err(|e| {
             anyhow::anyhow!(
                 "live cursor completion failed (is cursor-agent installed and authed?): {e}"
             )
@@ -158,7 +159,8 @@ async fn live_cursor_completes_then_replays() -> Result<()> {
         replay_dir: dir.clone(),
     })
     .await?;
-    let replayed = replay.complete(prompt, Arc::new(NoopToolHost)).await?;
+    let replay_request = CompletionRequest::try_from(prompt).expect("assemble replay prompt");
+    let replayed = replay.complete(replay_request, Arc::new(NoopToolHost)).await?;
     assert_eq!(replayed.value, answer.value, "ModelDefault must replay the exact recorded answer");
 
     let _ = std::fs::remove_dir_all(&dir);
