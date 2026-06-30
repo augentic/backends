@@ -24,7 +24,7 @@ use omnia_cursor::{Client, ConnectOptions};
 use omnia_wasi_model::{
     BackendAnswer, PreparedPrompt, ConnectOptions as ReplayConnectOptions, DirEntry,
     FutureResult, JsonSchemaSpec, ModelDefault, Prompt, Recording, Reference, ResponseFormat,
-    ResponseFormatKind, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
+    Format, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
 use serde_json::json;
 
@@ -77,7 +77,7 @@ fn verdict_prompt() -> Prompt {
         }),
         generation: None,
         response_format: ResponseFormat {
-            kind: ResponseFormatKind::JsonSchema,
+            kind: Format::JsonSchema,
             json_schema: Some(JsonSchemaSpec {
                 name: "verdict".to_owned(),
                 schema: json!({

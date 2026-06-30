@@ -20,7 +20,7 @@ use genai::chat::{
     ToolResponse,
 };
 use omnia_wasi_model::{
-    BackendAnswer, PreparedPrompt, FutureResult, Prompt, Reference, ResponseFormatKind,
+    BackendAnswer, PreparedPrompt, FutureResult, Prompt, Reference, Format,
     ToolHost, ToolTurn, Transcript, WasiModelCtx,
 };
 use serde_json::{Value, json};
@@ -191,7 +191,7 @@ fn build_options(prompt: &Prompt) -> Result<ChatOptions> {
     let mut options = ChatOptions::default();
 
     options = match (prompt.response_format.kind, &prompt.response_format.json_schema) {
-        (ResponseFormatKind::JsonSchema, Some(spec)) => {
+        (Format::JsonSchema, Some(spec)) => {
             let schema: Value = serde_json::from_str(&spec.schema)
                 .context("response-format json-schema is not valid JSON")?;
             options.with_response_format(ChatResponseFormat::JsonSpec(JsonSpec::new(
@@ -201,11 +201,11 @@ fn build_options(prompt: &Prompt) -> Result<ChatOptions> {
         }
         // `json-object`, or `json-schema` with no spec attached: request the
         // provider's JSON mode (the strongest portable structured-output hint).
-        (ResponseFormatKind::JsonObject | ResponseFormatKind::JsonSchema, _) => {
+        (Format::JsonObject | Format::JsonSchema, _) => {
             options.with_response_format(ChatResponseFormat::JsonMode)
         }
         // `text`: a plain string answer, no structured-output hint.
-        (ResponseFormatKind::Text, _) => options,
+        (Format::Text, _) => options,
     };
 
     if let Some(generation) = &prompt.generation {
@@ -264,10 +264,10 @@ async fn dispatch_tool(
 
 /// Interpret the model's text turn as the answer value for the requested kind.
 /// `text` answers wrap the string verbatim; JSON kinds must parse.
-fn parse_answer(text: &str, kind: ResponseFormatKind) -> Result<Value, String> {
+fn parse_answer(text: &str, kind: Format) -> Result<Value, String> {
     match kind {
-        ResponseFormatKind::Text => Ok(Value::String(text.to_owned())),
-        ResponseFormatKind::JsonObject | ResponseFormatKind::JsonSchema => {
+        Format::Text => Ok(Value::String(text.to_owned())),
+        Format::JsonObject | Format::JsonSchema => {
             serde_json::from_str::<Value>(text)
                 .map_err(|e| format!("the answer was not valid JSON: {e}"))
         }
@@ -276,12 +276,12 @@ fn parse_answer(text: &str, kind: ResponseFormatKind) -> Result<Value, String> {
 
 /// Structural self-check mirroring the host gate (§3.1.3); the host re-validates
 /// as the single authority, so this only decides whether to spend a repair turn.
-fn check_answer(value: &Value, kind: ResponseFormatKind) -> Result<(), String> {
+fn check_answer(value: &Value, kind: Format) -> Result<(), String> {
     match kind {
-        ResponseFormatKind::Text if !value.is_string() => {
+        Format::Text if !value.is_string() => {
             Err("answer is not a JSON string".to_owned())
         }
-        ResponseFormatKind::JsonObject if !value.is_object() => {
+        Format::JsonObject if !value.is_object() => {
             Err("answer is not a JSON object".to_owned())
         }
         _ => Ok(()),

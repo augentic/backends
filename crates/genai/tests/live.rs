@@ -23,7 +23,7 @@ use omnia::Backend as _;
 use omnia_genai::Client;
 use omnia_wasi_model::{
     BackendAnswer, PreparedPrompt, ConnectOptions as ReplayConnectOptions, DirEntry,
-    FutureResult, ModelDefault, Prompt, Recording, Reference, ResponseFormat, ResponseFormatKind,
+    FutureResult, ModelDefault, Prompt, Recording, Reference, ResponseFormat, Format,
     Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
 use serde_json::Value;
@@ -81,7 +81,7 @@ fn resolve_prompt() -> Prompt {
         }),
         generation: None,
         response_format: ResponseFormat {
-            kind: ResponseFormatKind::JsonObject,
+            kind: Format::JsonObject,
             json_schema: None,
         },
         tools: vec![],

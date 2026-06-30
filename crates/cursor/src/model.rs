@@ -19,7 +19,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use futures::FutureExt as _;
 use omnia_wasi_model::{
-    BackendAnswer, PreparedPrompt, FutureResult, ResponseFormat, ResponseFormatKind, ToolHost,
+    BackendAnswer, PreparedPrompt, FutureResult, ResponseFormat, Format, ToolHost,
     WasiModelCtx,
 };
 use serde_json::Value;
@@ -98,7 +98,7 @@ fn build_prompt(request: &PreparedPrompt) -> String {
 /// requested `response-format` (§3.1.3).
 fn answer_instruction(response_format: &ResponseFormat) -> String {
     match response_format.kind {
-        ResponseFormatKind::JsonSchema => response_format.json_schema.as_ref().map_or_else(
+        Format::JsonSchema => response_format.json_schema.as_ref().map_or_else(
             || {
                 "When you are done, reply with only your final answer as a single JSON value and \
                  nothing else."
@@ -112,12 +112,12 @@ fn answer_instruction(response_format: &ResponseFormat) -> String {
                 )
             },
         ),
-        ResponseFormatKind::JsonObject => {
+        Format::JsonObject => {
             "When you are done, reply with only your final answer as \
              a single JSON object and nothing else."
                 .to_owned()
         }
-        ResponseFormatKind::Text => {
+        Format::Text => {
             "When you are done, reply with only your final answer as plain text and nothing else."
                 .to_owned()
         }
@@ -202,10 +202,10 @@ fn parse_json_envelope(stdout: &[u8]) -> Option<Value> {
 /// the genai backend: `text` wraps the string; JSON kinds parse (tolerating a
 /// Markdown code fence the agent may add despite instructions). The runtime core
 /// re-validates the shape (§3.1.3).
-fn parse_result(result: &str, kind: ResponseFormatKind) -> Result<Value> {
+fn parse_result(result: &str, kind: Format) -> Result<Value> {
     match kind {
-        ResponseFormatKind::Text => Ok(Value::String(result.to_owned())),
-        ResponseFormatKind::JsonObject | ResponseFormatKind::JsonSchema => {
+        Format::Text => Ok(Value::String(result.to_owned())),
+        Format::JsonObject | Format::JsonSchema => {
             let json = strip_code_fence(result);
             serde_json::from_str::<Value>(json)
                 .with_context(|| format!("cursor-agent answer was not valid JSON: {json}"))
@@ -233,7 +233,7 @@ mod tests {
     use futures::FutureExt as _;
     use omnia_wasi_model::{
         PreparedPrompt, DirEntry, FutureResult, Prompt, Reference, ResponseFormat,
-        ResponseFormatKind, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
+        Format, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
     };
     use serde_json::json;
 
@@ -292,7 +292,7 @@ mod tests {
             }),
             generation: None,
             response_format: ResponseFormat {
-                kind: ResponseFormatKind::JsonSchema,
+                kind: Format::JsonSchema,
                 json_schema: Some(omnia_wasi_model::JsonSchemaSpec {
                     name: "verdict".to_owned(),
                     schema: json!({
@@ -345,13 +345,13 @@ mod tests {
     #[test]
     fn answer_instruction_tracks_the_kind() {
         let text = answer_instruction(&ResponseFormat {
-            kind: ResponseFormatKind::Text,
+            kind: Format::Text,
             json_schema: None,
         });
         assert!(text.contains("plain text"), "text instruction: {text}");
 
         let object = answer_instruction(&ResponseFormat {
-            kind: ResponseFormatKind::JsonObject,
+            kind: Format::JsonObject,
             json_schema: None,
         });
         assert!(object.contains("JSON object"), "object instruction: {object}");
@@ -359,9 +359,9 @@ mod tests {
 
     #[test]
     fn parse_result_wraps_text_and_parses_json() {
-        assert_eq!(parse_result("hello", ResponseFormatKind::Text).unwrap(), json!("hello"));
+        assert_eq!(parse_result("hello", Format::Text).unwrap(), json!("hello"));
         assert_eq!(
-            parse_result(r#"{"verdict":"pass"}"#, ResponseFormatKind::JsonObject).unwrap(),
+            parse_result(r#"{"verdict":"pass"}"#, Format::JsonObject).unwrap(),
             json!({ "verdict": "pass" })
         );
     }
@@ -370,14 +370,14 @@ mod tests {
     fn parse_result_strips_a_code_fence() {
         let fenced = "```json\n{\"verdict\":\"pass\"}\n```";
         assert_eq!(
-            parse_result(fenced, ResponseFormatKind::JsonSchema).unwrap(),
+            parse_result(fenced, Format::JsonSchema).unwrap(),
             json!({ "verdict": "pass" })
         );
     }
 
     #[test]
     fn parse_result_rejects_non_json() {
-        let err = parse_result("not json", ResponseFormatKind::JsonObject).unwrap_err();
+        let err = parse_result("not json", Format::JsonObject).unwrap_err();
         assert!(err.to_string().contains("not valid JSON"), "unexpected: {err}");
     }
 
