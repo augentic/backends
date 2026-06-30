@@ -89,7 +89,7 @@ fn resolve_prompt() -> Prompt {
         metadata: vec![],
         grants: ToolGrants {
             references: Some("shelf".to_owned()),
-            working_tree_lent: false,
+            workspace: None,
             verify: vec![],
         },
     }
@@ -111,8 +111,10 @@ async fn live_genai_resolves_then_replays() -> Result<()> {
     // Run 2: the live genai backend, behind a `Recording` wrapper that writes the
     // run-1 fixture as a side effect of the live completion.
     let recording = Recording::new(Client::connect().await?, dir.clone());
-    let prompt = resolve_prompt();
-    let request = PreparedPrompt::try_from(prompt.clone()).expect("assemble resolve prompt");
+    // The generated prompt is not `Clone`; build an equivalent prompt for the
+    // record and replay legs — both reduce to the same replay key.
+    let request =
+        PreparedPrompt::assemble(resolve_prompt(), false).expect("assemble resolve prompt");
     let answer: BackendAnswer =
         recording.complete(request, Arc::new(LiveShelf)).await.map_err(|e| {
             anyhow::anyhow!("live genai completion failed (is OMNIA_MODEL/the API key valid?): {e}")
@@ -147,7 +149,8 @@ async fn live_genai_resolves_then_replays() -> Result<()> {
         replay_dir: dir.clone(),
     })
     .await?;
-    let replay_request = PreparedPrompt::try_from(prompt).expect("assemble replay prompt");
+    let replay_request =
+        PreparedPrompt::assemble(resolve_prompt(), false).expect("assemble replay prompt");
     let replayed = replay.complete(replay_request, Arc::new(LiveShelf)).await?;
     assert_eq!(replayed.value, answer.value, "ModelDefault must replay the exact recorded answer");
 

@@ -98,7 +98,7 @@ fn verdict_prompt() -> Prompt {
         metadata: vec![],
         grants: ToolGrants {
             references: None,
-            working_tree_lent: true,
+            workspace: None,
             verify: vec![],
         },
     }
@@ -136,8 +136,10 @@ async fn live_cursor_completes_then_replays() -> Result<()> {
     .await?;
     let recording = Recording::new(client, dir.clone());
 
-    let prompt = verdict_prompt();
-    let request = PreparedPrompt::try_from(prompt.clone()).expect("assemble verdict prompt");
+    // The generated prompt is not `Clone`; build an equivalent prompt for the
+    // record and replay legs — both reduce to the same replay key.
+    let request =
+        PreparedPrompt::assemble(verdict_prompt(), true).expect("assemble verdict prompt");
     let answer: BackendAnswer =
         recording.complete(request, Arc::new(NoopToolHost)).await.map_err(|e| {
             anyhow::anyhow!(
@@ -159,7 +161,8 @@ async fn live_cursor_completes_then_replays() -> Result<()> {
         replay_dir: dir.clone(),
     })
     .await?;
-    let replay_request = PreparedPrompt::try_from(prompt).expect("assemble replay prompt");
+    let replay_request =
+        PreparedPrompt::assemble(verdict_prompt(), true).expect("assemble replay prompt");
     let replayed = replay.complete(replay_request, Arc::new(NoopToolHost)).await?;
     assert_eq!(replayed.value, answer.value, "ModelDefault must replay the exact recorded answer");
 
