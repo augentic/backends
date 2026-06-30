@@ -5,7 +5,7 @@
 //! `system`/`messages` channels are consumed directly — drives the in-process
 //! tool loop — dispatching the host-injected `resolve` tool into the caller's
 //! `references` shelf through the lent [`ToolHost`] — self-checks the answer
-//! against `response-format`, and returns a host-only [`BackendAnswer`] (the
+//! against `response-format`, and returns a host-only [`Answer`] (the
 //! parsed value plus a tool transcript for record/replay). The guest only ever
 //! sees the validated answer string the `complete` binding derives from `value`;
 //! the host re-validates as the single authority (§3.1.3), so this self-check
@@ -20,7 +20,7 @@ use genai::chat::{
     ToolResponse,
 };
 use omnia_wasi_model::{
-    BackendAnswer, PreparedPrompt, FutureResult, Prompt, Reference, Format,
+    Answer, PreparedPrompt, FutureResult, Prompt, Reference, Format,
     ToolHost, ToolTurn, Transcript, WasiModelCtx,
 };
 use serde_json::{Value, json};
@@ -35,7 +35,7 @@ const MAX_TURNS: usize = 8;
 impl WasiModelCtx for Client {
     fn complete(
         &self, request: PreparedPrompt, tool_host: Arc<dyn ToolHost>,
-    ) -> FutureResult<BackendAnswer> {
+    ) -> FutureResult<Answer> {
         // Clone the swappable vendor handle + model id into the 'static future;
         // the genai client is cheap to clone (an `Arc` inside).
         let client = self.inner.clone();
@@ -83,7 +83,7 @@ impl WasiModelCtx for Client {
                 match parse_answer(&text, kind) {
                     Ok(value) => match check_answer(&value, kind) {
                         Ok(()) => {
-                            return Ok(BackendAnswer {
+                            return Ok(Answer {
                                 value,
                                 transcript: Some(transcript),
                             });
@@ -91,7 +91,7 @@ impl WasiModelCtx for Client {
                         // Budget spent: hand the value back so the host validation gate
                         // remains the single authority and produces the canonical error.
                         Err(_) if last_turn => {
-                            return Ok(BackendAnswer {
+                            return Ok(Answer {
                                 value,
                                 transcript: Some(transcript),
                             });

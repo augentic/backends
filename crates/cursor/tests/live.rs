@@ -2,10 +2,8 @@
 //! "run 3" (the spawned-agent acceptance gate).
 //!
 //! Mirrors the genai backend's `live.rs`: it spawns a real `cursor-agent`
-//! against a node-local workspace, parses the validated answer back through the
-//! `augentic:model/completion` boundary, and shows the recorded fixture replays
-//! deterministically under [`ModelDefault`] — proving record/replay works at the
-//! typed boundary for the spawned-agent shape, with no guest or contract change.
+//! against a node-local workspace and parses the validated answer back through the
+//! `augentic:model/completion` boundary.
 //!
 //! It is skipped unless `OMNIA_CURSOR_LIVE=1` is set (alongside an installed,
 //! authenticated `cursor-agent` — `CURSOR_API_KEY` or a prior `cursor-agent
@@ -22,9 +20,8 @@ use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_cursor::{Client, ConnectOptions};
 use omnia_wasi_model::{
-    BackendAnswer, PreparedPrompt, ConnectOptions as ReplayConnectOptions, DirEntry,
-    FutureResult, JsonSchemaSpec, ModelDefault, Prompt, Recording, Reference, ResponseFormat,
-    Format, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
+    Answer, DirEntry, FutureResult, Format, JsonSchemaSpec, PreparedPrompt, Prompt,
+    Reference, ResponseFormat, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
 use serde_json::json;
 
@@ -54,8 +51,6 @@ impl ToolHost for NoopToolHost {
     }
 }
 
-/// A trivial judgment prompt (§6): a `json-schema` `{ verdict, reason }` answer
-/// assembled from `sections`, with a working tree marked as lent.
 fn verdict_prompt() -> Prompt {
     Prompt {
         model: None,
@@ -105,49 +100,38 @@ fn verdict_prompt() -> Prompt {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn live_cursor_completes_then_replays() -> Result<()> {
+async fn live_cursor_completes() -> Result<()> {
     if std::env::var_os("OMNIA_CURSOR_LIVE").is_none() {
         eprintln!(
             "skipping live cursor run 3: set OMNIA_CURSOR_LIVE=1 (plus an installed, authenticated \
-             cursor-agent and optionally OMNIA_MODEL / OMNIA_WORKSPACE) to record and replay the \
+             cursor-agent and optionally OMNIA_MODEL / OMNIA_WORKSPACE) to exercise the \
              spawned-agent gate"
         );
         return Ok(());
     }
 
-    // Workspace the agent runs in: an explicit `OMNIA_WORKSPACE` or a temp dir.
     let workspace = std::env::var_os("OMNIA_WORKSPACE").map_or_else(
         || std::env::temp_dir().join(format!("omnia-cursor-live-ws-{}", std::process::id())),
         PathBuf::from,
     );
     std::fs::create_dir_all(&workspace)?;
 
-    let dir = std::env::temp_dir().join(format!("omnia-cursor-live-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-
-    // Run 3: the live cursor backend, behind a `Recording` wrapper that writes
-    // the run-1 fixture as a side effect of the live completion. Connect with
-    // explicit options so the workspace is controlled regardless of env.
     let client = Client::connect_with(ConnectOptions {
         model: std::env::var("OMNIA_MODEL").ok(),
         workspace: Some(workspace.to_string_lossy().into_owned()),
         timeout_secs: 300,
     })
     .await?;
-    let recording = Recording::new(client, dir.clone());
 
-    // The generated prompt is not `Clone`; build an equivalent prompt for the
-    // record and replay legs — both reduce to the same replay key.
     let request =
-        PreparedPrompt::assemble(verdict_prompt(), true).expect("assemble verdict prompt");
-    let answer: BackendAnswer =
-        recording.complete(request, Arc::new(NoopToolHost)).await.map_err(|e| {
+        PreparedPrompt::assemble(verdict_prompt()).expect("assemble verdict prompt");
+    let answer: Answer =
+        client.complete(request, Arc::new(NoopToolHost)).await.map_err(|e| {
             anyhow::anyhow!(
                 "live cursor completion failed (is cursor-agent installed and authed?): {e}"
             )
         })?;
 
-    // The spawned agent returned a schema-shaped JSON object.
     assert!(answer.value.is_object(), "run-3 answer must be a JSON object: {:?}", answer.value);
     assert!(
         answer.value.get("verdict").and_then(serde_json::Value::as_str).is_some(),
@@ -155,17 +139,5 @@ async fn live_cursor_completes_then_replays() -> Result<()> {
         answer.value
     );
 
-    // Run 1: the recorded fixture replays deterministically under `ModelDefault`
-    // — no spawn, no tool host.
-    let replay = ModelDefault::connect_with(ReplayConnectOptions {
-        replay_dir: dir.clone(),
-    })
-    .await?;
-    let replay_request =
-        PreparedPrompt::assemble(verdict_prompt(), true).expect("assemble replay prompt");
-    let replayed = replay.complete(replay_request, Arc::new(NoopToolHost)).await?;
-    assert_eq!(replayed.value, answer.value, "ModelDefault must replay the exact recorded answer");
-
-    let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }

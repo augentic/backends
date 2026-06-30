@@ -19,7 +19,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use futures::FutureExt as _;
 use omnia_wasi_model::{
-    BackendAnswer, PreparedPrompt, FutureResult, ResponseFormat, Format, ToolHost,
+    Answer, PreparedPrompt, FutureResult, ResponseFormat, Format, ToolHost,
     WasiModelCtx,
 };
 use serde_json::Value;
@@ -29,7 +29,7 @@ use crate::{CURSOR_AGENT_BIN, Client};
 impl WasiModelCtx for Client {
     fn complete(
         &self, request: PreparedPrompt, tool_host: Arc<dyn ToolHost>,
-    ) -> FutureResult<BackendAnswer> {
+    ) -> FutureResult<Answer> {
         // cursor owns its own loop and edits the tree directly, so the per-call
         // `ToolHost` is consulted only for its `local-path` face (§5.3): the
         // agent's `--workspace` is the working tree the host resolved from the
@@ -64,7 +64,7 @@ impl WasiModelCtx for Client {
 
             // No in-process tool loop, so there is no transcript to record; the
             // fixture still keys on the typed prompt (§5.4).
-            Ok(BackendAnswer {
+            Ok(Answer {
                 value,
                 transcript: None,
             })
@@ -322,7 +322,7 @@ mod tests {
         // loud before any spawn — the §5.3 capability signal.
         let err = client(None)
             .complete(
-                PreparedPrompt::assemble(schema_prompt(), true).expect("assemble"),
+                PreparedPrompt::assemble(schema_prompt()).expect("assemble"),
                 Arc::new(NoopToolHost),
             )
             .await
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn build_agent_prompt_includes_channels_and_schema() {
-        let request = PreparedPrompt::assemble(schema_prompt(), true).expect("assemble");
+        let request = PreparedPrompt::assemble(schema_prompt()).expect("assemble");
         let text = build_prompt(&request);
         // The assembled system + user channels survive into the agent prompt.
         assert!(text.contains("a terse judge"), "missing system channel: {text}");

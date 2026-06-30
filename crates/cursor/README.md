@@ -8,8 +8,7 @@ Spawned-agent model backend for the Omnia WASI runtime, implementing the
 
 Each completion launches a fresh, context-free [`cursor-agent`](https://cursor.com/docs/cli/headless)
 session that owns its own tool loop and edits the lent working tree directly,
-then returns a validated answer through the same boundary as `omnia-genai` and
-the in-tree replay backend. The guest only ever sees the validated answer
+then returns a validated answer through the same boundary as `omnia-genai`.
 string; the model id, the API key, and the agent protocol stay inside this
 crate.
 

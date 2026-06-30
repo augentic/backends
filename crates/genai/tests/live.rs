@@ -2,12 +2,10 @@
 //! "run 2" (the `resolve` acceptance gate).
 //!
 //! This is the cross-repo companion to omnia's deterministic
-//! `resolve_dispatches_to_a_fresh_shelf_per_call` test: that one proves the
-//! host→guest dispatch machinery with no network; this one proves the genai
-//! backend itself — `Prompt`→`ChatRequest` mapping, the in-process tool loop,
-//! `resolve` dispatch through the lent [`ToolHost`], and answer validation —
-//! against a real provider, then shows the recorded fixture replays
-//! deterministically under [`ModelDefault`].
+//! `resolve_dispatches` test: that one proves the host→guest dispatch machinery
+//! with no network; this one proves the genai backend itself — `Prompt`→`ChatRequest`
+//! mapping, the in-process tool loop, `resolve` dispatch through the lent
+//! [`ToolHost`], and answer validation — against a real provider.
 //!
 //! It is skipped unless `OMNIA_GENAI_LIVE=1` is set (alongside a provider key
 //! such as `OPENAI_API_KEY` and an `OMNIA_MODEL`), so it never runs or touches
@@ -22,9 +20,8 @@ use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_genai::Client;
 use omnia_wasi_model::{
-    BackendAnswer, PreparedPrompt, ConnectOptions as ReplayConnectOptions, DirEntry,
-    FutureResult, ModelDefault, Prompt, Recording, Reference, ResponseFormat, Format,
-    Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
+    Answer, DirEntry, FutureResult, Format, PreparedPrompt, Prompt, Reference,
+    ResponseFormat, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
 use serde_json::Value;
 
@@ -96,32 +93,22 @@ fn resolve_prompt() -> Prompt {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn live_genai_resolves_then_replays() -> Result<()> {
+async fn live_genai_resolves() -> Result<()> {
     if std::env::var_os("OMNIA_GENAI_LIVE").is_none() {
         eprintln!(
             "skipping live genai run 2: set OMNIA_GENAI_LIVE=1 (plus a provider key such as \
-             OPENAI_API_KEY and OMNIA_MODEL) to record and replay the resolve gate"
+             OPENAI_API_KEY and OMNIA_MODEL) to exercise the resolve gate"
         );
         return Ok(());
     }
 
-    let dir = std::env::temp_dir().join(format!("omnia-genai-live-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-
-    // Run 2: the live genai backend, behind a `Recording` wrapper that writes the
-    // run-1 fixture as a side effect of the live completion.
-    let recording = Recording::new(Client::connect().await?, dir.clone());
-    // The generated prompt is not `Clone`; build an equivalent prompt for the
-    // record and replay legs — both reduce to the same replay key.
+    let client = Client::connect().await?;
     let request =
-        PreparedPrompt::assemble(resolve_prompt(), false).expect("assemble resolve prompt");
-    let answer: BackendAnswer =
-        recording.complete(request, Arc::new(LiveShelf)).await.map_err(|e| {
-            anyhow::anyhow!("live genai completion failed (is OMNIA_MODEL/the API key valid?): {e}")
-        })?;
+        PreparedPrompt::assemble(resolve_prompt()).expect("assemble resolve prompt");
+    let answer: Answer = client.complete(request, Arc::new(LiveShelf)).await.map_err(|e| {
+        anyhow::anyhow!("live genai completion failed (is OMNIA_MODEL/the API key valid?): {e}")
+    })?;
 
-    // The model drove a `resolve` tool call, and the shelf bytes round-tripped
-    // back into the loop.
     let transcript = answer.transcript.as_ref().expect("genai always records a transcript");
     let resolve_turn = transcript
         .turns
@@ -134,8 +121,6 @@ async fn live_genai_resolves_then_replays() -> Result<()> {
         "the resolve tool result must round-trip the shelf bytes"
     );
 
-    // The answer is a JSON object (the host validation gate for `json-object`)
-    // and carries the resolved value the model fetched via the tool.
     assert!(answer.value.is_object(), "run-2 answer must be a JSON object: {:?}", answer.value);
     assert!(
         answer.value.to_string().contains("shelf:alpha"),
@@ -143,17 +128,5 @@ async fn live_genai_resolves_then_replays() -> Result<()> {
         answer.value
     );
 
-    // Run 1: the recorded fixture replays deterministically under `ModelDefault`
-    // — no network, no tool host.
-    let replay = ModelDefault::connect_with(ReplayConnectOptions {
-        replay_dir: dir.clone(),
-    })
-    .await?;
-    let replay_request =
-        PreparedPrompt::assemble(resolve_prompt(), false).expect("assemble replay prompt");
-    let replayed = replay.complete(replay_request, Arc::new(LiveShelf)).await?;
-    assert_eq!(replayed.value, answer.value, "ModelDefault must replay the exact recorded answer");
-
-    let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }
