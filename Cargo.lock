@@ -3367,7 +3367,7 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3382,6 +3382,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "pastey",
  "serde",
  "tokio",
  "tokio-util",
@@ -3391,6 +3392,7 @@ dependencies = [
  "tracing-subscriber",
  "wasmtime",
  "wasmtime-wasi",
+ "wasmtime-wasi-http",
  "wrpc-transport",
  "wrpc-wasmtime",
 ]
@@ -3492,7 +3494,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3502,7 +3504,7 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3614,7 +3616,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3630,7 +3632,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -3647,7 +3649,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-jsondb"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3668,7 +3670,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3686,7 +3688,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "futures",
@@ -3705,7 +3707,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "cap-fs-ext",
@@ -3724,7 +3726,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -3748,7 +3750,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -3769,7 +3771,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f24aa1409ecba884061b156fc3d7ef706378f828"
+source = "git+https://github.com/augentic/omnia.git#421e0c831bbef8dfffb0986c432e97a70f12d98a"
 dependencies = [
  "anyhow",
  "futures",
@@ -3948,6 +3950,12 @@ dependencies = [
  "smallvec",
  "windows-link",
 ]
+
+[[package]]
+name = "pastey"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pbkdf2"
@@ -6856,6 +6864,30 @@ dependencies = [
  "wasmtime-wasi-io",
  "wiggle",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "wasmtime-wasi-http"
+version = "46.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb65eeb8116615c2a22f51b19672c0d5b652ca7b051086da5c7c0a9eb39f4af7"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "rustls",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-io",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
