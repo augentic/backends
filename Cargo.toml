@@ -21,7 +21,7 @@ unused_extern_crates = "warn"
 
 [workspace.lints.clippy]
 # https://doc.rust-lang.org/stable/clippy/index.html
-all = "warn"      # correctness, suspicious, style, complexity, perf
+all = "warn"  # correctness, suspicious, style, complexity, perf
 cargo = "warn"
 nursery = "warn"
 pedantic = "warn"
@@ -91,8 +91,18 @@ omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-sql = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-vault = { git = "https://github.com/augentic/omnia.git" }
+
 # omnia = { path = "../omnia/crates/omnia" }
+# omnia-wasi-blobstore = { path = "../omnia/crates/wasi-blobstore" }
+# omnia-wasi-identity = { path = "../omnia/crates/wasi-identity" }
+# omnia-wasi-jsondb = { path = "../omnia/crates/wasi-jsondb" }
+# omnia-wasi-keyvalue = { path = "../omnia/crates/wasi-keyvalue" }
+# omnia-wasi-messaging = { path = "../omnia/crates/wasi-messaging" }
 # omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
+# omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
+# omnia-wasi-sql = { path = "../omnia/crates/wasi-sql" }
+# omnia-wasi-vault = { path = "../omnia/crates/wasi-vault" }
+# omnia-wasi-websocket = { path = "../omnia/crates/wasi-websocket" }
 
 [profile.release]
 lto = true

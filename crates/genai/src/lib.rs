@@ -1,5 +1,4 @@
 #![doc = include_str!("../README.md")]
-#![cfg(not(target_arch = "wasm32"))]
 // The genai SDK's dependency tree pulls duplicate transitive crates (e.g.
 // `schemars`, `indexmap`); these are outside this crate's control and cannot be
 // unified without patching upstream, so silence the workspace `cargo` lint here.
@@ -53,7 +52,7 @@ mod config {
     pub struct ConnectOptions {
         /// Provider model id (e.g. `gpt-5.5`, `claude-…`, `gemini-…`). genai
         /// routes to the provider by the model id's prefix.
-        #[env(from = "OMNIA_MODEL", default = "gpt-5.5")]
+        #[env(from = "CURSOR_MODEL", default = "gpt-5.5")]
         pub model: String,
     }
 }

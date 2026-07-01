@@ -7,8 +7,9 @@ Multi-provider generative-AI model backend for the Omnia WASI runtime,
 implementing the `augentic:model/completion` boundary (`wasi-model`).
 
 Wraps the [`genai`](https://crates.io/crates/genai) SDK (`OpenAI`, Anthropic,
-Gemini, Groq, Ollama, …). A guest's typed `Prompt` is assembled into a provider
-chat request, the in-process tool loop is driven to completion, and the floor's
+Gemini, Groq, Ollama, …). The host assembles a guest's typed `Prompt` into a
+`PreparedPrompt`, which this backend maps to a provider chat request; the
+in-process tool loop is driven to completion, and the runtime core's
 `resolve` tool is dispatched into the guest's `references` shelf via the lent
 `ToolHost`. The guest only ever sees the validated answer string.
 
@@ -16,9 +17,9 @@ MSRV: Rust 1.95
 
 ## Configuration
 
-| Variable      | Required | Default   | Description                                               |
-| ------------- | -------- | --------- | --------------------------------------------------------- |
-| `OMNIA_MODEL` | no       | `gpt-5.5` | Provider model id; genai routes to the provider by prefix |
+| Variable       | Required | Default   | Description                                               |
+| -------------- | -------- | --------- | --------------------------------------------------------- |
+| `CURSOR_MODEL` | no       | `gpt-5.5` | Provider model id; genai routes to the provider by prefix |
 
 Provider API keys are read by genai from the ambient environment
 (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …) and are never

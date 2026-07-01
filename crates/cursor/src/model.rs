@@ -1,15 +1,4 @@
-//! `wasi-model` implementation backed by a spawned `cursor-agent` session.
-//!
-//! The spawned-agent backend (RFC wasi-model §5.3): assemble the floor [`Prompt`]
-//! into a single agent prompt (§3.1.1, reusing [`assemble`]) with a trailing
-//! response-format instruction, launch a fresh headless `cursor-agent` scoped to
-//! the lent working tree, and parse its aggregated `.result` back into the
-//! validated answer the boundary returns. The agent owns its own tool loop and
-//! reads/writes the tree directly, so this backend uses the [`ToolHost`] only
-//! for its `local-path` face ([`ToolHost::local_path`], RFC-55) — the agent's
-//! `--workspace` — never its `read`/`list`/`write` (unlike genai). The floor's
-//! `complete` binding re-validates the answer (§3.1.3), so this backend only
-//! has to produce the parsed value.
+//! # Cursor Agent Backend
 
 use std::path::Path;
 use std::sync::Arc;
@@ -18,8 +7,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use futures::FutureExt as _;
 use omnia_wasi_model::{
-    Assembled, BackendAnswer, FutureResult, Prompt, ResponseFormat, ResponseFormatKind, ToolHost,
-    WasiModelCtx, assemble,
+    Answer, Format, FutureResult, PreparedPrompt, ResponseFormat, ToolHost, WasiModelCtx,
 };
 use serde_json::Value;
 
@@ -27,15 +15,9 @@ use crate::{CURSOR_AGENT_BIN, Client};
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, prompt: Prompt, tool_host: Arc<dyn ToolHost>,
-    ) -> FutureResult<BackendAnswer> {
-        // cursor owns its own loop and edits the tree directly, so the per-call
-        // `ToolHost` is consulted only for its `local-path` face (§5.3): the
-        // agent's `--workspace` is the working tree the floor resolved from the
-        // lent `grants.working-tree` descriptor (RFC-55). `OMNIA_WORKSPACE`
-        // (carried on `self.workspace`) is demoted to a dev/test override, used
-        // only when no tree was lent on this node. Resolve to an owned `PathBuf`
-        // and clone the cheap handles into the 'static future.
+        &self, request: PreparedPrompt, tool_host: Arc<dyn ToolHost>,
+    ) -> FutureResult<Answer> {
+        // Cursor owns its own loop and edits the tree directly
         let model = self.model.clone();
         let workspace = tool_host
             .local_path()
@@ -44,18 +26,10 @@ impl WasiModelCtx for Client {
         let timeout = self.timeout;
 
         async move {
-            let kind = prompt.response_format.kind;
+            let kind = request.prompt.response_format.kind;
+            let agent_prompt = build_prompt(&request);
 
-            // Assemble system + user channels (§3.1.1) and fold them into one
-            // prompt string with a response-format instruction so `.result`
-            // parses.
-            let assembled =
-                assemble(&prompt).map_err(|e| anyhow::anyhow!("prompt assembly failed: {e:?}"))?;
-            let agent_prompt = build_prompt(&assembled, &prompt.response_format);
-
-            // Capability signal: an agent-driven build needs a node-local tree
-            // — the lent working tree's `local-path` (RFC-55), or the dev/test
-            // `OMNIA_WORKSPACE` override.
+            // an agent-driven build needs a node-local tree.
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
             };
@@ -64,9 +38,7 @@ impl WasiModelCtx for Client {
             let result = extract_result(&stdout)?;
             let value = parse_result(&result, kind)?;
 
-            // No in-process tool loop, so there is no transcript to record; the
-            // fixture still keys on the typed prompt (§5.4).
-            Ok(BackendAnswer {
+            Ok(Answer {
                 value,
                 transcript: None,
             })
@@ -75,32 +47,26 @@ impl WasiModelCtx for Client {
     }
 }
 
-/// Fold the assembled channels (§3.1.1) into the single prompt string handed to
-/// `cursor-agent`, with a trailing instruction pinning the agent's final answer
-/// to the floor's `response-format` so `.result` parses (§5.3).
-fn build_prompt(assembled: &Assembled, response_format: &ResponseFormat) -> String {
+fn build_prompt(request: &PreparedPrompt) -> String {
     let mut parts: Vec<String> = Vec::new();
-    if let Some(system) = &assembled.system {
+    if let Some(system) = &request.system {
         parts.push(system.clone());
     }
-    for message in &assembled.messages {
-        // Roles are advisory in a single-shot agent prompt; keep user content
-        // verbatim and tag the rest so the structure survives.
+    for message in &request.messages {
         if message.role == "user" {
             parts.push(message.content.clone());
         } else {
             parts.push(format!("[{}]\n{}", message.role, message.content));
         }
     }
-    parts.push(answer_instruction(response_format));
+    parts.push(answer_instruction(&request.prompt.response_format));
     parts.join("\n\n")
 }
 
-/// The trailing instruction that constrains the agent's final answer to the
-/// requested `response-format` (§3.1.3).
+// Constrain the agent's answer to the requested `response-format`.
 fn answer_instruction(response_format: &ResponseFormat) -> String {
     match response_format.kind {
-        ResponseFormatKind::JsonSchema => response_format.json_schema.as_ref().map_or_else(
+        Format::JsonSchema => response_format.json_schema.as_ref().map_or_else(
             || {
                 "When you are done, reply with only your final answer as a single JSON value and \
                  nothing else."
@@ -114,25 +80,16 @@ fn answer_instruction(response_format: &ResponseFormat) -> String {
                 )
             },
         ),
-        ResponseFormatKind::JsonObject => {
-            "When you are done, reply with only your final answer as \
+        Format::JsonObject => "When you are done, reply with only your final answer as \
              a single JSON object and nothing else."
-                .to_owned()
-        }
-        ResponseFormatKind::Text => {
+            .to_owned(),
+        Format::Text => {
             "When you are done, reply with only your final answer as plain text and nothing else."
                 .to_owned()
         }
     }
 }
 
-/// Spawn one headless `cursor-agent` run scoped to `workspace`, bounded by
-/// `timeout`, returning its stdout.
-///
-/// Uses the documented headless surface: `--print` runs non-interactive to
-/// completion, `--force` grants write access so the agent can edit the tree,
-/// `--trust` skips the workspace-trust prompt, `--output-format json` emits a
-/// single result object, and `--workspace` scopes it to the lent tree.
 async fn spawn_agent(
     agent_prompt: &str, model: Option<&str>, workspace: &Path, timeout: Duration,
 ) -> Result<Vec<u8>> {
@@ -169,11 +126,19 @@ async fn spawn_agent(
     Ok(output.stdout)
 }
 
-/// Pull the aggregated final answer out of `cursor-agent`'s `--output-format
-/// json` payload: a single JSON object whose `result` field holds the answer.
+// Extract the result field from `cursor-agent`'s `--output-format json` payload.
 fn extract_result(stdout: &[u8]) -> Result<String> {
-    let envelope = parse_json_envelope(stdout)
-        .context("cursor-agent did not emit a JSON result object (did the run fail?)")?;
+    let text = std::str::from_utf8(stdout).context("cursor-agent did not emit valid UTF-8")?;
+
+    // extract result
+    let envelope = if let Ok(value) = serde_json::from_str::<Value>(text.trim()) {
+        value
+    } else {
+        let Some(last) = text.lines().rev().find(|line| !line.trim().is_empty()) else {
+            bail!("cursor-agent did not emit a JSON result object");
+        };
+        serde_json::from_str::<Value>(last.trim())?
+    };
 
     if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
         bail!(
@@ -189,25 +154,10 @@ fn extract_result(stdout: &[u8]) -> Result<String> {
         .context("cursor-agent JSON output has no string `result` field")
 }
 
-/// Parse the agent envelope, tolerating a trailing newline or stray preamble by
-/// falling back to the last non-empty line (the `json` format emits one object).
-fn parse_json_envelope(stdout: &[u8]) -> Option<Value> {
-    let text = std::str::from_utf8(stdout).ok()?;
-    if let Ok(value) = serde_json::from_str::<Value>(text.trim()) {
-        return Some(value);
-    }
-    let last = text.lines().rev().find(|line| !line.trim().is_empty())?;
-    serde_json::from_str::<Value>(last.trim()).ok()
-}
-
-/// Interpret the agent's `result` text as the answer value for `kind`, mirroring
-/// the genai backend: `text` wraps the string; JSON kinds parse (tolerating a
-/// Markdown code fence the agent may add despite instructions). The floor
-/// re-validates the shape (§3.1.3).
-fn parse_result(result: &str, kind: ResponseFormatKind) -> Result<Value> {
+fn parse_result(result: &str, kind: Format) -> Result<Value> {
     match kind {
-        ResponseFormatKind::Text => Ok(Value::String(result.to_owned())),
-        ResponseFormatKind::JsonObject | ResponseFormatKind::JsonSchema => {
+        Format::Text => Ok(Value::String(result.to_owned())),
+        Format::JsonObject | Format::JsonSchema => {
             let json = strip_code_fence(result);
             serde_json::from_str::<Value>(json)
                 .with_context(|| format!("cursor-agent answer was not valid JSON: {json}"))
@@ -234,8 +184,8 @@ mod tests {
 
     use futures::FutureExt as _;
     use omnia_wasi_model::{
-        DirEntry, FutureResult, Prompt, Reference, ResponseFormat, ResponseFormatKind, Sections,
-        ToolGrants, ToolHost, VerifyReport, WasiModelCtx, assemble,
+        DirEntry, Format, FutureResult, PreparedPrompt, Prompt, Reference, ResponseFormat,
+        Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
     };
     use serde_json::json;
 
@@ -294,7 +244,7 @@ mod tests {
             }),
             generation: None,
             response_format: ResponseFormat {
-                kind: ResponseFormatKind::JsonSchema,
+                kind: Format::JsonSchema,
                 json_schema: Some(omnia_wasi_model::JsonSchemaSpec {
                     name: "verdict".to_owned(),
                     schema: json!({
@@ -311,92 +261,89 @@ mod tests {
             metadata: vec![],
             grants: ToolGrants {
                 references: None,
-                working_tree_lent: true,
+                workspace: None,
                 verify: vec![],
             },
         }
     }
 
     #[tokio::test]
-    async fn no_local_tree_is_a_capability_signal() {
+    async fn no_local_tree() {
         // With neither a lent working tree (the default `ToolHost::local_path`
         // is `None`) nor an `OMNIA_WORKSPACE` override, `complete` must fail
         // loud before any spawn — the §5.3 capability signal.
         let err = client(None)
-            .complete(schema_prompt(), Arc::new(NoopToolHost))
+            .complete(
+                PreparedPrompt::try_from(schema_prompt()).expect("try_from"),
+                Arc::new(NoopToolHost),
+            )
             .await
             .expect_err("a backend with no local tree must fail");
         assert!(err.to_string().contains("no local tree on this node"), "unexpected error: {err}");
     }
 
     #[test]
-    fn build_agent_prompt_includes_channels_and_schema() {
-        let prompt = schema_prompt();
-        let assembled = assemble(&prompt).expect("assemble");
-        let text = build_prompt(&assembled, &prompt.response_format);
-        // The assembled system + user channels survive into the agent prompt.
+    fn agent_prompt() {
+        let request = PreparedPrompt::try_from(schema_prompt()).expect("try_from");
+        let text = build_prompt(&request);
         assert!(text.contains("a terse judge"), "missing system channel: {text}");
         assert!(text.contains("decide pass or fail"), "missing user channel: {text}");
-        // The trailing instruction carries the JSON Schema (§5.3).
         assert!(text.contains("JSON Schema"), "missing schema instruction: {text}");
         assert!(text.contains("\"verdict\""), "missing schema body: {text}");
     }
 
     #[test]
-    fn answer_instruction_tracks_the_kind() {
+    fn answer_kind() {
         let text = answer_instruction(&ResponseFormat {
-            kind: ResponseFormatKind::Text,
+            kind: Format::Text,
             json_schema: None,
         });
         assert!(text.contains("plain text"), "text instruction: {text}");
 
         let object = answer_instruction(&ResponseFormat {
-            kind: ResponseFormatKind::JsonObject,
+            kind: Format::JsonObject,
             json_schema: None,
         });
         assert!(object.contains("JSON object"), "object instruction: {object}");
     }
 
     #[test]
-    fn parse_result_wraps_text_and_parses_json() {
-        assert_eq!(parse_result("hello", ResponseFormatKind::Text).unwrap(), json!("hello"));
+    fn parse_json() {
+        assert_eq!(parse_result("hello", Format::Text).unwrap(), json!("hello"));
         assert_eq!(
-            parse_result(r#"{"verdict":"pass"}"#, ResponseFormatKind::JsonObject).unwrap(),
+            parse_result(r#"{"verdict":"pass"}"#, Format::JsonObject).unwrap(),
             json!({ "verdict": "pass" })
         );
     }
 
     #[test]
-    fn parse_result_strips_a_code_fence() {
+    fn parse_code_fence() {
         let fenced = "```json\n{\"verdict\":\"pass\"}\n```";
-        assert_eq!(
-            parse_result(fenced, ResponseFormatKind::JsonSchema).unwrap(),
-            json!({ "verdict": "pass" })
-        );
+        assert_eq!(parse_result(fenced, Format::JsonSchema).unwrap(), json!({ "verdict": "pass" }));
     }
 
     #[test]
-    fn parse_result_rejects_non_json() {
-        let err = parse_result("not json", ResponseFormatKind::JsonObject).unwrap_err();
+    fn parse_non_json() {
+        let err = parse_result("not json", Format::JsonObject).unwrap_err();
         assert!(err.to_string().contains("not valid JSON"), "unexpected: {err}");
     }
 
     #[test]
-    fn extract_result_reads_the_result_field() {
+    fn extract_result_field() {
         let stdout = br#"{"type":"result","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
         let result = extract_result(stdout).expect("extract result");
         assert_eq!(result, r#"{"verdict":"pass"}"#);
     }
 
     #[test]
-    fn extract_result_surfaces_an_agent_error() {
+    fn extract_result_error() {
         let stdout = br#"{"type":"result","is_error":true,"result":"boom"}"#;
         let err = extract_result(stdout).expect_err("an agent error must surface");
         assert!(err.to_string().contains("cursor-agent reported an error"), "unexpected: {err}");
     }
 
     #[test]
-    fn extract_result_tolerates_a_trailing_newline() {
+    fn extract_result_newline() {
         let stdout = b"{\"is_error\":false,\"result\":\"hi\"}\n";
         assert_eq!(extract_result(stdout).expect("extract"), "hi");
     }
