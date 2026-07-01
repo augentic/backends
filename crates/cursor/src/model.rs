@@ -11,7 +11,13 @@ use omnia_wasi_model::{
 };
 use serde_json::Value;
 
-use crate::{CURSOR_AGENT_BIN, Client};
+use crate::{CURSOR_AGENT_BIN, Client, mcp_json};
+
+/// Prepended to the agent prompt when an MCP server is advertised, so the model
+/// knows the read-only reference tools exist and should be consulted.
+const MCP_PROMPT_HINT: &str = "A read-only MCP server named `omnia` is available. Consult its \
+    tools and resources for authoritative reference material before answering, and prefer that \
+    material over assumptions.";
 
 impl WasiModelCtx for Client {
     fn complete(
@@ -24,17 +30,38 @@ impl WasiModelCtx for Client {
             .map(Path::to_path_buf)
             .or_else(|| self.workspace.as_deref().map(Path::to_path_buf));
         let timeout = self.timeout;
+        let mcp_url = self.mcp_url.clone();
 
         async move {
             let kind = request.prompt.response_format.kind;
-            let agent_prompt = build_prompt(&request);
+            let mut agent_prompt = build_prompt(&request);
 
             // an agent-driven build needs a node-local tree.
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
             };
 
-            let stdout = spawn_agent(&agent_prompt, model.as_deref(), &workspace, timeout).await?;
+            // Advertise an omnia-hosted MCP server to `cursor-agent`, if one is
+            // configured. The guard patches `<workspace>/.cursor/mcp.json` for
+            // the duration of the spawn and restores it afterwards; the prompt
+            // hint tells the model the tools exist (an unadvertised server is
+            // not reliably discovered).
+            let _mcp_guard = match mcp_url.as_deref() {
+                Some(url) => {
+                    agent_prompt = format!("{MCP_PROMPT_HINT}\n\n{agent_prompt}");
+                    Some(mcp_json::McpConfigGuard::install(&workspace, url)?)
+                }
+                None => None,
+            };
+
+            let stdout = spawn_agent(
+                &agent_prompt,
+                model.as_deref(),
+                &workspace,
+                timeout,
+                mcp_url.is_some(),
+            )
+            .await?;
             let result = extract_result(&stdout)?;
             let value = parse_result(&result, kind)?;
 
@@ -91,7 +118,7 @@ fn answer_instruction(response_format: &ResponseFormat) -> String {
 }
 
 async fn spawn_agent(
-    agent_prompt: &str, model: Option<&str>, workspace: &Path, timeout: Duration,
+    agent_prompt: &str, model: Option<&str>, workspace: &Path, timeout: Duration, mcp: bool,
 ) -> Result<Vec<u8>> {
     let mut command = tokio::process::Command::new(CURSOR_AGENT_BIN);
     command
@@ -102,6 +129,11 @@ async fn spawn_agent(
         .arg("json")
         .arg("--workspace")
         .arg(workspace);
+    if mcp {
+        // Auto-approve the servers in the workspace `.cursor/mcp.json` so a
+        // headless run never blocks on an approval prompt.
+        command.arg("--approve-mcps");
+    }
     if let Some(model) = model {
         command.arg("--model").arg(model);
     }
@@ -226,6 +258,7 @@ mod tests {
             workspace: workspace.map(|w| Arc::from(Path::new(w))),
             // Nominal: no unit test reaches a spawn, so the bound is unused.
             timeout: Duration::from_secs(1),
+            mcp_url: None,
         }
     }
 
