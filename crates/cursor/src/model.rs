@@ -322,7 +322,7 @@ mod tests {
         // loud before any spawn — the §5.3 capability signal.
         let err = client(None)
             .complete(
-                PreparedPrompt::assemble(schema_prompt()).expect("assemble"),
+                PreparedPrompt::try_from(schema_prompt()).expect("try_from"),
                 Arc::new(NoopToolHost),
             )
             .await
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn build_agent_prompt_includes_channels_and_schema() {
-        let request = PreparedPrompt::assemble(schema_prompt()).expect("assemble");
+        let request = PreparedPrompt::try_from(schema_prompt()).expect("try_from");
         let text = build_prompt(&request);
         // The assembled system + user channels survive into the agent prompt.
         assert!(text.contains("a terse judge"), "missing system channel: {text}");

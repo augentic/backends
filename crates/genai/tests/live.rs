@@ -104,7 +104,7 @@ async fn live_genai_resolves() -> Result<()> {
 
     let client = Client::connect().await?;
     let request =
-        PreparedPrompt::assemble(resolve_prompt()).expect("assemble resolve prompt");
+        PreparedPrompt::try_from(resolve_prompt()).expect("assemble resolve prompt");
     let answer: Answer = client.complete(request, Arc::new(LiveShelf)).await.map_err(|e| {
         anyhow::anyhow!("live genai completion failed (is OMNIA_MODEL/the API key valid?): {e}")
     })?;

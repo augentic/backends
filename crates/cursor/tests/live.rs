@@ -124,7 +124,7 @@ async fn live_cursor_completes() -> Result<()> {
     .await?;
 
     let request =
-        PreparedPrompt::assemble(verdict_prompt()).expect("assemble verdict prompt");
+        PreparedPrompt::try_from(verdict_prompt()).expect("assemble verdict prompt");
     let answer: Answer =
         client.complete(request, Arc::new(NoopToolHost)).await.map_err(|e| {
             anyhow::anyhow!(
