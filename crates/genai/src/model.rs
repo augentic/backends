@@ -20,8 +20,8 @@ use genai::chat::{
     ToolResponse,
 };
 use omnia_wasi_model::{
-    Answer, PreparedPrompt, FutureResult, Prompt, Reference, Format,
-    ToolHost, ToolTurn, Transcript, WasiModelCtx,
+    Answer, Format, FutureResult, PreparedPrompt, Prompt, Reference, ToolHost, ToolTurn,
+    Transcript, WasiModelCtx,
 };
 use serde_json::{Value, json};
 
@@ -267,10 +267,8 @@ async fn dispatch_tool(
 fn parse_answer(text: &str, kind: Format) -> Result<Value, String> {
     match kind {
         Format::Text => Ok(Value::String(text.to_owned())),
-        Format::JsonObject | Format::JsonSchema => {
-            serde_json::from_str::<Value>(text)
-                .map_err(|e| format!("the answer was not valid JSON: {e}"))
-        }
+        Format::JsonObject | Format::JsonSchema => serde_json::from_str::<Value>(text)
+            .map_err(|e| format!("the answer was not valid JSON: {e}")),
     }
 }
 
@@ -278,12 +276,8 @@ fn parse_answer(text: &str, kind: Format) -> Result<Value, String> {
 /// as the single authority, so this only decides whether to spend a repair turn.
 fn check_answer(value: &Value, kind: Format) -> Result<(), String> {
     match kind {
-        Format::Text if !value.is_string() => {
-            Err("answer is not a JSON string".to_owned())
-        }
-        Format::JsonObject if !value.is_object() => {
-            Err("answer is not a JSON object".to_owned())
-        }
+        Format::Text if !value.is_string() => Err("answer is not a JSON string".to_owned()),
+        Format::JsonObject if !value.is_object() => Err("answer is not a JSON object".to_owned()),
         _ => Ok(()),
     }
 }
