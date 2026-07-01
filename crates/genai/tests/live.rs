@@ -8,10 +8,8 @@
 //! [`ToolHost`], and answer validation — against a real provider.
 //!
 //! It is skipped unless `OMNIA_GENAI_LIVE=1` is set (alongside a provider key
-//! such as `OPENAI_API_KEY` and an `OMNIA_MODEL`), so it never runs or touches
+//! such as `OPENAI_API_KEY` and an `CURSOR_MODEL`), so it never runs or touches
 //! the network in CI.
-
-#![cfg(not(target_arch = "wasm32"))]
 
 use std::sync::Arc;
 
@@ -20,8 +18,8 @@ use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_genai::Client;
 use omnia_wasi_model::{
-    Answer, DirEntry, FutureResult, Format, PreparedPrompt, Prompt, Reference,
-    ResponseFormat, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
+    Answer, DirEntry, Format, FutureResult, PreparedPrompt, Prompt, Reference, ResponseFormat,
+    Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
 use serde_json::Value;
 
@@ -97,16 +95,15 @@ async fn live_genai_resolves() -> Result<()> {
     if std::env::var_os("OMNIA_GENAI_LIVE").is_none() {
         eprintln!(
             "skipping live genai run 2: set OMNIA_GENAI_LIVE=1 (plus a provider key such as \
-             OPENAI_API_KEY and OMNIA_MODEL) to exercise the resolve gate"
+             OPENAI_API_KEY and CURSOR_MODEL) to exercise the resolve gate"
         );
         return Ok(());
     }
 
     let client = Client::connect().await?;
-    let request =
-        PreparedPrompt::try_from(resolve_prompt()).expect("assemble resolve prompt");
+    let request = PreparedPrompt::try_from(resolve_prompt()).expect("assemble resolve prompt");
     let answer: Answer = client.complete(request, Arc::new(LiveShelf)).await.map_err(|e| {
-        anyhow::anyhow!("live genai completion failed (is OMNIA_MODEL/the API key valid?): {e}")
+        anyhow::anyhow!("live genai completion failed (is CURSOR_MODEL/the API key valid?): {e}")
     })?;
 
     let transcript = answer.transcript.as_ref().expect("genai always records a transcript");

@@ -23,11 +23,11 @@ captured, logged, or recorded into fixtures.
 
 ## Configuration
 
-| Variable                    | Required | Default                | Description                                                                                         |
-| --------------------------- | -------- | ---------------------- | --------------------------------------------------------------------------------------------------- |
-| `OMNIA_MODEL`               | no       | _cursor-agent default_ | Model id forwarded to `cursor-agent --model`; unset lets the agent choose                           |
-| `OMNIA_WORKSPACE`           | no       | _none_                 | Node-local working-tree path lent via `--workspace`; unset is the "no local tree" capability signal |
-| `OMNIA_CURSOR_TIMEOUT_SECS` | no       | `120`                  | Wall-clock bound on one `cursor-agent` spawn                                                        |
+| Variable              | Required | Default                | Description                                                                                         |
+| --------------------- | -------- | ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `CURSOR_MODEL`        | no       | _cursor-agent default_ | Model id forwarded to `cursor-agent --model`; unset lets the agent choose                           |
+| `OMNIA_WORKSPACE`     | no       | _none_                 | Node-local working-tree path lent via `--workspace`; unset is the "no local tree" capability signal |
+| `CURSOR_TIMEOUT_SECS` | no       | `120`                  | Wall-clock bound on one `cursor-agent` spawn                                                        |
 
 `OMNIA_WORKSPACE` is a stopgap for the RFC-55 working-tree host's `local-path`
 face: until that host lands, the workspace is sourced from config rather than

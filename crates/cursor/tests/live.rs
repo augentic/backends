@@ -7,10 +7,8 @@
 //!
 //! It is skipped unless `OMNIA_CURSOR_LIVE=1` is set (alongside an installed,
 //! authenticated `cursor-agent` — `CURSOR_API_KEY` or a prior `cursor-agent
-//! login` — and optionally `OMNIA_MODEL` / `OMNIA_WORKSPACE`), so it never runs or
+//! login` — and optionally `CURSOR_MODEL` / `OMNIA_WORKSPACE`), so it never runs or
 //! spawns a process in CI.
-
-#![cfg(not(target_arch = "wasm32"))]
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,8 +18,8 @@ use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_cursor::{Client, ConnectOptions};
 use omnia_wasi_model::{
-    Answer, DirEntry, FutureResult, Format, JsonSchemaSpec, PreparedPrompt, Prompt,
-    Reference, ResponseFormat, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
+    Answer, DirEntry, Format, FutureResult, JsonSchemaSpec, PreparedPrompt, Prompt, Reference,
+    ResponseFormat, Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
 };
 use serde_json::json;
 
@@ -104,7 +102,7 @@ async fn live_cursor_completes() -> Result<()> {
     if std::env::var_os("OMNIA_CURSOR_LIVE").is_none() {
         eprintln!(
             "skipping live cursor run 3: set OMNIA_CURSOR_LIVE=1 (plus an installed, authenticated \
-             cursor-agent and optionally OMNIA_MODEL / OMNIA_WORKSPACE) to exercise the \
+             cursor-agent and optionally CURSOR_MODEL / OMNIA_WORKSPACE) to exercise the \
              spawned-agent gate"
         );
         return Ok(());
@@ -117,20 +115,18 @@ async fn live_cursor_completes() -> Result<()> {
     std::fs::create_dir_all(&workspace)?;
 
     let client = Client::connect_with(ConnectOptions {
-        model: std::env::var("OMNIA_MODEL").ok(),
+        model: std::env::var("CURSOR_MODEL").ok(),
         workspace: Some(workspace.to_string_lossy().into_owned()),
         timeout_secs: 300,
     })
     .await?;
 
-    let request =
-        PreparedPrompt::try_from(verdict_prompt()).expect("assemble verdict prompt");
-    let answer: Answer =
-        client.complete(request, Arc::new(NoopToolHost)).await.map_err(|e| {
-            anyhow::anyhow!(
-                "live cursor completion failed (is cursor-agent installed and authed?): {e}"
-            )
-        })?;
+    let request = PreparedPrompt::try_from(verdict_prompt()).expect("assemble verdict prompt");
+    let answer: Answer = client.complete(request, Arc::new(NoopToolHost)).await.map_err(|e| {
+        anyhow::anyhow!(
+            "live cursor completion failed (is cursor-agent installed and authed?): {e}"
+        )
+    })?;
 
     assert!(answer.value.is_object(), "run-3 answer must be a JSON object: {:?}", answer.value);
     assert!(

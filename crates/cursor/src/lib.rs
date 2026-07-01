@@ -1,8 +1,4 @@
 #![doc = include_str!("../README.md")]
-#![cfg(not(target_arch = "wasm32"))]
-// `omnia-wasi-model` pulls in the wasmtime dependency tree, which carries
-// duplicate transitive crates outside this crate's control; silence the
-// workspace `cargo` lint here (as `omnia-genai` does).
 #![allow(clippy::multiple_crate_versions)]
 
 mod model;
@@ -78,13 +74,13 @@ mod config {
     #[derive(Debug, Clone, FromEnv)]
     pub struct ConnectOptions {
         /// Model to use.
-        #[env(from = "OMNIA_MODEL")]
+        #[env(from = "CURSOR_MODEL")]
         pub model: Option<String>,
         /// Workspace path.
         #[env(from = "OMNIA_WORKSPACE")]
         pub workspace: Option<String>,
         /// Wall-clock bound (seconds) on one `cursor-agent` spawn.
-        #[env(from = "OMNIA_CURSOR_TIMEOUT_SECS", default = "120")]
+        #[env(from = "CURSOR_TIMEOUT_SECS", default = "120")]
         pub timeout_secs: u64,
     }
 }

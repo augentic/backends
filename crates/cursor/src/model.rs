@@ -1,16 +1,4 @@
-//! `wasi-model` implementation backed by a spawned `cursor-agent` session.
-//!
-//! The spawned-agent backend (RFC wasi-model §5.3): fold the host-assembled
-//! [`PreparedPrompt`] channels into a single agent prompt (the host applies
-//! §3.1.1) with a trailing
-//! response-format instruction, launch a fresh headless `cursor-agent` scoped to
-//! the lent working tree, and parse its aggregated `.result` back into the
-//! validated answer the boundary returns. The agent owns its own tool loop and
-//! reads/writes the tree directly, so this backend uses the [`ToolHost`] only
-//! for its `local-path` face ([`ToolHost::local_path`], RFC-55) — the agent's
-//! `--workspace` — never its `read`/`list`/`write` (unlike genai). The runtime core's
-//! `complete` binding re-validates the answer (§3.1.3), so this backend only
-//! has to produce the parsed value.
+//! # Cursor Agent Backend
 
 use std::path::Path;
 use std::sync::Arc;
@@ -50,7 +38,6 @@ impl WasiModelCtx for Client {
             let result = extract_result(&stdout)?;
             let value = parse_result(&result, kind)?;
 
-            // no in-process tool loop
             Ok(Answer {
                 value,
                 transcript: None,
