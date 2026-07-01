@@ -21,7 +21,7 @@ unused_extern_crates = "warn"
 
 [workspace.lints.clippy]
 # https://doc.rust-lang.org/stable/clippy/index.html
-all = "warn"      # correctness, suspicious, style, complexity, perf
+all = "warn"  # correctness, suspicious, style, complexity, perf
 cargo = "warn"
 nursery = "warn"
 pedantic = "warn"
