@@ -17,9 +17,9 @@ MSRV: Rust 1.95
 
 ## Configuration
 
-| Variable       | Required | Default   | Description                                               |
-| -------------- | -------- | --------- | --------------------------------------------------------- |
-| `CURSOR_MODEL` | no       | `gpt-5.5` | Provider model id; genai routes to the provider by prefix |
+The provider model id is carried per-request (`request.model`); when a request
+leaves it unset the backend falls back to `gpt-5.5`. genai routes to the
+provider by the model id's prefix.
 
 Provider API keys are read by genai from the ambient environment
 (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …) and are never

@@ -8,8 +8,7 @@
 //! [`ToolHost`], and answer validation — against a real provider.
 //!
 //! It is skipped unless `OMNIA_GENAI_LIVE=1` is set (alongside a provider key
-//! such as `OPENAI_API_KEY` and an `CURSOR_MODEL`), so it never runs or touches
-//! the network in CI.
+//! such as `OPENAI_API_KEY`), so it never runs or touches the network in CI.
 
 use std::sync::Arc;
 
@@ -92,7 +91,7 @@ async fn live_genai_resolves() -> Result<()> {
     if std::env::var_os("OMNIA_GENAI_LIVE").is_none() {
         eprintln!(
             "skipping live genai run 2: set OMNIA_GENAI_LIVE=1 (plus a provider key such as \
-             OPENAI_API_KEY and CURSOR_MODEL) to exercise the resolve gate"
+             OPENAI_API_KEY) to exercise the resolve gate"
         );
         return Ok(());
     }
@@ -100,7 +99,7 @@ async fn live_genai_resolves() -> Result<()> {
     let client = Client::connect().await?;
     let prepared = PreparedRequest::try_from(resolve_request()).expect("assemble resolve request");
     let answer: Answer = client.complete(prepared, Arc::new(LiveShelf)).await.map_err(|e| {
-        anyhow::anyhow!("live genai completion failed (is CURSOR_MODEL/the API key valid?): {e}")
+        anyhow::anyhow!("live genai completion failed (is the API key valid?): {e}")
     })?;
 
     let transcript = answer.transcript.as_ref().expect("genai always records a transcript");

@@ -19,7 +19,7 @@ use crate::{CURSOR_AGENT_BIN, Client, mcp};
 const MAX_ATTEMPTS: usize = 3;
 const MAX_INLINE_SIZE: usize = 128_000;
 
-// A prompt-granted MCP server resolved to its deployment-configured endpoint.
+// A prompt-granted MCP server and the endpoint URL the guest supplied for it.
 struct McpServer {
     name: String,
     url: String,
@@ -45,10 +45,8 @@ impl WasiModelCtx for Client {
     fn complete(
         &self, prepared: PreparedRequest, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<Answer> {
-        let model = self.model.clone();
         let workspace = tool_host.local_path().or(self.workspace.as_deref()).map(Path::to_path_buf);
         let timeout = self.timeout;
-        let mcp_servers = Arc::clone(&self.mcp_servers);
 
         async move {
             let format = prepared.request.format.clone();
@@ -62,9 +60,9 @@ impl WasiModelCtx for Client {
                 .canonicalize()
                 .with_context(|| format!("workspace {}", workspace.display()))?;
 
-            // Per-prompt MCP grants select from the deployment-configured servers;
-            // no grant means no MCP wiring (MCP is opt-in per completion).
-            let selected = select_mcp_servers(&prepared.request, &mcp_servers)?;
+            // Per-prompt MCP grants carry their own endpoint URL; no grant means
+            // no MCP wiring (MCP is opt-in per completion).
+            let selected = select_mcp_servers(&prepared.request)?;
             let _mcp_guard = if selected.is_empty() {
                 None
             } else {
@@ -75,7 +73,7 @@ impl WasiModelCtx for Client {
             };
 
             let spawn = SpawnOptions {
-                model: model.as_deref(),
+                model: prepared.request.model.as_deref(),
                 workspace: &workspace,
                 timeout,
                 approve_mcps: !selected.is_empty(),
@@ -129,23 +127,18 @@ fn build_prompt(prepared: &PreparedRequest) -> String {
     parts.join("\n\n")
 }
 
-// Resolve the prompt's MCP grants against the deployment-configured servers,
-// erroring on a grant that names no configured server.
-fn select_mcp_servers(
-    request: &Request, configured: &HashMap<String, String>,
-) -> Result<Vec<McpServer>> {
+// Collect the prompt's MCP grants, each carrying its own endpoint URL. A grant
+// without a URL is an error: the backend has nowhere to point the spawned agent.
+fn select_mcp_servers(request: &Request) -> Result<Vec<McpServer>> {
     let mut selected = Vec::new();
     for tool in &request.tools {
         let Tool::Mcp(grant) = tool else { continue };
-        let url = configured.get(&grant.name).ok_or_else(|| {
-            anyhow!(
-                "request granted MCP server `{}`, but it is not configured (set CURSOR_MCP_SERVERS)",
-                grant.name
-            )
+        let url = grant.url.clone().ok_or_else(|| {
+            anyhow!("MCP grant `{}` has no url; the guest must supply one", grant.name)
         })?;
         selected.push(McpServer {
             name: grant.name.clone(),
-            url: url.clone(),
+            url,
             tools: grant.tools.clone(),
         });
     }

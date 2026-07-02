@@ -32,16 +32,22 @@ use crate::Client;
 /// loop terminates (the per-call budget invariant of the RFC).
 const MAX_TURNS: usize = 8;
 
+/// Provider model id used when the request leaves `model` unset. genai routes to
+/// the provider by the id's prefix (e.g. `gpt-…`, `claude-…`, `gemini-…`).
+const DEFAULT_MODEL: &str = "gpt-5.5";
+
 impl WasiModelCtx for Client {
     fn complete(
         &self, prepared: PreparedRequest, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<Answer> {
-        // Clone the swappable vendor handle + model id into the 'static future;
-        // the genai client is cheap to clone (an `Arc` inside).
+        // Clone the swappable vendor handle into the 'static future; the genai
+        // client is cheap to clone (an `Arc` inside).
         let client = self.inner.clone();
-        let model = Arc::clone(&self.model);
 
         async move {
+            // The model id is carried on the request; fall back to the backend
+            // default when the guest leaves it unset.
+            let model = prepared.request.model.clone().unwrap_or_else(|| DEFAULT_MODEL.to_owned());
             let format = prepared.request.format.clone();
             let mut chat = build_request(&prepared)?;
             let options = build_options(&prepared.request)?;

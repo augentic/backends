@@ -48,8 +48,7 @@ AZURE_CLIENT_SECRET=<client secret>
 
 ## What it does
 
-The example is self-contained -- it creates its own container and blobs during
-the run and cleans up afterwards. No manual data seeding is required.
+The example is self-contained -- it creates its own container and blobs during the run and cleans up afterwards. No manual data seeding is required.
 
 Operations exercised:
 

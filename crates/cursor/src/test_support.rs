@@ -1,6 +1,5 @@
 //! Unit-test helpers for the cursor backend crate.
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,9 +38,7 @@ impl ToolHost for NoopToolHost {
 /// Build a [`Client`] directly, bypassing `connect_with` (and its `PATH` check).
 pub fn client(workspace: Option<&Path>) -> Client {
     Client {
-        model: None,
         workspace: workspace.map(|path| Arc::from(path.to_path_buf())),
         timeout: Duration::from_secs(1),
-        mcp_servers: Arc::new(HashMap::new()),
     }
 }
