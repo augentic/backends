@@ -16,43 +16,6 @@ use omnia_wasi_blobstore::{
 
 use crate::Client;
 
-fn now_unix_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
-}
-
-/// Build download options with an HTTP `Range` header for partial reads.
-///
-/// Returns `Ok(None)` for full-object reads (the convention is `start=0, end=0`
-/// or `start=0, end=u64::MAX`). When `end` is `0` or `u64::MAX` but `start > 0`,
-/// an open-ended range (`bytes=start-`) is used.
-///
-/// Returns `Err` when `end` is a concrete (non-sentinel) value that is less than
-/// `start`, which would produce an invalid HTTP Range header.
-fn range_options(
-    start: u64, end: u64,
-) -> anyhow::Result<Option<BlobClientDownloadOptions<'static>>> {
-    if start == 0 && (end == 0 || end == u64::MAX) {
-        return Ok(None);
-    }
-
-    let unbounded = end == 0 || end == u64::MAX;
-
-    if !unbounded && end < start {
-        anyhow::bail!("invalid byte range: end ({end}) < start ({start})");
-    }
-
-    let range = if unbounded {
-        HttpRange::from_offset(start)
-    } else {
-        HttpRange::new(start, end - start + 1)
-    };
-
-    Ok(Some(BlobClientDownloadOptions {
-        range: Some(range),
-        ..Default::default()
-    }))
-}
-
 /// `wasi-blobstore` implementation backed by Azure Blob Storage.
 impl WasiBlobstoreCtx for Client {
     fn create_container(&self, name: String) -> FutureResult<Arc<dyn Container>> {
@@ -235,6 +198,36 @@ impl Container for AzureBlobContainer {
         }
         .boxed()
     }
+}
+
+fn now_unix_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+}
+
+// Download options with an HTTP `Range` header for partial reads.
+fn range_options(
+    start: u64, end: u64,
+) -> anyhow::Result<Option<BlobClientDownloadOptions<'static>>> {
+    if start == 0 && (end == 0 || end == u64::MAX) {
+        return Ok(None);
+    }
+
+    let unbounded = end == 0 || end == u64::MAX;
+
+    if !unbounded && end < start {
+        anyhow::bail!("invalid byte range: end ({end}) < start ({start})");
+    }
+
+    let range = if unbounded {
+        HttpRange::from_offset(start)
+    } else {
+        HttpRange::new(start, end - start + 1)
+    };
+
+    Ok(Some(BlobClientDownloadOptions {
+        range: Some(range),
+        ..Default::default()
+    }))
 }
 
 #[cfg(test)]
