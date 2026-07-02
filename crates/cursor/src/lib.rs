@@ -4,6 +4,9 @@
 mod mcp_json;
 mod model;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 use std::fmt::Debug;
 use std::path::Path;
 use std::sync::Arc;
@@ -26,6 +29,8 @@ pub struct Client {
     /// URL of an omnia-hosted MCP server to advertise to the spawned agent via
     /// `.cursor/mcp.json`, when configured.
     mcp_url: Option<Arc<str>>,
+    /// When true, run each spawn in an isolated git worktree (`--worktree`).
+    use_worktree: bool,
 }
 
 impl Backend for Client {
@@ -40,6 +45,7 @@ impl Backend for Client {
             workspace = options.workspace.as_deref().unwrap_or("<none>"),
             timeout_secs = options.timeout_secs,
             mcp_url = options.mcp_url.as_deref().unwrap_or("<none>"),
+            use_worktree = options.use_worktree,
             "configured cursor backend"
         );
 
@@ -48,6 +54,7 @@ impl Backend for Client {
             workspace: options.workspace.map(|w| Arc::from(Path::new(&w))),
             timeout: Duration::from_secs(options.timeout_secs),
             mcp_url: options.mcp_url.map(Arc::from),
+            use_worktree: options.use_worktree,
         })
     }
 }
@@ -92,6 +99,10 @@ mod config {
         /// through `.cursor/mcp.json`. Unset disables MCP wiring.
         #[env(from = "CURSOR_MCP_URL")]
         pub mcp_url: Option<String>,
+        /// Run each spawn in an isolated git worktree instead of editing the
+        /// lent tree directly (`cursor-agent --worktree`).
+        #[env(from = "CURSOR_USE_WORKTREE", default = "false")]
+        pub use_worktree: bool,
     }
 }
 pub use config::ConnectOptions;

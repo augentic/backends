@@ -24,6 +24,17 @@ use serde_json::{Map, Value, json};
 /// The server name written under `mcpServers` in `mcp.json`.
 const SERVER_NAME: &str = "omnia";
 
+/// Ensure `path` exists and return its canonical form for stable registry keys.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be created or canonicalized.
+pub fn prepare_workspace(path: &Path) -> Result<PathBuf> {
+    std::fs::create_dir_all(path)
+        .with_context(|| format!("creating workspace {}", path.display()))?;
+    path.canonicalize().with_context(|| format!("canonicalizing workspace {}", path.display()))
+}
+
 /// Per-workspace state protecting `.cursor/mcp.json` while guards are live.
 struct Entry {
     /// Number of live guards for this workspace.
@@ -57,7 +68,7 @@ impl McpConfigGuard {
     // concurrent install against the same workspace cannot race on the file.
     #[allow(clippy::significant_drop_tightening)]
     pub fn install(workspace: &Path, url: &str) -> Result<Self> {
-        let workspace = workspace.canonicalize().unwrap_or_else(|_| workspace.to_path_buf());
+        let workspace = prepare_workspace(workspace)?;
         let path = workspace.join(".cursor").join("mcp.json");
 
         let mut registry = REGISTRY.lock().unwrap_or_else(PoisonError::into_inner);

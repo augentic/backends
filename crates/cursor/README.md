@@ -8,9 +8,9 @@ Spawned-agent model backend for the Omnia WASI runtime, implementing the
 
 Each completion launches a fresh, context-free [`cursor-agent`](https://cursor.com/docs/cli/headless)
 session that owns its own tool loop and edits the lent working tree directly,
-then returns a validated answer through the same boundary as `omnia-genai`.
-string; the model id, the API key, and the agent protocol stay inside this
-crate.
+then returns a validated answer through the same boundary as `omnia-genai`. The
+guest only ever sees the validated answer string; the model id, the API key, and
+the agent protocol stay inside this crate.
 
 MSRV: Rust 1.95
 
@@ -27,7 +27,9 @@ captured, logged, or recorded into fixtures.
 | --------------------- | -------- | ---------------------- | --------------------------------------------------------------------------------------------------- |
 | `CURSOR_MODEL`        | no       | _cursor-agent default_ | Model id forwarded to `cursor-agent --model`; unset lets the agent choose                           |
 | `OMNIA_WORKSPACE`     | no       | _none_                 | Node-local working-tree path lent via `--workspace`; unset is the "no local tree" capability signal |
-| `CURSOR_TIMEOUT_SECS` | no       | `120`                  | Wall-clock bound on one `cursor-agent` spawn                                                        |
+| `CURSOR_TIMEOUT_SECS` | no       | `120`                  | Wall-clock bound on one `cursor-agent` spawn (orphaned processes are killed on timeout)             |
+| `CURSOR_MCP_URL`      | no       | _none_                 | URL of an omnia-hosted MCP server merged into `<workspace>/.cursor/mcp.json` for the spawn          |
+| `CURSOR_USE_WORKTREE` | no       | `false`                | When `true`, pass `--worktree` so edits land in an isolated git worktree instead of the lent tree   |
 
 `OMNIA_WORKSPACE` is a stopgap for the RFC-55 working-tree host's `local-path`
 face: until that host lands, the workspace is sourced from config rather than
