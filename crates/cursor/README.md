@@ -28,7 +28,7 @@ captured, logged, or recorded into fixtures.
 | `CURSOR_MODEL`        | no       | _cursor-agent default_ | Model id forwarded to `cursor-agent --model`; unset lets the agent choose                           |
 | `OMNIA_WORKSPACE`     | no       | _none_                 | Node-local working-tree path lent via `--workspace`; unset is the "no local tree" capability signal |
 | `CURSOR_TIMEOUT_SECS` | no       | `120`                  | Wall-clock bound on one `cursor-agent` spawn (orphaned processes are killed on timeout)             |
-| `CURSOR_MCP_URL`      | no       | _none_                 | URL of an omnia-hosted MCP server merged into `<workspace>/.cursor/mcp.json` for the spawn          |
+| `CURSOR_MCP_SERVERS`  | no       | _none_                 | JSON map of logical name → URL (e.g. `{"docs":"http://…"}`); a prompt's `mcp` grant selects servers by name, merged into `<workspace>/.cursor/mcp.json` for the spawn |
 | `CURSOR_USE_WORKTREE` | no       | `false`                | When `true`, pass `--worktree` so edits land in an isolated git worktree instead of the lent tree   |
 
 `OMNIA_WORKSPACE` is a stopgap for the RFC-55 working-tree host's `local-path`
@@ -49,7 +49,7 @@ let client = Client::connect_with(options).await?;
 
 ## End-to-end example
 
-The full guest + runtime demo lives in the [`omnia` repository](https://github.com/augentic/omnia) at [`examples/cursor`](https://github.com/augentic/omnia/tree/main/examples/cursor). It composes the `ask` guest (calls `complete`) with the `mcp` docs guest under one HTTP server.
+The full guest + runtime demo lives in the [`omnia` repository](https://github.com/augentic/omnia) at [`examples/cursor`](https://github.com/augentic/omnia/tree/main/examples/cursor). It composes the `ask` guest (calls `create`) with the `mcp` docs guest under one HTTP server.
 
 ## License
 

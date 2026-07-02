@@ -7,6 +7,7 @@ mod model;
 #[cfg(test)]
 pub(crate) mod test_support;
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -25,7 +26,9 @@ pub struct Client {
     model: Option<Arc<str>>,
     workspace: Option<Arc<Path>>,
     timeout: Duration,
-    mcp_url: Option<Arc<str>>,
+    /// Configured MCP servers, keyed by the logical name a prompt's `mcp` grant
+    /// selects. Deployment topology (Law 2): URLs live here, never in the guest.
+    mcp_servers: Arc<HashMap<String, String>>,
 }
 
 impl Backend for Client {
@@ -35,11 +38,17 @@ impl Backend for Client {
     async fn connect_with(options: Self::ConnectOptions) -> Result<Self> {
         assert_cursor().await?;
 
+        let mcp_servers = match options.mcp_servers {
+            Some(json) => serde_json::from_str::<HashMap<String, String>>(&json)
+                .context("CURSOR_MCP_SERVERS must be a JSON object mapping name to URL")?,
+            None => HashMap::new(),
+        };
+
         Ok(Self {
             model: options.model.map(Arc::from),
             workspace: options.workspace.map(|w| Arc::from(PathBuf::from(w))),
             timeout: Duration::from_secs(options.timeout_secs),
-            mcp_url: options.mcp_url.map(Arc::from),
+            mcp_servers: Arc::new(mcp_servers),
         })
     }
 }
@@ -78,10 +87,11 @@ mod config {
         /// Wall-clock bound (seconds) on one `cursor-agent` spawn.
         #[env(from = "CURSOR_TIMEOUT_SECS", default = "120")]
         pub timeout_secs: u64,
-        /// URL of an omnia-hosted MCP server to advertise to the spawned agent
-        /// through `.cursor/mcp.json`. Unset disables MCP wiring.
-        #[env(from = "CURSOR_MCP_URL")]
-        pub mcp_url: Option<String>,
+        /// JSON object mapping logical MCP server names to endpoint URLs, e.g.
+        /// `{"docs":"http://127.0.0.1:8080/mcp/docs"}`. A prompt's `mcp` tool
+        /// grant selects servers by name; unset disables MCP wiring.
+        #[env(from = "CURSOR_MCP_SERVERS")]
+        pub mcp_servers: Option<String>,
     }
 }
 pub use config::ConnectOptions;

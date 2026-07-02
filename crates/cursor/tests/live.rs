@@ -18,15 +18,14 @@ use anyhow::Result;
 use omnia::Backend as _;
 use omnia_cursor::{Client, ConnectOptions};
 use omnia_wasi_model::{
-    Answer, Format, JsonSchemaSpec, PreparedPrompt, Prompt, ResponseFormat, Sections, ToolGrants,
-    WasiModelCtx,
+    Answer, Format, Grants, Mcp, PreparedRequest, Request, Schema, Sections, Tool, WasiModelCtx,
 };
 use serde_json::json;
 use support::{SENTINEL, noop_tool_host, serve};
 use tokio::net::TcpListener;
 
-fn verdict_prompt() -> Prompt {
-    Prompt {
+fn verdict_request() -> Request {
+    Request {
         model: None,
         system: Some(
             "You are a terse judge. Decide whether the candidate passes and reply with the \
@@ -45,27 +44,24 @@ fn verdict_prompt() -> Prompt {
             variables: vec![],
         }),
         generation: None,
-        response_format: ResponseFormat {
-            kind: Format::JsonSchema,
-            json_schema: Some(JsonSchemaSpec {
-                name: "verdict".to_owned(),
-                schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "verdict": { "type": "string", "enum": ["pass", "fail"] },
-                        "reason": { "type": "string" },
-                    },
-                    "required": ["verdict", "reason"],
-                    "additionalProperties": false,
-                })
-                .to_string(),
-                strict: Some(true),
-            }),
-        },
+        format: Format::Schema(Schema {
+            name: "verdict".to_owned(),
+            schema: json!({
+                "type": "object",
+                "properties": {
+                    "verdict": { "type": "string", "enum": ["pass", "fail"] },
+                    "reason": { "type": "string" },
+                },
+                "required": ["verdict", "reason"],
+                "additionalProperties": false,
+            })
+            .to_string(),
+            strict: Some(true),
+        }),
         tools: vec![],
         tool_choice: None,
         metadata: vec![],
-        grants: ToolGrants {
+        grants: Grants {
             references: None,
             workspace: None,
             verify: vec![],
@@ -94,12 +90,12 @@ async fn live_cursor_completes() -> Result<()> {
         model: std::env::var("CURSOR_MODEL").ok(),
         workspace: Some(workspace.to_string_lossy().into_owned()),
         timeout_secs: 300,
-        mcp_url: None,
+        mcp_servers: None,
     })
     .await?;
 
-    let request = PreparedPrompt::try_from(verdict_prompt()).expect("assemble verdict prompt");
-    let answer: Answer = client.complete(request, noop_tool_host()).await.map_err(|e| {
+    let prepared = PreparedRequest::try_from(verdict_request()).expect("assemble verdict request");
+    let answer: Answer = client.complete(prepared, noop_tool_host()).await.map_err(|e| {
         anyhow::anyhow!(
             "live cursor completion failed (is cursor-agent installed and authed?): {e}"
         )
@@ -115,8 +111,8 @@ async fn live_cursor_completes() -> Result<()> {
     Ok(())
 }
 
-fn secret_prompt() -> Prompt {
-    Prompt {
+fn secret_request() -> Request {
+    Request {
         model: None,
         system: Some("Answer only from tools. Do not guess or fabricate values.".to_owned()),
         messages: vec![],
@@ -131,24 +127,26 @@ fn secret_prompt() -> Prompt {
             variables: vec![],
         }),
         generation: None,
-        response_format: ResponseFormat {
-            kind: Format::JsonSchema,
-            json_schema: Some(JsonSchemaSpec {
-                name: "secret".to_owned(),
-                schema: json!({
-                    "type": "object",
-                    "properties": { "secret": { "type": "string" } },
-                    "required": ["secret"],
-                    "additionalProperties": false,
-                })
-                .to_string(),
-                strict: Some(true),
-            }),
-        },
-        tools: vec![],
+        format: Format::Schema(Schema {
+            name: "secret".to_owned(),
+            schema: json!({
+                "type": "object",
+                "properties": { "secret": { "type": "string" } },
+                "required": ["secret"],
+                "additionalProperties": false,
+            })
+            .to_string(),
+            strict: Some(true),
+        }),
+        // Grant the `omnia` MCP server the deployment maps to a URL; the backend
+        // resolves the name and wires the spawned agent to it.
+        tools: vec![Tool::Mcp(Mcp {
+            name: "omnia".to_owned(),
+            tools: vec![],
+        })],
         tool_choice: None,
         metadata: vec![],
-        grants: ToolGrants {
+        grants: Grants {
             references: None,
             workspace: None,
             verify: vec![],
@@ -178,13 +176,13 @@ async fn live_cursor_uses_mcp() -> Result<()> {
         model: std::env::var("CURSOR_MODEL").ok(),
         workspace: Some(workspace.to_string_lossy().into_owned()),
         timeout_secs: 300,
-        mcp_url: Some(format!("http://127.0.0.1:{port}/mcp")),
+        mcp_servers: Some(format!("{{\"omnia\":\"http://127.0.0.1:{port}/mcp\"}}")),
     })
     .await?;
 
-    let request = PreparedPrompt::try_from(secret_prompt()).expect("assemble secret prompt");
+    let prepared = PreparedRequest::try_from(secret_request()).expect("assemble secret request");
     let answer: Answer = client
-        .complete(request, noop_tool_host())
+        .complete(prepared, noop_tool_host())
         .await
         .map_err(|e| anyhow::anyhow!("live cursor MCP completion failed: {e}"))?;
 

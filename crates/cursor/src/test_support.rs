@@ -1,5 +1,6 @@
 //! Unit-test helpers for the cursor backend crate.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,6 +42,6 @@ pub fn client(workspace: Option<&Path>) -> Client {
         model: None,
         workspace: workspace.map(|path| Arc::from(path.to_path_buf())),
         timeout: Duration::from_secs(1),
-        mcp_url: None,
+        mcp_servers: Arc::new(HashMap::new()),
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -8,25 +8,29 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use futures::FutureExt as _;
 use omnia_wasi_model::{
-    Answer, Format, FutureResult, PreparedPrompt, ResponseFormat, ToolHost, ToolTurn, Transcript,
-    WasiModelCtx,
+    Answer, Format, FutureResult, PreparedRequest, Request, Role, Tool, ToolHost, ToolTurn,
+    Transcript, WasiModelCtx,
 };
 use serde_json::Value;
 use tokio::process::Command;
 
 use crate::{CURSOR_AGENT_BIN, Client, mcp};
 
-const MCP_PROMPT_HINT: &str = "A read-only MCP server named `omnia` is available. Consult its \
-    tools and resources for authoritative reference material before answering, and prefer that \
-    material over assumptions.";
 const MAX_ATTEMPTS: usize = 3;
 const MAX_INLINE_SIZE: usize = 128_000;
+
+// A prompt-granted MCP server resolved to its deployment-configured endpoint.
+struct McpServer {
+    name: String,
+    url: String,
+    tools: Vec<String>,
+}
 
 struct SpawnOptions<'a> {
     model: Option<&'a str>,
     workspace: &'a Path,
     timeout: Duration,
-    mcp_url: Option<&'a str>,
+    approve_mcps: bool,
 }
 
 #[derive(Debug)]
@@ -39,16 +43,16 @@ static PROMPT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, request: PreparedPrompt, tool_host: Arc<dyn ToolHost>,
+        &self, prepared: PreparedRequest, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<Answer> {
         let model = self.model.clone();
         let workspace = tool_host.local_path().or(self.workspace.as_deref()).map(Path::to_path_buf);
         let timeout = self.timeout;
-        let mcp_url = self.mcp_url.clone();
+        let mcp_servers = Arc::clone(&self.mcp_servers);
 
         async move {
-            let kind = request.prompt.response_format.kind;
-            let mut prompt = build_prompt(&request);
+            let format = prepared.request.format.clone();
+            let mut prompt = build_prompt(&prepared);
 
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
@@ -58,19 +62,23 @@ impl WasiModelCtx for Client {
                 .canonicalize()
                 .with_context(|| format!("workspace {}", workspace.display()))?;
 
-            let _mcp_guard = match mcp_url.as_deref() {
-                Some(url) => {
-                    prompt = format!("{MCP_PROMPT_HINT}\n\n{prompt}");
-                    Some(mcp::McpGuard::install(&workspace, url)?)
-                }
-                None => None,
+            // Per-prompt MCP grants select from the deployment-configured servers;
+            // no grant means no MCP wiring (MCP is opt-in per completion).
+            let selected = select_mcp_servers(&prepared.request, &mcp_servers)?;
+            let _mcp_guard = if selected.is_empty() {
+                None
+            } else {
+                prompt = format!("{}\n\n{prompt}", mcp_hint(&selected));
+                let map: BTreeMap<String, String> =
+                    selected.iter().map(|s| (s.name.clone(), s.url.clone())).collect();
+                Some(mcp::McpGuard::install(&workspace, &map)?)
             };
 
             let spawn = SpawnOptions {
                 model: model.as_deref(),
                 workspace: &workspace,
                 timeout,
-                mcp_url: mcp_url.as_deref(),
+                approve_mcps: !selected.is_empty(),
             };
 
             for attempt in 1..=MAX_ATTEMPTS {
@@ -78,12 +86,12 @@ impl WasiModelCtx for Client {
                 let AgentOutput { result, transcript } = parse_output(&stdout)?;
                 let last = attempt == MAX_ATTEMPTS;
 
-                match parse_result(&result, kind) {
-                    Ok(value) => match check_answer(&value, kind) {
+                match parse_result(&result, &format) {
+                    Ok(value) => match check_answer(&value, &format) {
                         // a value of the wrong shape is better than no answer
                         // on the last attempt
-                        Ok(()) => return Ok(Answer { value, transcript }),
-                        Err(_) if last => return Ok(Answer { value, transcript }),
+                        Ok(()) => return Ok(Answer { value, usage: None, transcript }),
+                        Err(_) if last => return Ok(Answer { value, usage: None, transcript }),
                         Err(reason) => {
                             prompt = append_repair(&prompt, &result, &reason);
                         }
@@ -105,20 +113,62 @@ impl WasiModelCtx for Client {
     }
 }
 
-fn build_prompt(request: &PreparedPrompt) -> String {
+fn build_prompt(prepared: &PreparedRequest) -> String {
     let mut parts: Vec<String> = Vec::new();
-    if let Some(system) = &request.system {
+    if let Some(system) = &prepared.system {
         parts.push(system.clone());
     }
-    for message in &request.messages {
-        if message.role == "user" {
-            parts.push(message.content.clone());
-        } else {
-            parts.push(format!("[{}]\n{}", message.role, message.content));
+    for message in &prepared.messages {
+        match message.role {
+            Role::User => parts.push(message.content.clone()),
+            Role::System => parts.push(format!("[system]\n{}", message.content)),
+            Role::Assistant => parts.push(format!("[assistant]\n{}", message.content)),
         }
     }
-    parts.push(answer_instruction(&request.prompt.response_format));
+    parts.push(answer_instruction(&prepared.request.format));
     parts.join("\n\n")
+}
+
+// Resolve the prompt's MCP grants against the deployment-configured servers,
+// erroring on a grant that names no configured server.
+fn select_mcp_servers(
+    request: &Request, configured: &HashMap<String, String>,
+) -> Result<Vec<McpServer>> {
+    let mut selected = Vec::new();
+    for tool in &request.tools {
+        let Tool::Mcp(grant) = tool else { continue };
+        let url = configured.get(&grant.name).ok_or_else(|| {
+            anyhow!(
+                "request granted MCP server `{}`, but it is not configured (set CURSOR_MCP_SERVERS)",
+                grant.name
+            )
+        })?;
+        selected.push(McpServer {
+            name: grant.name.clone(),
+            url: url.clone(),
+            tools: grant.tools.clone(),
+        });
+    }
+    Ok(selected)
+}
+
+// A natural-language hint naming the granted MCP servers and any tool allowlist,
+// prepended so the spawned agent prefers them over assumptions.
+fn mcp_hint(servers: &[McpServer]) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    for server in servers {
+        if server.tools.is_empty() {
+            lines.push(format!("- `{}`", server.name));
+        } else {
+            lines.push(format!("- `{}` (use only: {})", server.name, server.tools.join(", ")));
+        }
+    }
+    format!(
+        "The following read-only MCP servers are available. Consult their tools and resources for \
+         authoritative reference material before answering, and prefer that material over \
+         assumptions:\n{}",
+        lines.join("\n")
+    )
 }
 
 async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>> {
@@ -141,7 +191,7 @@ async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>
         .arg("stream-json")
         .arg("--workspace")
         .arg(options.workspace);
-    if options.mcp_url.is_some() {
+    if options.approve_mcps {
         cmd.arg("--approve-mcps");
     }
     if let Some(model) = options.model {
@@ -200,23 +250,14 @@ fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, Option<Pr
     Ok((arg, Some(PromptFile { path })))
 }
 
-fn answer_instruction(response_format: &ResponseFormat) -> String {
-    match response_format.kind {
-        Format::JsonSchema => response_format.json_schema.as_ref().map_or_else(
-            || {
-                "When you are done, reply with only your final answer as a single JSON value and \
-                 nothing else."
-                    .to_owned()
-            },
-            |spec| {
-                format!(
-                    "When you are done, reply with only your final answer as a single JSON value \
-                     conforming to this JSON Schema, and nothing else:\n{}",
-                    spec.schema
-                )
-            },
+fn answer_instruction(format: &Format) -> String {
+    match format {
+        Format::Schema(spec) => format!(
+            "When you are done, reply with only your final answer as a single JSON value \
+             conforming to this JSON Schema, and nothing else:\n{}",
+            spec.schema
         ),
-        Format::JsonObject => "When you are done, reply with only your final answer as \
+        Format::Json => "When you are done, reply with only your final answer as \
              a single JSON object and nothing else."
             .to_owned(),
         Format::Text => {
@@ -234,10 +275,10 @@ fn append_repair(prompt: &str, answer: &str, reason: &str) -> String {
     )
 }
 
-fn check_answer(value: &Value, kind: Format) -> Result<(), String> {
-    match kind {
+fn check_answer(value: &Value, format: &Format) -> Result<(), String> {
+    match format {
         Format::Text if !value.is_string() => Err("answer is not a JSON string".to_owned()),
-        Format::JsonObject if !value.is_object() => Err("answer is not a JSON object".to_owned()),
+        Format::Json if !value.is_object() => Err("answer is not a JSON object".to_owned()),
         _ => Ok(()),
     }
 }
@@ -353,10 +394,10 @@ fn tool_call_result(tool_call: &Value) -> Option<Value> {
     None
 }
 
-fn parse_result(result: &str, kind: Format) -> Result<Value, String> {
-    match kind {
+fn parse_result(result: &str, format: &Format) -> Result<Value, String> {
+    match format {
         Format::Text => Ok(Value::String(result.to_owned())),
-        Format::JsonObject | Format::JsonSchema => {
+        Format::Json | Format::Schema(_) => {
             let json = strip_code_fence(result);
             serde_json::from_str::<Value>(json)
                 .map_err(|error| format!("cursor-agent answer was not valid JSON: {error}"))
@@ -379,7 +420,7 @@ mod tests {
     use std::sync::Arc;
 
     use omnia_wasi_model::{
-        Format, PreparedPrompt, Prompt, ResponseFormat, Sections, ToolGrants, WasiModelCtx,
+        Format, Grants, PreparedRequest, Request, Schema, Sections, WasiModelCtx,
     };
     use serde_json::json;
 
@@ -388,8 +429,8 @@ mod tests {
     };
     use crate::test_support::{NoopToolHost, client};
 
-    fn schema_prompt() -> Prompt {
-        Prompt {
+    fn schema_request() -> Request {
+        Request {
             model: None,
             system: None,
             messages: vec![],
@@ -402,23 +443,20 @@ mod tests {
                 variables: vec![],
             }),
             generation: None,
-            response_format: ResponseFormat {
-                kind: Format::JsonSchema,
-                json_schema: Some(omnia_wasi_model::JsonSchemaSpec {
-                    name: "verdict".to_owned(),
-                    schema: json!({
-                        "type": "object",
-                        "properties": { "verdict": { "type": "string" } },
-                        "required": ["verdict"],
-                    })
-                    .to_string(),
-                    strict: Some(true),
-                }),
-            },
+            format: Format::Schema(Schema {
+                name: "verdict".to_owned(),
+                schema: json!({
+                    "type": "object",
+                    "properties": { "verdict": { "type": "string" } },
+                    "required": ["verdict"],
+                })
+                .to_string(),
+                strict: Some(true),
+            }),
             tools: vec![],
             tool_choice: None,
             metadata: vec![],
-            grants: ToolGrants {
+            grants: Grants {
                 references: None,
                 workspace: None,
                 verify: vec![],
@@ -430,7 +468,7 @@ mod tests {
     async fn no_local_tree() {
         let err = client(None)
             .complete(
-                PreparedPrompt::try_from(schema_prompt()).expect("try_from"),
+                PreparedRequest::try_from(schema_request()).expect("try_from"),
                 Arc::new(NoopToolHost),
             )
             .await
@@ -440,19 +478,27 @@ mod tests {
 
     #[test]
     fn agent_prompt() {
-        let request = PreparedPrompt::try_from(schema_prompt()).expect("try_from");
-        let text = build_prompt(&request);
+        let prepared = PreparedRequest::try_from(schema_request()).expect("try_from");
+        let text = build_prompt(&prepared);
         assert!(text.contains("a terse judge"), "missing system channel: {text}");
         assert!(text.contains("decide pass or fail"), "missing user channel: {text}");
         assert!(text.contains("JSON Schema"), "missing schema instruction: {text}");
         assert!(text.contains("\"verdict\""), "missing schema body: {text}");
     }
 
+    fn verdict_schema() -> Format {
+        Format::Schema(Schema {
+            name: "verdict".to_owned(),
+            schema: "{\"type\":\"object\"}".to_owned(),
+            strict: None,
+        })
+    }
+
     #[test]
     fn parse_json() {
-        assert_eq!(parse_result("hello", Format::Text).unwrap(), json!("hello"));
+        assert_eq!(parse_result("hello", &Format::Text).unwrap(), json!("hello"));
         assert_eq!(
-            parse_result(r#"{"verdict":"pass"}"#, Format::JsonObject).unwrap(),
+            parse_result(r#"{"verdict":"pass"}"#, &Format::Json).unwrap(),
             json!({ "verdict": "pass" })
         );
     }
@@ -460,12 +506,12 @@ mod tests {
     #[test]
     fn parse_code_fence() {
         let fenced = "```json\n{\"verdict\":\"pass\"}\n```";
-        assert_eq!(parse_result(fenced, Format::JsonSchema).unwrap(), json!({ "verdict": "pass" }));
+        assert_eq!(parse_result(fenced, &verdict_schema()).unwrap(), json!({ "verdict": "pass" }));
     }
 
     #[test]
     fn parse_non_json() {
-        let err = parse_result("not json", Format::JsonObject).unwrap_err();
+        let err = parse_result("not json", &Format::Json).unwrap_err();
         assert!(err.contains("not valid JSON"), "unexpected: {err}");
     }
 
