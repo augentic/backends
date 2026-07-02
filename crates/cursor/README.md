@@ -47,6 +47,10 @@ let options = omnia_cursor::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## End-to-end example
+
+The full guest + runtime demo lives in the [`omnia` repository](https://github.com/augentic/omnia) at [`examples/cursor`](https://github.com/augentic/omnia/tree/main/examples/cursor). It composes the `ask` guest (calls `complete`) with the `mcp` docs guest under one HTTP server.
+
 ## License
 
 MIT OR Apache-2.0

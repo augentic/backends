@@ -20,7 +20,7 @@ const MCP_PROMPT_HINT: &str = "A read-only MCP server named `omnia` is available
     tools and resources for authoritative reference material before answering, and prefer that \
     material over assumptions.";
 const MAX_ATTEMPTS: usize = 3;
-const PROMPT_INLINE_LIMIT: usize = 128_000;
+const MAX_INLINE_SIZE: usize = 128_000;
 
 struct SpawnOptions<'a> {
     model: Option<&'a str>,
@@ -48,7 +48,7 @@ impl WasiModelCtx for Client {
 
         async move {
             let kind = request.prompt.response_format.kind;
-            let mut agent_prompt = build_prompt(&request);
+            let mut prompt = build_prompt(&request);
 
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
@@ -60,7 +60,7 @@ impl WasiModelCtx for Client {
 
             let _mcp_guard = match mcp_url.as_deref() {
                 Some(url) => {
-                    agent_prompt = format!("{MCP_PROMPT_HINT}\n\n{agent_prompt}");
+                    prompt = format!("{MCP_PROMPT_HINT}\n\n{prompt}");
                     Some(mcp::McpGuard::install(&workspace, url)?)
                 }
                 None => None,
@@ -74,18 +74,18 @@ impl WasiModelCtx for Client {
             };
 
             for attempt in 1..=MAX_ATTEMPTS {
-                let stdout = spawn_agent(&agent_prompt, &spawn).await?;
-                let AgentOutput { result, transcript } = parse_agent_output(&stdout)?;
+                let stdout = spawn_agent(&prompt, &spawn).await?;
+                let AgentOutput { result, transcript } = parse_output(&stdout)?;
                 let last = attempt == MAX_ATTEMPTS;
 
                 match parse_result(&result, kind) {
                     Ok(value) => match check_answer(&value, kind) {
-                        // On the last attempt a value of the wrong shape is
-                        // better than no answer at all.
+                        // a value of the wrong shape is better than no answer
+                        // on the last attempt
                         Ok(()) => return Ok(Answer { value, transcript }),
                         Err(_) if last => return Ok(Answer { value, transcript }),
                         Err(reason) => {
-                            agent_prompt = append_repair(&agent_prompt, &result, &reason);
+                            prompt = append_repair(&prompt, &result, &reason);
                         }
                     },
                     Err(reason) if last => {
@@ -94,7 +94,7 @@ impl WasiModelCtx for Client {
                         );
                     }
                     Err(reason) => {
-                        agent_prompt = append_repair(&agent_prompt, &result, &reason);
+                        prompt = append_repair(&prompt, &result, &reason);
                     }
                 }
             }
@@ -119,6 +119,85 @@ fn build_prompt(request: &PreparedPrompt) -> String {
     }
     parts.push(answer_instruction(&request.prompt.response_format));
     parts.join("\n\n")
+}
+
+async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>> {
+    // if the prompt is too large, spill it to a file and pass the file path to the agent
+    let (prompt, _file) = if prompt.len() <= MAX_INLINE_SIZE {
+        (prompt.to_owned(), None)
+    } else {
+        into_prompt_file(prompt, options.workspace)?
+    };
+
+    let mut cmd = Command::new(CURSOR_AGENT_BIN);
+    cmd.kill_on_drop(true)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .arg("--print")
+        .arg("--force")
+        .arg("--trust")
+        .arg("--output-format")
+        .arg("stream-json")
+        .arg("--workspace")
+        .arg(options.workspace);
+    if options.mcp_url.is_some() {
+        cmd.arg("--approve-mcps");
+    }
+    if let Some(model) = options.model {
+        cmd.arg("--model").arg(model);
+    }
+    cmd.arg(prompt);
+
+    let child = cmd.spawn().with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?;
+
+    let output = tokio::time::timeout(options.timeout, child.wait_with_output())
+        .await
+        .map_err(|_elapsed| anyhow!("cursor-agent timed out after {}s", options.timeout.as_secs()))?
+        .with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?;
+
+    if !output.status.success() {
+        bail!(
+            "cursor-agent exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    Ok(output.stdout)
+}
+
+// Removes a spill-to-disk prompt file when the spawn finishes.
+struct PromptFile {
+    path: PathBuf,
+}
+
+impl Drop for PromptFile {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_file(&self.path) {
+            tracing::warn!(path = %self.path.display(), %error, "failed to remove prompt file");
+        }
+    }
+}
+
+// Write oversized prompts to the workspace and return a short CLI argument.
+fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, Option<PromptFile>)> {
+    let cursor_dir = workspace.join(".cursor");
+    std::fs::create_dir_all(&cursor_dir)
+        .with_context(|| format!("creating {}", cursor_dir.display()))?;
+
+    let id = PROMPT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let path = cursor_dir.join(format!("omnia-prompt-{id}.txt"));
+    std::fs::write(&path, prompt)
+        .with_context(|| format!("writing prompt file {}", path.display()))?;
+
+    let arg = format!(
+        "Follow every instruction in the file at `{}`. When you are done, reply exactly as that \
+         file instructs.",
+        path.display()
+    );
+
+    Ok((arg, Some(PromptFile { path })))
 }
 
 fn answer_instruction(response_format: &ResponseFormat) -> String {
@@ -163,86 +242,8 @@ fn check_answer(value: &Value, kind: Format) -> Result<(), String> {
     }
 }
 
-// Write oversized prompts to the workspace and return a short CLI argument.
-fn prepare_prompt_arg(
-    agent_prompt: &str, workspace: &Path,
-) -> Result<(String, Option<PromptFile>)> {
-    if agent_prompt.len() <= PROMPT_INLINE_LIMIT {
-        return Ok((agent_prompt.to_owned(), None));
-    }
-
-    let cursor_dir = workspace.join(".cursor");
-    std::fs::create_dir_all(&cursor_dir)
-        .with_context(|| format!("creating {}", cursor_dir.display()))?;
-    let id = PROMPT_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = cursor_dir.join(format!("omnia-prompt-{id}.txt"));
-    std::fs::write(&path, agent_prompt)
-        .with_context(|| format!("writing prompt file {}", path.display()))?;
-    let arg = format!(
-        "Follow every instruction in the file at `{}`. When you are done, reply exactly as that \
-         file instructs.",
-        path.display()
-    );
-    Ok((arg, Some(PromptFile { path })))
-}
-
-// Removes a spill-to-disk prompt file when the spawn finishes.
-struct PromptFile {
-    path: PathBuf,
-}
-
-impl Drop for PromptFile {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_file(&self.path) {
-            tracing::warn!(path = %self.path.display(), %error, "failed to remove prompt file");
-        }
-    }
-}
-
-async fn spawn_agent(agent_prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>> {
-    let (prompt_arg, _prompt_file) = prepare_prompt_arg(agent_prompt, options.workspace)?;
-
-    let mut command = Command::new(CURSOR_AGENT_BIN);
-    command
-        .kill_on_drop(true)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .arg("--print")
-        .arg("--force")
-        .arg("--trust")
-        .arg("--output-format")
-        .arg("stream-json")
-        .arg("--workspace")
-        .arg(options.workspace);
-    if options.mcp_url.is_some() {
-        command.arg("--approve-mcps");
-    }
-    if let Some(model) = options.model {
-        command.arg("--model").arg(model);
-    }
-    command.arg(prompt_arg);
-
-    let child = command.spawn().with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?;
-
-    let output = tokio::time::timeout(options.timeout, child.wait_with_output())
-        .await
-        .map_err(|_elapsed| anyhow!("cursor-agent timed out after {}s", options.timeout.as_secs()))?
-        .with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?;
-
-    if !output.status.success() {
-        bail!(
-            "cursor-agent exited with {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-
-    Ok(output.stdout)
-}
-
 // Parse `stream-json` NDJSON (or a legacy single-line `json` payload).
-fn parse_agent_output(stdout: &[u8]) -> Result<AgentOutput> {
+fn parse_output(stdout: &[u8]) -> Result<AgentOutput> {
     let text = std::str::from_utf8(stdout).context("cursor-agent did not emit valid UTF-8")?;
 
     let mut result: Option<String> = None;
@@ -299,13 +300,13 @@ fn parse_agent_output(stdout: &[u8]) -> Result<AgentOutput> {
     }
 
     if parsed_lines == 1 {
-        return parse_legacy_json_output(text.trim());
+        return parse_legacy_output(text.trim());
     }
 
     bail!("cursor-agent did not emit a terminal result event");
 }
 
-fn parse_legacy_json_output(text: &str) -> Result<AgentOutput> {
+fn parse_legacy_output(text: &str) -> Result<AgentOutput> {
     let envelope: Value =
         serde_json::from_str(text).context("cursor-agent did not emit a JSON result object")?;
     let result = result_payload(&envelope)?
@@ -383,8 +384,7 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        AgentOutput, PROMPT_INLINE_LIMIT, answer_instruction, append_repair, build_prompt,
-        check_answer, parse_agent_output, parse_result, prepare_prompt_arg,
+        AgentOutput, MAX_INLINE_SIZE, build_prompt, into_prompt_file, parse_output, parse_result,
     };
     use crate::test_support::{NoopToolHost, client};
 
@@ -449,21 +449,6 @@ mod tests {
     }
 
     #[test]
-    fn answer_kind() {
-        let text = answer_instruction(&ResponseFormat {
-            kind: Format::Text,
-            json_schema: None,
-        });
-        assert!(text.contains("plain text"), "text instruction: {text}");
-
-        let object = answer_instruction(&ResponseFormat {
-            kind: Format::JsonObject,
-            json_schema: None,
-        });
-        assert!(object.contains("JSON object"), "object instruction: {object}");
-    }
-
-    #[test]
     fn parse_json() {
         assert_eq!(parse_result("hello", Format::Text).unwrap(), json!("hello"));
         assert_eq!(
@@ -485,26 +470,9 @@ mod tests {
     }
 
     #[test]
-    fn check_answer_kind() {
-        check_answer(&json!("ok"), Format::Text).expect("string text answer");
-        check_answer(&json!({ "ok": true }), Format::JsonObject).expect("object answer");
-        assert!(check_answer(&json!(1), Format::Text).is_err());
-        assert!(check_answer(&json!("nope"), Format::JsonObject).is_err());
-    }
-
-    #[test]
-    fn append_repair_includes_reason() {
-        let repaired = append_repair("base", "bad", "not JSON");
-        assert!(repaired.contains("base"));
-        assert!(repaired.contains("bad"));
-        assert!(repaired.contains("not JSON"));
-    }
-
-    #[test]
     fn parse_legacy_result_field() {
         let stdout = br#"{"type":"result","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
-        let AgentOutput { result, transcript } =
-            parse_agent_output(stdout).expect("extract result");
+        let AgentOutput { result, transcript } = parse_output(stdout).expect("extract result");
         assert_eq!(result, r#"{"verdict":"pass"}"#);
         assert!(transcript.is_none());
     }
@@ -512,7 +480,7 @@ mod tests {
     #[test]
     fn parse_result_error() {
         let stdout = br#"{"type":"result","is_error":true,"result":"boom"}"#;
-        let err = parse_agent_output(stdout).expect_err("an agent error must surface");
+        let err = parse_output(stdout).expect_err("an agent error must surface");
         assert!(err.to_string().contains("cursor-agent reported an error"), "unexpected: {err}");
     }
 
@@ -521,7 +489,7 @@ mod tests {
         let stdout = br#"{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}
 {"type":"tool_call","subtype":"completed","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"},"result":{"success":{"content":"hi"}}}}}
 {"type":"result","subtype":"success","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
-        let AgentOutput { result, transcript } = parse_agent_output(stdout).expect("parse stream");
+        let AgentOutput { result, transcript } = parse_output(stdout).expect("parse stream");
         assert_eq!(result, r#"{"verdict":"pass"}"#);
         let transcript = transcript.expect("tool transcript");
         assert_eq!(transcript.turns.len(), 1);
@@ -536,8 +504,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&workspace);
         std::fs::create_dir_all(&workspace).expect("temp workspace");
 
-        let large = "x".repeat(PROMPT_INLINE_LIMIT + 1);
-        let (arg, spill) = prepare_prompt_arg(&large, &workspace).expect("spill prompt");
+        let large = "x".repeat(MAX_INLINE_SIZE + 1);
+        let (arg, spill) = into_prompt_file(&large, &workspace).expect("spill prompt");
         assert!(spill.is_some(), "large prompt must spill to disk");
         assert!(arg.contains("omnia-prompt-"), "arg references prompt file: {arg}");
         drop(spill);

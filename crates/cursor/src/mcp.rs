@@ -21,7 +21,6 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 use anyhow::{Context as _, Result};
 use serde_json::{Map, Value, json};
 
-// Registry of workspaces whose `mcp.json` the backend has patched.
 static REGISTRY: LazyLock<Mutex<HashMap<PathBuf, Entry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -30,7 +29,6 @@ struct Entry {
     original: Option<Vec<u8>>,
 }
 
-// A guard to keep the MCP server in `<workspace>/.cursor/mcp.json` while held.
 pub struct McpGuard {
     workspace: PathBuf,
     path: PathBuf,

@@ -25,7 +25,6 @@ pub struct Client {
     model: Option<Arc<str>>,
     workspace: Option<Arc<Path>>,
     timeout: Duration,
-    // URL of an MCP server for the cursor-agent to use via `.cursor/mcp.json`.
     mcp_url: Option<Arc<str>>,
 }
 
