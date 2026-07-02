@@ -25,28 +25,19 @@ use serde_json::{Map, Value, json};
 static REGISTRY: LazyLock<Mutex<HashMap<PathBuf, Entry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Per-workspace state protecting `.cursor/mcp.json` while guards are live.
 struct Entry {
-    /// Number of live guards for this workspace.
     refcount: usize,
-    /// Original file bytes to restore, or `None` if there was no file.
     original: Option<Vec<u8>>,
 }
 
-// An RAII guard that keeps `<workspace>/.cursor/mcp.json` advertising the omnia
-// MCP server while held, restoring the prior state when the last guard for the
-// workspace drops.
+// A guard to keep the MCP server in `<workspace>/.cursor/mcp.json` while held.
 pub struct McpGuard {
-    // Canonical workspace path; the registry key.
     workspace: PathBuf,
-    // The `.cursor/mcp.json` path under `workspace`.
     path: PathBuf,
 }
 
 impl McpGuard {
     // Merge the omnia MCP server at `url` into `<workspace>/.cursor/mcp.json`.
-    //
-    // `workspace` must already exist and be canonical.
     #[allow(clippy::significant_drop_tightening)]
     pub fn install(workspace: &Path, url: &str) -> Result<Self> {
         let workspace = workspace.to_path_buf();

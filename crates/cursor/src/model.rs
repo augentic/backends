@@ -18,20 +18,12 @@ use tokio::process::Command;
 
 use crate::{CURSOR_AGENT_BIN, Client, mcp};
 
-/// Prepended to the agent prompt when an MCP server is advertised, so the model
-/// knows the read-only reference tools exist and should be consulted.
 const MCP_PROMPT_HINT: &str = "A read-only MCP server named `omnia` is available. Consult its \
     tools and resources for authoritative reference material before answering, and prefer that \
     material over assumptions.";
-
-/// Maximum `cursor-agent` spawns per completion (initial attempt plus repairs).
 const MAX_ATTEMPTS: usize = 3;
-
-/// When the prompt exceeds this byte length, write it to a workspace file instead
-/// of passing it as a CLI argument (avoids `ARG_MAX` limits).
 const PROMPT_INLINE_LIMIT: usize = 128_000;
 
-/// Options forwarded to each `cursor-agent` spawn.
 struct SpawnOptions<'a> {
     model: Option<&'a str>,
     workspace: &'a Path,
@@ -39,7 +31,6 @@ struct SpawnOptions<'a> {
     mcp_url: Option<&'a str>,
 }
 
-/// Parsed stdout from one `cursor-agent` run.
 #[derive(Debug)]
 struct AgentOutput {
     result: String,
@@ -105,8 +96,7 @@ impl WasiModelCtx for Client {
                     },
                     Err(reason) if attempt == MAX_ATTEMPTS => {
                         bail!(
-                            "cursor-agent did not return a valid answer after {MAX_ATTEMPTS} \
-                             attempts: {reason}"
+                            "cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts: {reason}"
                         );
                     }
                     Err(reason) => {
@@ -115,7 +105,7 @@ impl WasiModelCtx for Client {
                 }
             }
 
-            bail!("cursor-agent did not return a valid answer after {MAX_ATTEMPTS} attempts");
+            bail!("cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts");
         }
         .boxed()
     }
