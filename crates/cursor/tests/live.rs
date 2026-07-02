@@ -95,7 +95,6 @@ async fn live_cursor_completes() -> Result<()> {
         workspace: Some(workspace.to_string_lossy().into_owned()),
         timeout_secs: 300,
         mcp_url: None,
-        use_worktree: false,
     })
     .await?;
 
@@ -180,7 +179,6 @@ async fn live_cursor_uses_mcp() -> Result<()> {
         workspace: Some(workspace.to_string_lossy().into_owned()),
         timeout_secs: 300,
         mcp_url: Some(format!("http://127.0.0.1:{port}/mcp")),
-        use_worktree: false,
     })
     .await?;
 

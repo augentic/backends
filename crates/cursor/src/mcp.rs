@@ -21,9 +21,6 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 use anyhow::{Context as _, Result};
 use serde_json::{Map, Value, json};
 
-/// The server name written under `mcpServers` in `mcp.json`.
-const SERVER_NAME: &str = "omnia";
-
 /// Ensure `path` exists and return its canonical form for stable registry keys.
 ///
 /// # Errors
@@ -150,7 +147,7 @@ fn merge(original: Option<&[u8]>, url: &str) -> Result<Vec<u8>> {
     let servers = root.entry("mcpServers").or_insert_with(|| Value::Object(Map::new()));
     let servers =
         servers.as_object_mut().context("`mcpServers` in .cursor/mcp.json is not an object")?;
-    servers.insert(SERVER_NAME.to_owned(), json!({ "url": url }));
+    servers.insert("omnia".to_owned(), json!({ "url": url }));
 
     let mut bytes = serde_json::to_vec_pretty(&Value::Object(root.clone()))
         .context("serializing .cursor/mcp.json")?;
@@ -165,7 +162,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{McpConfigGuard, SERVER_NAME};
+    use super::{McpConfigGuard};
 
     /// A fresh, empty temp directory unique to this process and `label`.
     fn temp_workspace(label: &str) -> PathBuf {
@@ -187,7 +184,7 @@ mod tests {
         let workspace = temp_workspace("absent");
         let path = workspace.join(".cursor/mcp.json");
         let guard = McpConfigGuard::install(&workspace, "http://127.0.0.1:8080/mcp/docs").unwrap();
-        assert_eq!(read_servers(&path)[SERVER_NAME]["url"], "http://127.0.0.1:8080/mcp/docs");
+        assert_eq!(read_servers(&path)["omnia"]["url"], "http://127.0.0.1:8080/mcp/docs");
         drop(guard);
         assert!(!path.exists(), "a file we created is removed on drop");
     }
@@ -203,7 +200,7 @@ mod tests {
 
         let guard = McpConfigGuard::install(&workspace, "http://127.0.0.1:9/x").unwrap();
         let servers = read_servers(&path);
-        assert_eq!(servers[SERVER_NAME]["url"], "http://127.0.0.1:9/x");
+        assert_eq!(servers["omnia"]["url"], "http://127.0.0.1:9/x");
         assert_eq!(servers["other"]["url"], "http://example", "existing servers survive");
         drop(guard);
 
@@ -220,7 +217,7 @@ mod tests {
 
         drop(first);
         assert!(path.exists(), "the file survives while a guard is still held");
-        assert_eq!(read_servers(&path)[SERVER_NAME]["url"], "http://127.0.0.1:8080/mcp/docs");
+        assert_eq!(read_servers(&path)["omnia"]["url"], "http://127.0.0.1:8080/mcp/docs");
 
         drop(second);
         assert!(!path.exists(), "the file is removed once the last guard drops");

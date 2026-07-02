@@ -42,6 +42,5 @@ pub fn client(workspace: Option<&Path>) -> Client {
         workspace: workspace.map(|path| Arc::from(path.to_path_buf())),
         timeout: Duration::from_secs(1),
         mcp_url: None,
-        use_worktree: false,
     }
 }

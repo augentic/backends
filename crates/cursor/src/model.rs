@@ -16,7 +16,7 @@ use omnia_wasi_model::{
 use serde_json::Value;
 use tokio::process::Command;
 
-use crate::{CURSOR_AGENT_BIN, Client, mcp_json};
+use crate::{CURSOR_AGENT_BIN, Client, mcp};
 
 /// Prepended to the agent prompt when an MCP server is advertised, so the model
 /// knows the read-only reference tools exist and should be consulted.
@@ -37,7 +37,6 @@ struct SpawnOptions<'a> {
     workspace: &'a Path,
     timeout: Duration,
     mcp_url: Option<&'a str>,
-    use_worktree: bool,
 }
 
 /// Parsed stdout from one `cursor-agent` run.
@@ -60,7 +59,6 @@ impl WasiModelCtx for Client {
             .or_else(|| self.workspace.as_deref().map(Path::to_path_buf));
         let timeout = self.timeout;
         let mcp_url = self.mcp_url.clone();
-        let use_worktree = self.use_worktree;
 
         async move {
             let kind = request.prompt.response_format.kind;
@@ -69,12 +67,12 @@ impl WasiModelCtx for Client {
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
             };
-            let workspace = mcp_json::prepare_workspace(&workspace)?;
+            let workspace = mcp::prepare_workspace(&workspace)?;
 
             let _mcp_guard = match mcp_url.as_deref() {
                 Some(url) => {
                     agent_prompt = format!("{MCP_PROMPT_HINT}\n\n{agent_prompt}");
-                    Some(mcp_json::McpConfigGuard::install(&workspace, url)?)
+                    Some(mcp::McpConfigGuard::install(&workspace, url)?)
                 }
                 None => None,
             };
@@ -84,7 +82,6 @@ impl WasiModelCtx for Client {
                 workspace: &workspace,
                 timeout,
                 mcp_url: mcp_url.as_deref(),
-                use_worktree,
             };
 
             for attempt in 1..=MAX_ATTEMPTS {
@@ -234,9 +231,9 @@ async fn spawn_agent(agent_prompt: &str, options: &SpawnOptions<'_>) -> Result<V
     if options.mcp_url.is_some() {
         command.arg("--approve-mcps");
     }
-    if options.use_worktree {
-        command.arg("--worktree");
-    }
+    // if options.use_worktree {
+    //     command.arg("--worktree");
+    // }
     if let Some(model) = options.model {
         command.arg("--model").arg(model);
     }
