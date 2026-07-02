@@ -245,8 +245,6 @@ fn build_options(request: &Request) -> Result<ChatOptions> {
         if let Some(effort) = generation.effort {
             options = options.with_reasoning_effort(reasoning_effort(effort));
         }
-        // genai's `ChatOptions` exposes no top-k control, so `generation.top-k`
-        // is not forwarded.
     }
 
     Ok(options)

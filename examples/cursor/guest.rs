@@ -48,8 +48,6 @@ impl Guest for CliGuest {
                 tools: vec![],
                 url: Some("http://localhost:8080/mcp/docs".to_string()),
             })],
-            tool_choice: None,
-            metadata: vec![],
             grants: Grants {
                 references: None,
                 workspace: None,

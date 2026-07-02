@@ -56,11 +56,8 @@ fn verdict_request() -> Request {
                 "additionalProperties": false,
             })
             .to_string(),
-            strict: Some(true),
         }),
         tools: vec![],
-        tool_choice: None,
-        metadata: vec![],
         grants: Grants {
             references: None,
             workspace: None,
@@ -125,7 +122,6 @@ fn secret_request(url: String) -> Request {
                 "additionalProperties": false,
             })
             .to_string(),
-            strict: Some(true),
         }),
         // Grant the `omnia` MCP server with its endpoint URL; the backend wires
         // the spawned agent directly to it.
@@ -134,8 +130,6 @@ fn secret_request(url: String) -> Request {
             tools: vec![],
             url: Some(url),
         })],
-        tool_choice: None,
-        metadata: vec![],
         grants: Grants {
             references: None,
             workspace: None,

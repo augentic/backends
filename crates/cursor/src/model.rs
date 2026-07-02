@@ -444,11 +444,8 @@ mod tests {
                     "required": ["verdict"],
                 })
                 .to_string(),
-                strict: Some(true),
             }),
             tools: vec![],
-            tool_choice: None,
-            metadata: vec![],
             grants: Grants {
                 references: None,
                 workspace: None,
@@ -483,7 +480,6 @@ mod tests {
         Format::Schema(Schema {
             name: "verdict".to_owned(),
             schema: "{\"type\":\"object\"}".to_owned(),
-            strict: None,
         })
     }
 

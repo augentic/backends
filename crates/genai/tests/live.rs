@@ -76,8 +76,6 @@ fn resolve_request() -> Request {
         generation: None,
         format: Format::Json,
         tools: vec![],
-        tool_choice: None,
-        metadata: vec![],
         grants: Grants {
             references: Some("shelf".to_owned()),
             workspace: None,
