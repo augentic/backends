@@ -1,7 +1,7 @@
 //! Shared helpers for cursor backend integration tests.
 
+pub mod local_path_tool_host;
 pub mod mcp_server;
-pub mod noop_tool_host;
 
+pub use local_path_tool_host::local_path_tool_host;
 pub use mcp_server::{SENTINEL, serve};
-pub use noop_tool_host::noop_tool_host;

@@ -6,28 +6,14 @@
 
 cfg_if::cfg_if! {
     if #[cfg(not(target_arch = "wasm32"))] {
-        use anyhow::{Context, Result};
+        use anyhow::Result;
         use omnia::futures::future;
-        use omnia::{main as omnia_main, Backend, FromEnv, Mode, Runtime, Server, Wiring};
-        use omnia_cursor::{Client, ConnectOptions};
+        use omnia::{main as omnia_main, Backend, Mode, Runtime, Server, Wiring};
+        use omnia_cursor::Client;
         use omnia_wasi_http::{HttpDefault, WasiHttp};
         use omnia_wasi_model::WasiModel;
         use omnia_wasi_otel::{OtelDefault, WasiOtel};
         use std::process::ExitCode;
-
-        fn cursor_connect_options() -> Result<ConnectOptions> {
-            let mut options = <ConnectOptions as FromEnv>::from_env()?;
-            if options.workspace.is_none() {
-                let dir = std::env::temp_dir().join(format!(
-                    "omnia-cursor-workspace-{}",
-                    std::process::id()
-                ));
-                std::fs::create_dir_all(&dir)
-                    .with_context(|| format!("creating workspace {}", dir.display()))?;
-                options.workspace = Some(dir.to_string_lossy().into_owned());
-            }
-            Ok(options)
-        }
 
         #[derive(Clone)]
         struct Backends {
@@ -41,7 +27,7 @@ cfg_if::cfg_if! {
                 let (http_default, otel_default, client) = tokio::try_join!(
                     HttpDefault::connect(),
                     OtelDefault::connect(),
-                    Client::connect_with(cursor_connect_options()?),
+                    Client::connect(),
                 )?;
                 Ok(Self { http_default, otel_default, client })
             }

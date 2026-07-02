@@ -1,7 +1,5 @@
 //! Unit-test helpers for the cursor backend crate.
 
-use std::path::Path;
-use std::sync::Arc;
 use std::time::Duration;
 
 use futures::FutureExt as _;
@@ -36,9 +34,8 @@ impl ToolHost for NoopToolHost {
 }
 
 /// Build a [`Client`] directly, bypassing `connect_with` (and its `PATH` check).
-pub fn client(workspace: Option<&Path>) -> Client {
+pub fn client() -> Client {
     Client {
-        workspace: workspace.map(|path| Arc::from(path.to_path_buf())),
         timeout: Duration::from_secs(1),
     }
 }

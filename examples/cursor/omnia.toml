@@ -15,6 +15,15 @@ source.path = "../../target/wasm32-wasip2/debug/examples/cursor_wasm.wasm"
 id = "docs"
 source.path = "../../../omnia/target/wasm32-wasip2/debug/examples/mcp_wasm.wasm"
 
+# The working tree the `ask` guest lends through `grants.workspace`. `path`
+# resolves relative to this manifest's directory; the host preopens it as the
+# tree named `.` and resolves the lent descriptor back to it. Create it before
+# running (see README.md): `mkdir -p examples/cursor/workspace`.
+[[mount]]
+name = "."
+path = "./workspace"
+writable = true
+
 [[route.http]]
 prefix = "/ask"
 guest = "ask"

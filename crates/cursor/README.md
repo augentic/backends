@@ -23,20 +23,18 @@ captured, logged, or recorded into fixtures.
 
 ## Configuration
 
-| Variable          | Required | Default | Description                                                                                         |
-| ----------------- | -------- | ------- | --------------------------------------------------------------------------------------------------- |
-| `OMNIA_WORKSPACE` | no       | _none_  | Node-local working-tree path lent via `--workspace`; unset is the "no local tree" capability signal |
+The backend takes no environment configuration. The working tree is lent per
+completion through the guest's `grants.workspace`: the runtime preopens the
+configured `[[mount]]`, the guest lends that descriptor, and the host resolves
+it to a node-local path exposed on the tool host (`ToolHost::local_path`). A
+completion with no lent workspace yields
+`error::backend("no local tree on this node")`, preserving the capability
+signal.
 
 The model id is taken from each request (`request.model`); an unset value lets
 `cursor-agent` choose. Each spawn is bounded at 120s. MCP servers are supplied
 per-request: a prompt's `mcp` grant carries the endpoint `url` directly (merged
 into `<workspace>/.cursor/mcp.json` for the spawn).
-
-`OMNIA_WORKSPACE` is a stopgap for the RFC-55 working-tree host's `local-path`
-face: until that host lands, the workspace is sourced from config rather than
-resolved from the lent `grants.working-tree` descriptor. An absent workspace
-yields `error::backend("no local tree on this node")`, preserving the
-capability signal.
 
 ## Usage
 
@@ -44,8 +42,7 @@ capability signal.
 use omnia::Backend;
 use omnia_cursor::Client;
 
-let options = omnia_cursor::ConnectOptions::from_env()?;
-let client = Client::connect_with(options).await?;
+let client = Client::connect().await?;
 ```
 
 ## End-to-end example

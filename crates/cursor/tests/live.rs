@@ -8,11 +8,9 @@
 //! Both tests are `#[ignore]`d so they never run or spawn a process in CI; run
 //! them with `cargo nextest run --run-ignored` (or `cargo test -- --ignored`)
 //! alongside an installed, authenticated `cursor-agent` (`CURSOR_API_KEY` or a
-//! prior `cursor-agent login`) and optionally `OMNIA_WORKSPACE`.
+//! prior `cursor-agent login`).
 
 mod support;
-
-use std::path::PathBuf;
 
 use anyhow::Result;
 use omnia::Backend as _;
@@ -21,7 +19,7 @@ use omnia_wasi_model::{
     Answer, Format, Grants, Mcp, PreparedRequest, Request, Schema, Sections, Tool, WasiModelCtx,
 };
 use serde_json::json;
-use support::{SENTINEL, noop_tool_host, serve};
+use support::{SENTINEL, local_path_tool_host, serve};
 use tokio::net::TcpListener;
 
 fn verdict_request() -> Request {
@@ -69,23 +67,19 @@ fn verdict_request() -> Request {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs an installed, authenticated cursor-agent; run with --run-ignored"]
 async fn live_cursor_completes() -> Result<()> {
-    let workspace = std::env::var_os("OMNIA_WORKSPACE").map_or_else(
-        || std::env::temp_dir().join(format!("omnia-cursor-live-ws-{}", std::process::id())),
-        PathBuf::from,
-    );
+    let workspace =
+        std::env::temp_dir().join(format!("omnia-cursor-live-ws-{}", std::process::id()));
     std::fs::create_dir_all(&workspace)?;
 
-    let client = Client::connect_with(ConnectOptions {
-        workspace: Some(workspace.to_string_lossy().into_owned()),
-    })
-    .await?;
+    let client = Client::connect_with(ConnectOptions).await?;
 
     let prepared = PreparedRequest::try_from(verdict_request()).expect("assemble verdict request");
-    let answer: Answer = client.complete(prepared, noop_tool_host()).await.map_err(|e| {
-        anyhow::anyhow!(
-            "live cursor completion failed (is cursor-agent installed and authed?): {e}"
-        )
-    })?;
+    let answer: Answer =
+        client.complete(prepared, local_path_tool_host(workspace)).await.map_err(|e| {
+            anyhow::anyhow!(
+                "live cursor completion failed (is cursor-agent installed and authed?): {e}"
+            )
+        })?;
 
     assert!(answer.value.is_object(), "run-3 answer must be a JSON object: {:?}", answer.value);
     assert!(
@@ -149,16 +143,13 @@ async fn live_cursor_uses_mcp() -> Result<()> {
         std::env::temp_dir().join(format!("omnia-cursor-mcp-live-{}", std::process::id()));
     std::fs::create_dir_all(&workspace)?;
 
-    let client = Client::connect_with(ConnectOptions {
-        workspace: Some(workspace.to_string_lossy().into_owned()),
-    })
-    .await?;
+    let client = Client::connect_with(ConnectOptions).await?;
 
     let prepared =
         PreparedRequest::try_from(secret_request(format!("http://127.0.0.1:{port}/mcp")))
             .expect("assemble secret request");
     let answer: Answer = client
-        .complete(prepared, noop_tool_host())
+        .complete(prepared, local_path_tool_host(workspace))
         .await
         .map_err(|e| anyhow::anyhow!("live cursor MCP completion failed: {e}"))?;
 

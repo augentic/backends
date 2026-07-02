@@ -1,15 +1,19 @@
-//! A no-op [`ToolHost`] for cursor backend tests — the backend owns its own loop.
+//! A [`ToolHost`] that lends a fixed node-local workspace path.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use futures::FutureExt as _;
 use omnia_wasi_model::{DirEntry, FutureResult, Reference, ToolHost, VerifyReport};
 
-/// Stub host whose every method errors; cursor ignores the lent capabilities.
+/// Tool host that resolves the lent workspace to a fixed path; cursor ignores
+/// every other capability.
 #[derive(Debug)]
-pub struct NoopToolHost;
+pub struct LocalPathToolHost {
+    path: PathBuf,
+}
 
-impl ToolHost for NoopToolHost {
+impl ToolHost for LocalPathToolHost {
     fn resolve(&self, _reference: Reference) -> FutureResult<Vec<u8>> {
         async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
     }
@@ -29,9 +33,13 @@ impl ToolHost for NoopToolHost {
     fn verify(&self, _check: String) -> FutureResult<VerifyReport> {
         async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
     }
+
+    fn local_path(&self) -> Option<&Path> {
+        Some(&self.path)
+    }
 }
 
-/// Convenience wrapper for tests that need an `Arc<dyn ToolHost>`.
-pub fn noop_tool_host() -> Arc<dyn ToolHost> {
-    Arc::new(NoopToolHost)
+/// A tool host that lends `path` as the completion's node-local workspace.
+pub fn local_path_tool_host(path: PathBuf) -> Arc<dyn ToolHost> {
+    Arc::new(LocalPathToolHost { path })
 }

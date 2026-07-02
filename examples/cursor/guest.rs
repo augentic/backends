@@ -7,6 +7,10 @@
 //! spawned `cursor-agent` to the read-only MCP documentation server served in the
 //! background by the sibling `docs` guest.
 //!
+//! It reads `wasi:filesystem/preopens` and lends the `.` mount (the `[[mount]]`
+//! in `omnia.toml`) through `grants.workspace`; the host resolves it to the
+//! node-local working tree the spawned agent edits.
+//!
 //! It also exports `wasi:http` on `/ask` so the same completion can be triggered
 //! over HTTP. `omnia.toml` routes `/ask` here.
 
@@ -17,6 +21,7 @@ use axum::routing::get;
 use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Sections, Tool};
 use wasip3::exports::cli::run::Guest;
 use wasip3::exports::http::handler::Guest as HttpGuest;
+use wasip3::filesystem::preopens;
 use wasip3::http::types::{ErrorCode, Request as HttpRequest, Response};
 
 struct CliGuest;
@@ -24,6 +29,12 @@ wasip3::cli::command::export!(CliGuest);
 
 impl Guest for CliGuest {
     async fn run() -> Result<(), ()> {
+        // Read the preopen table the host populated from `[[mount]]` and lend the
+        // tree named `.` as the working tree. `directories` must outlive the
+        // `create` call — the lent `workspace` borrows one of its descriptors.
+        let directories = preopens::get_directories();
+        let workspace = directories.iter().find_map(|(dir, name)| (name == ".").then_some(dir));
+
         let request = completion::Request {
             model: None,
             system: Some(
@@ -50,7 +61,7 @@ impl Guest for CliGuest {
             })],
             grants: Grants {
                 references: None,
-                workspace: None,
+                workspace,
                 verify: vec![],
             },
         };

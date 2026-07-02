@@ -45,7 +45,7 @@ impl WasiModelCtx for Client {
     fn complete(
         &self, request: PreparedRequest, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<Answer> {
-        let workspace = tool_host.local_path().or(self.workspace.as_deref()).map(Path::to_path_buf);
+        let workspace = tool_host.local_path().map(Path::to_path_buf);
         let timeout = self.timeout;
 
         async move {
@@ -456,7 +456,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_local_tree() {
-        let err = client(None)
+        let err = client()
             .complete(
                 PreparedRequest::try_from(schema_request()).expect("try_from"),
                 Arc::new(NoopToolHost),
