@@ -21,16 +21,9 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 use anyhow::{Context as _, Result};
 use serde_json::{Map, Value, json};
 
-/// Ensure `path` exists and return its canonical form for stable registry keys.
-///
-/// # Errors
-///
-/// Returns an error if the directory cannot be created or canonicalized.
-pub fn prepare_workspace(path: &Path) -> Result<PathBuf> {
-    std::fs::create_dir_all(path)
-        .with_context(|| format!("creating workspace {}", path.display()))?;
-    path.canonicalize().with_context(|| format!("canonicalizing workspace {}", path.display()))
-}
+// Registry of workspaces whose `mcp.json` the backend has patched.
+static REGISTRY: LazyLock<Mutex<HashMap<PathBuf, Entry>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Per-workspace state protecting `.cursor/mcp.json` while guards are live.
 struct Entry {
@@ -40,32 +33,23 @@ struct Entry {
     original: Option<Vec<u8>>,
 }
 
-/// Ref-counted registry of workspaces whose `mcp.json` the backend has patched.
-static REGISTRY: LazyLock<Mutex<HashMap<PathBuf, Entry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// An RAII guard that keeps `<workspace>/.cursor/mcp.json` advertising the omnia
-/// MCP server while held, restoring the prior state when the last guard for the
-/// workspace drops.
-pub struct McpConfigGuard {
-    /// Canonical workspace path; the registry key.
+// An RAII guard that keeps `<workspace>/.cursor/mcp.json` advertising the omnia
+// MCP server while held, restoring the prior state when the last guard for the
+// workspace drops.
+pub struct McpGuard {
+    // Canonical workspace path; the registry key.
     workspace: PathBuf,
-    /// The `.cursor/mcp.json` path under `workspace`.
+    // The `.cursor/mcp.json` path under `workspace`.
     path: PathBuf,
 }
 
-impl McpConfigGuard {
-    /// Merge the omnia MCP server at `url` into `<workspace>/.cursor/mcp.json`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `.cursor/mcp.json` exists but is not a JSON object,
-    /// or if the `.cursor` directory or file cannot be read or written.
-    // The registry lock is intentionally held across the file I/O so a
-    // concurrent install against the same workspace cannot race on the file.
+impl McpGuard {
+    // Merge the omnia MCP server at `url` into `<workspace>/.cursor/mcp.json`.
+    //
+    // `workspace` must already exist and be canonical.
     #[allow(clippy::significant_drop_tightening)]
     pub fn install(workspace: &Path, url: &str) -> Result<Self> {
-        let workspace = prepare_workspace(workspace)?;
+        let workspace = workspace.to_path_buf();
         let path = workspace.join(".cursor").join("mcp.json");
 
         let mut registry = REGISTRY.lock().unwrap_or_else(PoisonError::into_inner);
@@ -100,9 +84,7 @@ impl McpConfigGuard {
     }
 }
 
-impl Drop for McpConfigGuard {
-    // The lock is held across the restore so a concurrent install cannot observe
-    // a half-restored file.
+impl Drop for McpGuard {
     #[allow(clippy::significant_drop_tightening)]
     fn drop(&mut self) {
         let mut registry = REGISTRY.lock().unwrap_or_else(PoisonError::into_inner);
@@ -134,8 +116,7 @@ impl Drop for McpConfigGuard {
     }
 }
 
-/// Merge the omnia server entry into existing `mcp.json` bytes, or into a fresh
-/// document when there was no file.
+// Merge the omnia server entry into existing `mcp.json`.
 fn merge(original: Option<&[u8]>, url: &str) -> Result<Vec<u8>> {
     let mut root = match original {
         Some(bytes) => serde_json::from_slice::<Value>(bytes)
@@ -162,7 +143,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{McpConfigGuard};
+    use super::McpGuard;
 
     /// A fresh, empty temp directory unique to this process and `label`.
     fn temp_workspace(label: &str) -> PathBuf {
@@ -183,7 +164,7 @@ mod tests {
     fn creates_and_removes_when_absent() {
         let workspace = temp_workspace("absent");
         let path = workspace.join(".cursor/mcp.json");
-        let guard = McpConfigGuard::install(&workspace, "http://127.0.0.1:8080/mcp/docs").unwrap();
+        let guard = McpGuard::install(&workspace, "http://127.0.0.1:8080/mcp/docs").unwrap();
         assert_eq!(read_servers(&path)["omnia"]["url"], "http://127.0.0.1:8080/mcp/docs");
         drop(guard);
         assert!(!path.exists(), "a file we created is removed on drop");
@@ -198,7 +179,7 @@ mod tests {
         let original = json!({ "mcpServers": { "other": { "url": "http://example" } } });
         fs::write(&path, serde_json::to_vec_pretty(&original).unwrap()).unwrap();
 
-        let guard = McpConfigGuard::install(&workspace, "http://127.0.0.1:9/x").unwrap();
+        let guard = McpGuard::install(&workspace, "http://127.0.0.1:9/x").unwrap();
         let servers = read_servers(&path);
         assert_eq!(servers["omnia"]["url"], "http://127.0.0.1:9/x");
         assert_eq!(servers["other"]["url"], "http://example", "existing servers survive");
@@ -212,8 +193,8 @@ mod tests {
     fn refcount_keeps_file_until_last_guard_drops() {
         let workspace = temp_workspace("refcount");
         let path = workspace.join(".cursor/mcp.json");
-        let first = McpConfigGuard::install(&workspace, "http://127.0.0.1:8080/mcp/docs").unwrap();
-        let second = McpConfigGuard::install(&workspace, "http://127.0.0.1:8080/mcp/docs").unwrap();
+        let first = McpGuard::install(&workspace, "http://127.0.0.1:8080/mcp/docs").unwrap();
+        let second = McpGuard::install(&workspace, "http://127.0.0.1:8080/mcp/docs").unwrap();
 
         drop(first);
         assert!(path.exists(), "the file survives while a guard is still held");

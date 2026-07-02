@@ -67,12 +67,15 @@ impl WasiModelCtx for Client {
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
             };
-            let workspace = mcp::prepare_workspace(&workspace)?;
+            std::fs::create_dir_all(&workspace)?;
+            let workspace = workspace
+                .canonicalize()
+                .with_context(|| format!("workspace {}", workspace.display()))?;
 
             let _mcp_guard = match mcp_url.as_deref() {
                 Some(url) => {
                     agent_prompt = format!("{MCP_PROMPT_HINT}\n\n{agent_prompt}");
-                    Some(mcp::McpConfigGuard::install(&workspace, url)?)
+                    Some(mcp::McpGuard::install(&workspace, url)?)
                 }
                 None => None,
             };

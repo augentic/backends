@@ -17,7 +17,6 @@ use omnia::Backend;
 use tokio::process::Command;
 use tracing::instrument;
 
-/// The `cursor-agent` executable, resolved on `PATH`.
 pub(crate) const CURSOR_AGENT_BIN: &str = "cursor-agent";
 
 /// Spawned, filesystem-capable `cursor-agent` model backend.
@@ -36,7 +35,7 @@ impl Backend for Client {
 
     #[instrument(name = "Cursor::connect_with")]
     async fn connect_with(options: Self::ConnectOptions) -> Result<Self> {
-        ensure_cursor().await?;
+        assert_cursor().await?;
 
         Ok(Self {
             model: options.model.map(Arc::from),
@@ -47,9 +46,7 @@ impl Backend for Client {
     }
 }
 
-/// Validate that `cursor-agent` is installed and runnable by invoking
-/// `cursor-agent --version`.
-async fn ensure_cursor() -> Result<()> {
+async fn assert_cursor() -> Result<()> {
     let output = Command::new(CURSOR_AGENT_BIN)
         .arg("--version")
         .output()
