@@ -1,5 +1,3 @@
-//! # Cursor Agent Backend
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -7,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use futures::FutureExt as _;
 use omnia_wasi_model::{
     Answer, Format, FutureResult, PreparedPrompt, ResponseFormat, ToolHost, ToolTurn, Transcript,
@@ -44,10 +42,7 @@ impl WasiModelCtx for Client {
         &self, request: PreparedPrompt, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<Answer> {
         let model = self.model.clone();
-        let workspace = tool_host
-            .local_path()
-            .map(Path::to_path_buf)
-            .or_else(|| self.workspace.as_deref().map(Path::to_path_buf));
+        let workspace = tool_host.local_path().or(self.workspace.as_deref()).map(Path::to_path_buf);
         let timeout = self.timeout;
         let mcp_url = self.mcp_url.clone();
 
@@ -81,20 +76,19 @@ impl WasiModelCtx for Client {
             for attempt in 1..=MAX_ATTEMPTS {
                 let stdout = spawn_agent(&agent_prompt, &spawn).await?;
                 let AgentOutput { result, transcript } = parse_agent_output(&stdout)?;
+                let last = attempt == MAX_ATTEMPTS;
 
                 match parse_result(&result, kind) {
                     Ok(value) => match check_answer(&value, kind) {
-                        Ok(()) => {
-                            return Ok(Answer { value, transcript });
-                        }
-                        Err(_reason) if attempt == MAX_ATTEMPTS => {
-                            return Ok(Answer { value, transcript });
-                        }
+                        // On the last attempt a value of the wrong shape is
+                        // better than no answer at all.
+                        Ok(()) => return Ok(Answer { value, transcript }),
+                        Err(_) if last => return Ok(Answer { value, transcript }),
                         Err(reason) => {
                             agent_prompt = append_repair(&agent_prompt, &result, &reason);
                         }
                     },
-                    Err(reason) if attempt == MAX_ATTEMPTS => {
+                    Err(reason) if last => {
                         bail!(
                             "cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts: {reason}"
                         );
@@ -105,7 +99,7 @@ impl WasiModelCtx for Client {
                 }
             }
 
-            bail!("cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts");
+            unreachable!("the final attempt always returns or bails");
         }
         .boxed()
     }
@@ -169,7 +163,7 @@ fn check_answer(value: &Value, kind: Format) -> Result<(), String> {
     }
 }
 
-/// Write oversized prompts to the workspace and return a short CLI argument.
+// Write oversized prompts to the workspace and return a short CLI argument.
 fn prepare_prompt_arg(
     agent_prompt: &str, workspace: &Path,
 ) -> Result<(String, Option<PromptFile>)> {
@@ -192,7 +186,7 @@ fn prepare_prompt_arg(
     Ok((arg, Some(PromptFile { path })))
 }
 
-/// Removes a spill-to-disk prompt file when the spawn finishes.
+// Removes a spill-to-disk prompt file when the spawn finishes.
 struct PromptFile {
     path: PathBuf,
 }
@@ -224,9 +218,6 @@ async fn spawn_agent(agent_prompt: &str, options: &SpawnOptions<'_>) -> Result<V
     if options.mcp_url.is_some() {
         command.arg("--approve-mcps");
     }
-    // if options.use_worktree {
-    //     command.arg("--worktree");
-    // }
     if let Some(model) = options.model {
         command.arg("--model").arg(model);
     }
@@ -234,17 +225,10 @@ async fn spawn_agent(agent_prompt: &str, options: &SpawnOptions<'_>) -> Result<V
 
     let child = command.spawn().with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?;
 
-    let wait = child.wait_with_output();
-    tokio::pin!(wait);
-
-    let output = tokio::select! {
-        () = tokio::time::sleep(options.timeout) => {
-            bail!("cursor-agent timed out after {}s", options.timeout.as_secs());
-        }
-        result = wait => {
-            result.with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?
-        }
-    };
+    let output = tokio::time::timeout(options.timeout, child.wait_with_output())
+        .await
+        .map_err(|_elapsed| anyhow!("cursor-agent timed out after {}s", options.timeout.as_secs()))?
+        .with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?;
 
     if !output.status.success() {
         bail!(
@@ -257,7 +241,7 @@ async fn spawn_agent(agent_prompt: &str, options: &SpawnOptions<'_>) -> Result<V
     Ok(output.stdout)
 }
 
-/// Parse `stream-json` NDJSON (or a legacy single-line `json` payload).
+// Parse `stream-json` NDJSON (or a legacy single-line `json` payload).
 fn parse_agent_output(stdout: &[u8]) -> Result<AgentOutput> {
     let text = std::str::from_utf8(stdout).context("cursor-agent did not emit valid UTF-8")?;
 
@@ -276,13 +260,7 @@ fn parse_agent_output(stdout: &[u8]) -> Result<AgentOutput> {
             serde_json::from_str(line).with_context(|| format!("invalid JSON event: {line}"))?;
         match event.get("type").and_then(Value::as_str) {
             Some("result") => {
-                if event.get("is_error").and_then(Value::as_bool) == Some(true) {
-                    bail!(
-                        "cursor-agent reported an error: {}",
-                        event.get("result").and_then(Value::as_str).unwrap_or("<no detail>")
-                    );
-                }
-                result = event.get("result").and_then(Value::as_str).map(ToOwned::to_owned);
+                result = result_payload(&event)?;
             }
             Some("tool_call") => match event.get("subtype").and_then(Value::as_str) {
                 Some("started") => {
@@ -330,21 +308,21 @@ fn parse_agent_output(stdout: &[u8]) -> Result<AgentOutput> {
 fn parse_legacy_json_output(text: &str) -> Result<AgentOutput> {
     let envelope: Value =
         serde_json::from_str(text).context("cursor-agent did not emit a JSON result object")?;
-    if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
-        bail!(
-            "cursor-agent reported an error: {}",
-            envelope.get("result").and_then(Value::as_str).unwrap_or("<no detail>")
-        );
-    }
-    let result = envelope
-        .get("result")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
+    let result = result_payload(&envelope)?
         .context("cursor-agent JSON output has no string `result` field")?;
     Ok(AgentOutput {
         result,
         transcript: None,
     })
+}
+
+// Extract the `result` string from a result envelope, surfacing agent errors.
+fn result_payload(envelope: &Value) -> Result<Option<String>> {
+    let result = envelope.get("result").and_then(Value::as_str);
+    if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
+        bail!("cursor-agent reported an error: {}", result.unwrap_or("<no detail>"));
+    }
+    Ok(result.map(ToOwned::to_owned))
 }
 
 fn tool_call_identity(tool_call: &Value) -> Option<(String, Value)> {
@@ -385,7 +363,7 @@ fn parse_result(result: &str, kind: Format) -> Result<Value, String> {
     }
 }
 
-/// Strip a wrapping Markdown code fence (```` ```json … ``` ````), if present.
+// Strip a wrapping Markdown code fence (```json ... ```), if present.
 fn strip_code_fence(text: &str) -> &str {
     let trimmed = text.trim();
     let Some(rest) = trimmed.strip_prefix("```") else {

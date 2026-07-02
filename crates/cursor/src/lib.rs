@@ -8,7 +8,7 @@ mod model;
 pub(crate) mod test_support;
 
 use std::fmt::Debug;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,8 +25,7 @@ pub struct Client {
     model: Option<Arc<str>>,
     workspace: Option<Arc<Path>>,
     timeout: Duration,
-    /// URL of an MCP server for the cursor-agent to use via 
-    /// `.cursor/mcp.json`, when configured.
+    // URL of an MCP server for the cursor-agent to use via `.cursor/mcp.json`.
     mcp_url: Option<Arc<str>>,
 }
 
@@ -39,7 +38,7 @@ impl Backend for Client {
 
         Ok(Self {
             model: options.model.map(Arc::from),
-            workspace: options.workspace.map(|w| Arc::from(Path::new(&w))),
+            workspace: options.workspace.map(|w| Arc::from(PathBuf::from(w))),
             timeout: Duration::from_secs(options.timeout_secs),
             mcp_url: options.mcp_url.map(Arc::from),
         })

@@ -12,7 +12,7 @@
 //! The URL is deployment-stable, so the written content is identical regardless
 //! of ordering.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -80,20 +80,15 @@ impl Drop for McpGuard {
     fn drop(&mut self) {
         let mut registry = REGISTRY.lock().unwrap_or_else(PoisonError::into_inner);
 
-        let remaining = match registry.get_mut(&self.workspace) {
-            Some(entry) => {
-                entry.refcount -= 1;
-                entry.refcount
-            }
-            None => return,
+        let hash_map::Entry::Occupied(mut occupied) = registry.entry(self.workspace.clone()) else {
+            return;
         };
-        if remaining > 0 {
+        occupied.get_mut().refcount -= 1;
+        if occupied.get().refcount > 0 {
             return;
         }
 
-        let Some(entry) = registry.remove(&self.workspace) else {
-            return;
-        };
+        let entry = occupied.remove();
         let restore = match entry.original {
             Some(bytes) => fs::write(&self.path, bytes),
             None => match fs::remove_file(&self.path) {
@@ -115,14 +110,13 @@ fn merge(original: Option<&[u8]>, url: &str) -> Result<Vec<u8>> {
         None => json!({}),
     };
 
-    let root = root.as_object_mut().context("existing .cursor/mcp.json is not a JSON object")?;
-    let servers = root.entry("mcpServers").or_insert_with(|| Value::Object(Map::new()));
+    let object = root.as_object_mut().context("existing .cursor/mcp.json is not a JSON object")?;
+    let servers = object.entry("mcpServers").or_insert_with(|| Value::Object(Map::new()));
     let servers =
         servers.as_object_mut().context("`mcpServers` in .cursor/mcp.json is not an object")?;
     servers.insert("omnia".to_owned(), json!({ "url": url }));
 
-    let mut bytes = serde_json::to_vec_pretty(&Value::Object(root.clone()))
-        .context("serializing .cursor/mcp.json")?;
+    let mut bytes = serde_json::to_vec_pretty(&root).context("serializing .cursor/mcp.json")?;
     bytes.push(b'\n');
     Ok(bytes)
 }
