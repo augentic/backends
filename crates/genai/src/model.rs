@@ -1,7 +1,7 @@
 //! `wasi-model` implementation backed by the multi-provider genai SDK.
 //!
 //! Maps the host-assembled [`PreparedRequest`] onto a genai
-//! [`ChatRequest`]/[`ChatOptions`] — the host applies §3.1.1, so the prepared
+//! [`ChatRequest`]/[`ChatOptions`] — the host applies §3.1.1, so the request
 //! `system`/`messages` channels are consumed directly — drives the in-process
 //! tool loop — dispatching the host-injected `resolve` tool into the caller's
 //! `references` shelf through the lent [`ToolHost`] — self-checks the answer
@@ -38,7 +38,7 @@ const DEFAULT_MODEL: &str = "gpt-5.5";
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, prepared: PreparedRequest, tool_host: Arc<dyn ToolHost>,
+        &self, request: PreparedRequest, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<Answer> {
         // Clone the swappable vendor handle into the 'static future; the genai
         // client is cheap to clone (an `Arc` inside).
@@ -47,10 +47,10 @@ impl WasiModelCtx for Client {
         async move {
             // The model id is carried on the request; fall back to the backend
             // default when the guest leaves it unset.
-            let model = prepared.request.model.clone().unwrap_or_else(|| DEFAULT_MODEL.to_owned());
-            let format = prepared.request.format.clone();
-            let mut chat = build_request(&prepared)?;
-            let options = build_options(&prepared.request)?;
+            let model = request.request.model.clone().unwrap_or_else(|| DEFAULT_MODEL.to_owned());
+            let format = request.request.format.clone();
+            let mut chat = build_request(&request)?;
+            let options = build_options(&request.request)?;
 
             let mut transcript = Transcript::default();
 
@@ -70,7 +70,7 @@ impl WasiModelCtx for Client {
                     // response follows as its own `tool`-role message.
                     chat = chat.append_message(tool_calls.clone());
                     for call in tool_calls {
-                        let result = dispatch_tool(&prepared.request, &tool_host, &call).await?;
+                        let result = dispatch_tool(&request.request, &tool_host, &call).await?;
                         transcript.turns.push(ToolTurn {
                             tool: call.fn_name,
                             args: call.fn_arguments,
@@ -133,8 +133,8 @@ impl WasiModelCtx for Client {
 /// Map the host-assembled [`PreparedRequest`] onto a genai [`ChatRequest`]: the
 /// host already applied §3.1.1, so `system`/`messages` are consumed directly, and
 /// the host-injected `resolve` tool is advertised only when a reference target is granted.
-fn build_request(prepared: &PreparedRequest) -> Result<ChatRequest> {
-    let messages = prepared
+fn build_request(request: &PreparedRequest) -> Result<ChatRequest> {
+    let messages = request
         .messages
         .iter()
         .map(|m| match m.role {
@@ -145,15 +145,15 @@ fn build_request(prepared: &PreparedRequest) -> Result<ChatRequest> {
         .collect();
 
     let mut chat = ChatRequest::new(messages);
-    if let Some(system) = &prepared.system {
+    if let Some(system) = &request.system {
         chat = chat.with_system(system.clone());
     }
 
     let mut tools: Vec<Tool> = Vec::new();
-    if prepared.request.grants.references.is_some() {
+    if request.request.grants.references.is_some() {
         tools.push(resolve_tool());
     }
-    for tool in &prepared.request.tools {
+    for tool in &request.request.tools {
         match tool {
             ModelTool::Function(function) => {
                 let schema: Value =

@@ -43,14 +43,14 @@ static PROMPT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, prepared: PreparedRequest, tool_host: Arc<dyn ToolHost>,
+        &self, request: PreparedRequest, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<Answer> {
         let workspace = tool_host.local_path().or(self.workspace.as_deref()).map(Path::to_path_buf);
         let timeout = self.timeout;
 
         async move {
-            let format = prepared.request.format.clone();
-            let mut prompt = build_prompt(&prepared);
+            let format = request.request.format.clone();
+            let mut prompt = build_prompt(&request);
 
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
@@ -62,7 +62,7 @@ impl WasiModelCtx for Client {
 
             // Per-prompt MCP grants carry their own endpoint URL; no grant means
             // no MCP wiring (MCP is opt-in per completion).
-            let selected = select_mcp_servers(&prepared.request)?;
+            let selected = select_mcp_servers(&request.request)?;
             let _mcp_guard = if selected.is_empty() {
                 None
             } else {
@@ -73,7 +73,7 @@ impl WasiModelCtx for Client {
             };
 
             let spawn = SpawnOptions {
-                model: prepared.request.model.as_deref(),
+                model: request.request.model.as_deref(),
                 workspace: &workspace,
                 timeout,
                 approve_mcps: !selected.is_empty(),
@@ -111,19 +111,19 @@ impl WasiModelCtx for Client {
     }
 }
 
-fn build_prompt(prepared: &PreparedRequest) -> String {
+fn build_prompt(request: &PreparedRequest) -> String {
     let mut parts: Vec<String> = Vec::new();
-    if let Some(system) = &prepared.system {
+    if let Some(system) = &request.system {
         parts.push(system.clone());
     }
-    for message in &prepared.messages {
+    for message in &request.messages {
         match message.role {
             Role::User => parts.push(message.content.clone()),
             Role::System => parts.push(format!("[system]\n{}", message.content)),
             Role::Assistant => parts.push(format!("[assistant]\n{}", message.content)),
         }
     }
-    parts.push(answer_instruction(&prepared.request.format));
+    parts.push(answer_instruction(&request.request.format));
     parts.join("\n\n")
 }
 
@@ -471,8 +471,8 @@ mod tests {
 
     #[test]
     fn agent_prompt() {
-        let prepared = PreparedRequest::try_from(schema_request()).expect("try_from");
-        let text = build_prompt(&prepared);
+        let request = PreparedRequest::try_from(schema_request()).expect("try_from");
+        let text = build_prompt(&request);
         assert!(text.contains("a terse judge"), "missing system channel: {text}");
         assert!(text.contains("decide pass or fail"), "missing user channel: {text}");
         assert!(text.contains("JSON Schema"), "missing schema instruction: {text}");

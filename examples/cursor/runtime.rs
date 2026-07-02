@@ -8,7 +8,7 @@ cfg_if::cfg_if! {
     if #[cfg(not(target_arch = "wasm32"))] {
         use anyhow::{Context, Result};
         use omnia::futures::future;
-        use omnia::{main as omnia_main, Backend, FromEnv, Mode, Runtime, RuntimeHooks, Server};
+        use omnia::{main as omnia_main, Backend, FromEnv, Mode, Runtime, Server, Wiring};
         use omnia_cursor::{Client, ConnectOptions};
         use omnia_wasi_http::{HttpDefault, WasiHttp};
         use omnia_wasi_model::WasiModel;
@@ -70,7 +70,7 @@ cfg_if::cfg_if! {
 
         struct Hooks;
 
-        impl RuntimeHooks<Backends> for Hooks {
+        impl Wiring<Backends> for Hooks {
             fn link(deployment: &mut omnia::Deployment<omnia::StoreCtx<Backends>>) -> Result<()> {
                 deployment.host::<WasiHttp, Backends>()?;
                 deployment.host::<WasiOtel, Backends>()?;
