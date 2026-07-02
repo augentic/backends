@@ -4,7 +4,7 @@
 [![docs.rs](https://docs.rs/omnia-cursor/badge.svg)](https://docs.rs/omnia-cursor)
 
 Spawned-agent model backend for the Omnia WASI runtime, implementing the
-`augentic:model/completion` boundary (`wasi-model`).
+`omnia:model/completion` boundary (`wasi-model`).
 
 Each completion launches a fresh, context-free [`cursor-agent`](https://cursor.com/docs/cli/headless)
 session that owns its own tool loop and edits the lent working tree directly,

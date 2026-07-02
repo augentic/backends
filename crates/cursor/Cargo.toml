@@ -1,6 +1,6 @@
 [package]
 name = "omnia-cursor"
-description = "Spawned cursor-agent model backend (the augentic:model boundary)"
+description = "Spawned cursor-agent model backend (the omnia:model boundary)"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true

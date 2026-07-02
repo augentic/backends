@@ -3,7 +3,7 @@
 //!
 //! Mirrors the genai backend's `live.rs`: it spawns a real `cursor-agent`
 //! against a node-local workspace and parses the validated answer back through the
-//! `augentic:model/completion` boundary.
+//! `omnia:model/completion` boundary.
 //!
 //! It is skipped unless `OMNIA_CURSOR_LIVE=1` is set (alongside an installed,
 //! authenticated `cursor-agent` — `CURSOR_API_KEY` or a prior `cursor-agent

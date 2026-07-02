@@ -1,0 +1,26 @@
+# Cursor end-to-end example.
+#
+# One HTTP server fronts two guests: `/ask` drives a `complete` call and
+# `/mcp/docs` is the MCP documentation server the spawned cursor-agent reads.
+# The `docs` guest is omnia's `mcp` example artifact (built in the omnia repo,
+# assumed a sibling checkout); the `ask` guest is built here. Source paths
+# resolve relative to this file. Build both guests first (see README.md), then
+# run from the repository root:
+#
+#   cargo run --example cursor -- run --config examples/cursor/omnia.toml
+
+[[guest]]
+id = "ask"
+source.path = "../../target/wasm32-wasip2/debug/examples/cursor_ask_wasm.wasm"
+
+[[guest]]
+id = "docs"
+source.path = "../../../omnia/target/wasm32-wasip2/debug/examples/mcp_wasm.wasm"
+
+[[route.http]]
+prefix = "/ask"
+guest = "ask"
+
+[[route.http]]
+prefix = "/mcp/docs"
+guest = "docs"

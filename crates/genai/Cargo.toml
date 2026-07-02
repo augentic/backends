@@ -1,6 +1,6 @@
 [package]
 name = "omnia-genai"
-description = "Multi-provider generative-AI model backend (the augentic:model boundary)"
+description = "Multi-provider generative-AI model backend (the omnia:model boundary)"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true

@@ -4,7 +4,7 @@
 [![docs.rs](https://docs.rs/omnia-genai/badge.svg)](https://docs.rs/omnia-genai)
 
 Multi-provider generative-AI model backend for the Omnia WASI runtime,
-implementing the `augentic:model/completion` boundary (`wasi-model`).
+implementing the `omnia:model/completion` boundary (`wasi-model`).
 
 Wraps the [`genai`](https://crates.io/crates/genai) SDK (`OpenAI`, Anthropic,
 Gemini, Groq, Ollama, …). The host assembles a guest's typed `Prompt` into a
