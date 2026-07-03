@@ -66,7 +66,8 @@ impl McpGuard {
                         Ok(bytes) => Some(bytes),
                         Err(error) if error.kind() == ErrorKind::NotFound => None,
                         Err(error) => {
-                            return Err(error).with_context(|| format!("reading {}", path.display()));
+                            return Err(error)
+                                .with_context(|| format!("reading {}", path.display()));
                         }
                     };
                     vacant.insert(Workspace {
@@ -270,13 +271,15 @@ mod tests {
         fs::write(&path, b"{ not json").unwrap();
 
         assert!(
-            McpGuard::install(&workspace, &servers(&[("docs", "http://127.0.0.1:8080/mcp/docs")])).is_err(),
+            McpGuard::install(&workspace, &servers(&[("docs", "http://127.0.0.1:8080/mcp/docs")]))
+                .is_err(),
             "invalid existing mcp.json is rejected"
         );
         fs::remove_file(&path).unwrap();
 
         let guard =
-            McpGuard::install(&workspace, &servers(&[("docs", "http://127.0.0.1:8080/mcp/docs")])).unwrap();
+            McpGuard::install(&workspace, &servers(&[("docs", "http://127.0.0.1:8080/mcp/docs")]))
+                .unwrap();
         assert_eq!(read_servers(&path)["docs"]["url"], "http://127.0.0.1:8080/mcp/docs");
         drop(guard);
         assert!(!path.exists(), "a leaked refcount would leave the file after drop");
