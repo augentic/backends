@@ -93,7 +93,7 @@ omnia = { git = "https://github.com/augentic/omnia.git"}
 omnia-wasi-blobstore = { git = "https://github.com/augentic/omnia.git"}
 omnia-wasi-identity = { git = "https://github.com/augentic/omnia.git"}
 omnia-wasi-docstore = { git = "https://github.com/augentic/omnia.git"}
-omnia-wasi-http = { git = "https://github.com/augentic/omnia.git", branch = "main" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-keyvalue = { git = "https://github.com/augentic/omnia.git"}
 omnia-wasi-messaging = { git = "https://github.com/augentic/omnia.git"}
 omnia-wasi-model = { git = "https://github.com/augentic/omnia.git"}
