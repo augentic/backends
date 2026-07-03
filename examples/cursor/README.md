@@ -1,23 +1,19 @@
 # Cursor Example
 
-Live model completion via [`omnia-cursor`](../crates/cursor): the `ask` guest calls `create` once (command mode) while an HTTP server serves `/ask` and the [`mcp`](https://github.com/augentic/omnia/tree/main/examples/mcp) docs guest at `/mcp/docs` for the spawned `cursor-agent`.
+Live model completion via `[omnia-cursor](../crates/cursor)`: the `ask` guest calls `create` once (command mode) while an HTTP server serves `/ask` and the `[mcp](https://github.com/augentic/omnia/tree/main/examples/mcp)` docs guest at `/mcp/docs` for the spawned `cursor-agent`.
 
-Requires a sibling [`omnia`](https://github.com/augentic/omnia) checkout (for the `mcp` docs guest) and [`cursor-agent`](https://cursor.com/docs/cli) on `PATH` (`cursor-agent login`).
+Requires a sibling `[omnia](https://github.com/augentic/omnia)` checkout (for the `mcp` docs guest) and `[cursor-agent](https://cursor.com/docs/cli)` on `PATH` (`cursor-agent login`).
 
 ## Build and run
 
 ```bash
-# backends repo — cursor guest + runtime
+# build the guest
 cargo build -p examples --example cursor-wasm --target wasm32-wasip2
 
-# omnia repo (sibling checkout) — docs MCP guest
-# cargo build -p examples --example mcp-wasm --target wasm32-wasip2
-
-# backends repo — create the working tree the `[[mount]]` lends
+# create the working tree the `[[mount]]` lends
 mkdir -p examples/cursor/workspace
 
-# backends repo — run the deployment
-# cargo run -p examples --example cursor -- run --config examples/cursor/omnia.toml
+# run the host
 cargo run --example cursor -- run ./target/wasm32-wasip2/debug/examples/cursor_wasm.wasm
 ```
 

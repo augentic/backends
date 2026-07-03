@@ -19,15 +19,13 @@
 use axum::Router;
 use axum::routing::get;
 use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Sections, Tool};
-use wasip3::exports::cli::run::Guest;
-use wasip3::exports::http::handler::Guest as HttpGuest;
 use wasip3::filesystem::preopens;
 use wasip3::http::types as http;
 
 struct CliGuest;
 wasip3::cli::command::export!(CliGuest);
 
-impl Guest for CliGuest {
+impl wasip3::exports::cli::run::Guest for CliGuest {
     async fn run() -> Result<(), ()> {
         // Read the preopen table the host populated from `[[mount]]` and lend the
         // tree named `.` as the working tree. `directories` must outlive the
@@ -79,8 +77,8 @@ impl Guest for CliGuest {
 struct HttpMcp;
 wasip3::http::service::export!(HttpMcp);
 
-impl HttpGuest for HttpMcp {
-    async fn handle(request: http::Request) -> Result<http::Response, ErrorCode> {
+impl wasip3::exports::http::handler::Guest for HttpMcp {
+    async fn handle(request: http::Request) -> Result<http::Response, http::ErrorCode> {
         let router = Router::new().route("/", get(mcp));
         omnia_wasi_http::serve(router, request).await
     }
