@@ -3,9 +3,9 @@
 [![crates.io](https://img.shields.io/crates/v/omnia-azure-table.svg)](https://crates.io/crates/omnia-azure-table)
 [![docs.rs](https://docs.rs/omnia-azure-table/badge.svg)](https://docs.rs/omnia-azure-table)
 
-Azure Table Storage backend for the Omnia WASI runtime, implementing the `wasi-jsondb` interface.
+Azure Table Storage backend for the Omnia WASI runtime, implementing the `wasi-docstore` interface.
 
-Azure Table Storage is a `NoSQL` key-value store. This crate maps the jsondb document model onto Azure Table entities: top-level JSON fields are flattened into entity properties so that server-side `OData` `$filter` queries work, while nested objects are serialized as JSON string properties.
+Azure Table Storage is a `NoSQL` key-value store. This crate maps the document store model onto Azure Table entities: top-level JSON fields are flattened into entity properties so that server-side `OData` `$filter` queries work, while nested objects are serialized as JSON string properties.
 
 MSRV: Rust 1.93
 
@@ -16,7 +16,7 @@ separated) that uniquely identifies an entity across all partitions. The
 `collection` string carries the table name and an optional `/{PartitionKey}`
 suffix for query scoping.
 
-| jsondb concept | Azure Table equivalent |
+| document store concept | Azure Table equivalent |
 |----------------|------------------------|
 | `collection` | Table name (+ optional `/{PartitionKey}` for query scoping) |
 | `id` | `{PartitionKey}\0{RowKey}` (composite) |
@@ -135,7 +135,7 @@ use omnia_azure_table::Client;
 let options = omnia_azure_table::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 
-// Create the table if needed (admin helper, not part of wasi-jsondb)
+// Create the table if needed (admin helper, not part of wasi-docstore)
 client.ensure_table("my_table").await?;
 ```
 

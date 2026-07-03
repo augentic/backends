@@ -1760,8 +1760,8 @@ dependencies = [
  "omnia-azure-table",
  "omnia-cursor",
  "omnia-wasi-blobstore",
+ "omnia-wasi-docstore",
  "omnia-wasi-http",
- "omnia-wasi-jsondb",
  "omnia-wasi-model",
  "omnia-wasi-otel",
  "serde",
@@ -3502,7 +3502,7 @@ dependencies = [
  "futures",
  "hmac 0.13.0",
  "omnia",
- "omnia-wasi-jsondb",
+ "omnia-wasi-docstore",
  "reqwest 0.13.4",
  "serde_json",
  "sha2 0.11.0",
@@ -3690,6 +3690,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-wasi-docstore"
+version = "0.35.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "fromenv",
+ "futures",
+ "omnia",
+ "parking_lot",
+ "polodb_core",
+ "regex",
+ "serde",
+ "serde_json",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
 name = "omnia-wasi-http"
 version = "0.35.0"
 dependencies = [
@@ -3729,26 +3749,6 @@ dependencies = [
  "oauth2",
  "omnia",
  "serde",
- "tracing",
- "wasmtime",
- "wasmtime-wasi",
- "wit-bindgen 0.58.0",
-]
-
-[[package]]
-name = "omnia-wasi-jsondb"
-version = "0.35.0"
-dependencies = [
- "anyhow",
- "chrono",
- "fromenv",
- "futures",
- "omnia",
- "parking_lot",
- "polodb_core",
- "regex",
- "serde",
- "serde_json",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",

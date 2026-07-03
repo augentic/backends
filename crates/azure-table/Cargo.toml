@@ -1,6 +1,6 @@
 [package]
 name = "omnia-azure-table"
-description = "Azure backend table storage provider implementing wasi-jsondb"
+description = "Azure backend table storage provider implementing wasi-docstore"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true
@@ -28,7 +28,7 @@ fromenv.workspace = true
 futures.workspace = true
 hmac = "0.13.0"
 omnia.workspace = true
-omnia-wasi-jsondb.workspace = true
+omnia-wasi-docstore.workspace = true
 reqwest = { version = "0.13.4", features = ["json", "rustls"] }
 serde_json.workspace = true
 sha2 = "0.11.0"

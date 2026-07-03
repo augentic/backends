@@ -6,7 +6,7 @@
 //! are serialized as JSON string properties.
 
 use anyhow::{Context, anyhow};
-use omnia_wasi_jsondb::Document;
+use omnia_wasi_docstore::Document;
 use serde_json::{Map, Value};
 
 /// Azure Table system / `OData` metadata properties stripped during unflatten.

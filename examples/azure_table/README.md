@@ -1,6 +1,6 @@
 # Azure Table Storage Desk Test
 
-Self-seeding desk test for the `omnia-azure-table` crate's `wasi-jsondb` implementation. It creates the table, seeds five records across two partitions (`desk` and `mobile`) covering multiple `OData` types, exercises every filter variant, CRUD operation, and cross-partition identity, then cleans up after itself.
+Self-seeding desk test for the `omnia-azure-table` crate's `wasi-docstore` implementation. It creates the table, seeds five records across two partitions (`desk` and `mobile`) covering multiple `OData` types, exercises every filter variant, CRUD operation, and cross-partition identity, then cleans up after itself.
 
 No manual data pre-seeding is required.
 
@@ -59,7 +59,7 @@ cargo run --example azure_table
 ## Expected output
 
 ```
-Azure Table JSONDB desk test
+Azure Table document store desk test
 ============================
 
 Table 'testJsondb': created

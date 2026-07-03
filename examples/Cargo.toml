@@ -35,7 +35,7 @@ omnia-azure-table = { path = "../crates/azure-table" }
 omnia-cursor = { path = "../crates/cursor" }
 omnia-wasi-blobstore.workspace = true
 omnia-wasi-http.workspace = true
-omnia-wasi-jsondb.workspace = true
+omnia-wasi-docstore.workspace = true
 omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 serde.workspace = true

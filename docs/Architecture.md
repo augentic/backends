@@ -109,7 +109,7 @@ Backend crates provide concrete implementations connecting to external services:
 | `azure_blob`    | Azure Blob Storage | blobstore                      |
 | `azure_id`      | Azure Identity     | identity.                      |
 | `azure_vault`   | Azure Key Vault    | vault                          |
-| `azure_table`   | Azure Table Store  | jsondb                         |
+| `azure_table`   | Azure Table Store  | docstore                       |
 | `opentelemetry` | OTEL Collector     | otel                           |
 
 Each backend:

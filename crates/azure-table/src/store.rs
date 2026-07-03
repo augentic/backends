@@ -1,4 +1,4 @@
-//! `wasi-jsondb` implementation for Azure Table Storage.
+//! `wasi-docstore` implementation for Azure Table Storage.
 
 pub mod document;
 pub mod filter;
@@ -10,8 +10,8 @@ use anyhow::{Context, anyhow, bail};
 use base64ct::{Base64, Encoding};
 use futures::future::FutureExt;
 use hmac::{Hmac, KeyInit, Mac};
-use omnia_wasi_jsondb::{
-    Document, FilterTree, FutureResult, QueryOpts, QueryResult, WasiJsonDbCtx,
+use omnia_wasi_docstore::{
+    Document, FilterTree, FutureResult, QueryOpts, QueryResult, WasiDocStoreCtx,
 };
 use reqwest::Client as HttpClient;
 use serde_json::Value;
@@ -22,8 +22,8 @@ use crate::Client;
 const API_VERSION: &str = "2026-02-06";
 const ACCEPT_HEADER: &str = "application/json;odata=fullmetadata";
 
-/// `wasi-jsondb` implementation backed by Azure Table Storage REST API.
-impl WasiJsonDbCtx for Client {
+/// `wasi-docstore` implementation backed by Azure Table Storage REST API.
+impl WasiDocStoreCtx for Client {
     fn get(&self, collection: String, id: String) -> FutureResult<Option<Document>> {
         let opts = Arc::clone(&self.options);
         let http = self.http.clone();
@@ -259,7 +259,7 @@ impl WasiJsonDbCtx for Client {
     }
 }
 
-/// Azure Table Storage management operations (outside the `wasi-jsondb` trait).
+/// Azure Table Storage management operations (outside the `wasi-docstore` trait).
 impl Client {
     /// Creates the named table if it does not already exist.
     ///

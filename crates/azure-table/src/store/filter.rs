@@ -13,7 +13,7 @@
 use std::fmt::Write;
 
 use anyhow::bail;
-use omnia_wasi_jsondb::{ComparisonOp, FilterTree, ScalarValue};
+use omnia_wasi_docstore::{ComparisonOp, FilterTree, ScalarValue};
 
 /// Validates that a field name is a safe `OData` property identifier
 /// (letters, digits, and underscores, starting with a letter or underscore).
