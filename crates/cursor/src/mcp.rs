@@ -57,45 +57,75 @@ impl McpGuard {
 
         let mut registry = REGISTRY.lock().unwrap_or_else(PoisonError::into_inner);
 
-        let entry = match registry.entry(workspace.clone()) {
-            hash_map::Entry::Occupied(occupied) => occupied.into_mut(),
-            hash_map::Entry::Vacant(vacant) => {
-                let original = match fs::read(&path) {
-                    Ok(bytes) => Some(bytes),
-                    Err(error) if error.kind() == ErrorKind::NotFound => None,
-                    Err(error) => {
-                        return Err(error).with_context(|| format!("reading {}", path.display()));
-                    }
-                };
-                vacant.insert(Workspace {
-                    original,
-                    servers: HashMap::new(),
-                })
+        let names: Vec<String> = servers.keys().cloned().collect();
+        let install_error = {
+            let entry = match registry.entry(workspace.clone()) {
+                hash_map::Entry::Occupied(occupied) => occupied.into_mut(),
+                hash_map::Entry::Vacant(vacant) => {
+                    let original = match fs::read(&path) {
+                        Ok(bytes) => Some(bytes),
+                        Err(error) if error.kind() == ErrorKind::NotFound => None,
+                        Err(error) => {
+                            return Err(error).with_context(|| format!("reading {}", path.display()));
+                        }
+                    };
+                    vacant.insert(Workspace {
+                        original,
+                        servers: HashMap::new(),
+                    })
+                }
+            };
+
+            for (name, url) in servers {
+                entry
+                    .servers
+                    .entry(name.clone())
+                    .or_insert_with(|| ServerState {
+                        refcount: 0,
+                        url: url.clone(),
+                    })
+                    .refcount += 1;
+            }
+
+            if let Err(error) = write_mcp_json(&path, entry) {
+                decrement_servers(&mut entry.servers, &names);
+                Some((error, entry.servers.is_empty()))
+            } else {
+                None
             }
         };
 
-        for (name, url) in servers {
-            entry
-                .servers
-                .entry(name.clone())
-                .or_insert_with(|| ServerState {
-                    refcount: 0,
-                    url: url.clone(),
-                })
-                .refcount += 1;
+        if let Some((error, remove_workspace)) = install_error {
+            if remove_workspace {
+                registry.remove(&workspace);
+            }
+            return Err(error);
         }
-
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
-        }
-        let merged = merge(entry.original.as_deref(), &entry.servers)?;
-        fs::write(&path, merged).with_context(|| format!("writing {}", path.display()))?;
 
         Ok(Self {
             workspace,
             path,
-            names: servers.keys().cloned().collect(),
+            names,
         })
+    }
+}
+
+fn write_mcp_json(path: &Path, workspace: &Workspace) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    }
+    let merged = merge(workspace.original.as_deref(), &workspace.servers)?;
+    fs::write(path, merged).with_context(|| format!("writing {}", path.display()))
+}
+
+fn decrement_servers(servers: &mut HashMap<String, ServerState>, names: &[String]) {
+    for name in names {
+        if let hash_map::Entry::Occupied(mut server) = servers.entry(name.clone()) {
+            server.get_mut().refcount -= 1;
+            if server.get().refcount == 0 {
+                server.remove();
+            }
+        }
     }
 }
 
@@ -108,16 +138,7 @@ impl Drop for McpGuard {
             return;
         };
 
-        for name in &self.names {
-            if let hash_map::Entry::Occupied(mut server) =
-                occupied.get_mut().servers.entry(name.clone())
-            {
-                server.get_mut().refcount -= 1;
-                if server.get().refcount == 0 {
-                    server.remove();
-                }
-            }
-        }
+        decrement_servers(&mut occupied.get_mut().servers, &self.names);
 
         let restore = if occupied.get().servers.is_empty() {
             let workspace = occupied.remove();
@@ -239,6 +260,26 @@ mod tests {
 
         drop(second);
         assert!(!path.exists(), "the file is removed once the last guard drops");
+    }
+
+    #[test]
+    fn install_failure_does_not_leak_refcount() {
+        let workspace = temp_workspace("install-fail");
+        let path = workspace.join(".cursor/mcp.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, b"{ not json").unwrap();
+
+        assert!(
+            McpGuard::install(&workspace, &servers(&[("docs", "http://127.0.0.1:8080/mcp/docs")])).is_err(),
+            "invalid existing mcp.json is rejected"
+        );
+        fs::remove_file(&path).unwrap();
+
+        let guard =
+            McpGuard::install(&workspace, &servers(&[("docs", "http://127.0.0.1:8080/mcp/docs")])).unwrap();
+        assert_eq!(read_servers(&path)["docs"]["url"], "http://127.0.0.1:8080/mcp/docs");
+        drop(guard);
+        assert!(!path.exists(), "a leaked refcount would leave the file after drop");
     }
 
     #[test]
