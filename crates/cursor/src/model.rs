@@ -520,7 +520,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_stream_json_with_tool_calls() {
+    fn parse_stream_json() {
         let stdout = br#"{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}
 {"type":"tool_call","subtype":"completed","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"},"result":{"success":{"content":"hi"}}}}}
 {"type":"result","subtype":"success","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
@@ -533,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn spill_large_prompt_to_file() {
+    fn spill_large_prompt() {
         let workspace =
             std::env::temp_dir().join(format!("omnia-cursor-prompt-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&workspace);

@@ -32,6 +32,18 @@ let options = omnia_azure_blob::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) exercises the `wasi-blobstore` boundary against
+a real storage account (or Azurite). It is `#[ignore]`d so it never runs in CI;
+run it explicitly:
+
+```bash
+AZURE_BLOB_ENDPOINT=https://<account>.blob.core.windows.net \
+AZURE_TENANT_ID=... AZURE_CLIENT_ID=... AZURE_CLIENT_SECRET=... \
+  cargo nextest run -p omnia-azure-blob --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

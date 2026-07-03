@@ -139,6 +139,17 @@ let client = Client::connect_with(options).await?;
 client.ensure_table("my_table").await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) exercises the `wasi-docstore` boundary against a
+real storage account (or Azurite). It is `#[ignore]`d so it never runs in CI; run
+it explicitly:
+
+```bash
+AZURE_STORAGE_ACCOUNT=... AZURE_STORAGE_KEY=... \
+  cargo nextest run -p omnia-azure-table --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

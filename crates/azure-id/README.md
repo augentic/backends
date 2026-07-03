@@ -25,6 +25,19 @@ let options = omnia_azure_id::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) exercises the `wasi-identity` boundary against
+real Azure AD. It is `#[ignore]`d so it never runs in CI; run it explicitly in an
+environment with an ambient credential (managed identity, or a service
+principal):
+
+```bash
+CREDENTIAL_TYPE=ClientSecret \
+AZURE_TENANT_ID=... AZURE_CLIENT_ID=... AZURE_CLIENT_SECRET=... \
+  cargo nextest run -p omnia-azure-id --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

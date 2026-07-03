@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_murmur2() {
+    fn murmur2_vectors() {
         let cases = vec![
             // Taken from
             // https://github.com/tulios/kafkajs/blob/v1.15.0/src/producer/partitioners/default/murmur2.spec.js
@@ -241,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_partitioning() {
+    fn partitioning() {
         let cases = vec![
             // Based on messages published in our Kafka cluster.
             TestCase {

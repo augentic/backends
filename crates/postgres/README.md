@@ -29,6 +29,17 @@ let options = omnia_postgres::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) exercises the `wasi-sql` boundary against a real
+database — the acceptance gate for `into_wasi_row`, which cannot be unit-tested.
+It is `#[ignore]`d so it never runs in CI; run it explicitly:
+
+```bash
+POSTGRES_URL=postgresql://user:pass@localhost:5432/mydb \
+  cargo nextest run -p omnia-postgres --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

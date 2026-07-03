@@ -194,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn creates_and_removes_when_absent() {
+    fn create_remove_absent() {
         let workspace = temp_workspace("absent");
         let path = workspace.join(".cursor/mcp.json");
         let guard =
@@ -206,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    fn merges_and_restores_existing() {
+    fn merge_restore_existing() {
         let workspace = temp_workspace("existing");
         let cursor_dir = workspace.join(".cursor");
         fs::create_dir_all(&cursor_dir).unwrap();
@@ -226,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn refcount_keeps_server_until_last_guard_drops() {
+    fn refcount_last_guard() {
         let workspace = temp_workspace("refcount");
         let path = workspace.join(".cursor/mcp.json");
         let map = servers(&[("docs", "http://127.0.0.1:8080/mcp/docs")]);
@@ -242,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn disjoint_grants_merge_and_unwind() {
+    fn disjoint_grants() {
         let workspace = temp_workspace("disjoint");
         let path = workspace.join(".cursor/mcp.json");
         let docs = McpGuard::install(&workspace, &servers(&[("docs", "http://d/mcp")])).unwrap();

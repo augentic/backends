@@ -232,101 +232,13 @@ fn range_options(
 
 #[cfg(test)]
 mod tests {
-    use azure_storage_blob::models::{BlobItem, BlobProperties, HttpRange};
+    // Only `range_options` is unit-tested here: it is pure, deterministic logic.
+    // The list/metadata mappings (`list_objects`, `object_info`) are proven
+    // against the real service in `tests/live.rs` — a native unit test could
+    // only assert against a reimplementation of them, not the real code path.
+    use azure_storage_blob::models::HttpRange;
 
     use super::*;
-
-    fn collect_blob_names(items: Vec<BlobItem>) -> Vec<String> {
-        items.into_iter().filter_map(|item| item.name).collect()
-    }
-
-    fn object_metadata_from_properties(
-        name: String, container: String, props: &BlobProperties,
-    ) -> ObjectMetadata {
-        let size = props.content_length.unwrap_or(0);
-
-        let created_at =
-            props.creation_time.map_or(0, |t| u64::try_from(t.unix_timestamp()).unwrap_or(0));
-
-        ObjectMetadata {
-            name,
-            container,
-            size,
-            created_at,
-        }
-    }
-
-    fn blob_item(name: Option<&str>) -> BlobItem {
-        let mut item = BlobItem::default();
-        item.name = name.map(String::from);
-        item
-    }
-
-    fn blob_props(content_length: Option<u64>, unix_secs: Option<i64>) -> BlobProperties {
-        let mut props = BlobProperties::default();
-        props.content_length = content_length;
-        props.creation_time =
-            unix_secs.map(|s| azure_core::time::OffsetDateTime::from_unix_timestamp(s).unwrap());
-        props
-    }
-
-    #[test]
-    fn collect_names_from_blob_items() {
-        let items =
-            vec![blob_item(Some("file1.txt")), blob_item(Some("dir/file2.json")), blob_item(None)];
-
-        let names = collect_blob_names(items);
-        assert_eq!(names, vec!["file1.txt", "dir/file2.json"]);
-    }
-
-    #[test]
-    fn collect_names_empty_list() {
-        let names = collect_blob_names(vec![]);
-        assert!(names.is_empty());
-    }
-
-    #[test]
-    fn metadata_from_properties_with_values() {
-        let props = blob_props(Some(1024), Some(1_700_000_000));
-
-        let meta = object_metadata_from_properties("blob.bin".into(), "mycontainer".into(), &props);
-
-        assert_eq!(meta.name, "blob.bin");
-        assert_eq!(meta.container, "mycontainer");
-        assert_eq!(meta.size, 1024);
-        assert_eq!(meta.created_at, 1_700_000_000);
-    }
-
-    #[test]
-    fn metadata_from_properties_defaults_when_none() {
-        let props = blob_props(None, None);
-
-        let meta = object_metadata_from_properties("empty.txt".into(), "c".into(), &props);
-
-        assert_eq!(meta.name, "empty.txt");
-        assert_eq!(meta.container, "c");
-        assert_eq!(meta.size, 0);
-        assert_eq!(meta.created_at, 0);
-    }
-
-    #[test]
-    fn metadata_from_properties_large_blob() {
-        let props = blob_props(Some(5_368_709_120), Some(1_000_000_000));
-
-        let meta = object_metadata_from_properties("large.zip".into(), "backups".into(), &props);
-
-        assert_eq!(meta.size, 5_368_709_120);
-        assert_eq!(meta.created_at, 1_000_000_000);
-    }
-
-    #[test]
-    fn metadata_from_properties_negative_timestamp_defaults_to_zero() {
-        let props = blob_props(Some(256), Some(-86_400));
-
-        let meta = object_metadata_from_properties("old.dat".into(), "archive".into(), &props);
-
-        assert_eq!(meta.created_at, 0);
-    }
 
     #[test]
     fn range_options_full_read_zero_zero() {
@@ -363,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn range_options_rejects_end_less_than_start() {
+    fn range_options_end_before_start() {
         let err = range_options(10, 5).unwrap_err();
         assert!(err.to_string().contains("end (5) < start (10)"));
     }

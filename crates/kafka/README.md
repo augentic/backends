@@ -35,6 +35,16 @@ let options = omnia_kafka::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) exercises the `wasi-messaging` boundary against a
+real broker. It is `#[ignore]`d so it never runs in CI; run it explicitly:
+
+```bash
+COMPONENT=omnia-live KAFKA_BROKERS=localhost:9092 \
+  cargo nextest run -p omnia-kafka --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

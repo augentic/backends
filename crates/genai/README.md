@@ -35,6 +35,17 @@ let options = omnia_genai::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) drives a real completion through the `wasi-model`
+boundary, exercising the in-process tool loop and `resolve` dispatch. It is
+`#[ignore]`d so it never touches the network in CI; run it with a provider key:
+
+```bash
+OPENAI_API_KEY=... \
+  cargo nextest run -p omnia-genai --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

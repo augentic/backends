@@ -49,6 +49,18 @@ let client = Client::connect().await?;
 
 The full guest + runtime demo lives in [`examples/cursor`](../../examples/cursor). It composes the `ask` guest (calls `create`) with the omnia [`mcp`](https://github.com/augentic/omnia/tree/main/examples/mcp) docs guest under one HTTP server.
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) drives a real completion through the `wasi-model`
+boundary (including an in-process MCP grant). Both tests are `#[ignore]`d so they
+never spawn a process in CI; run them with an installed, authenticated
+`cursor-agent`:
+
+```bash
+CURSOR_API_KEY=... \
+  cargo nextest run -p omnia-cursor --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

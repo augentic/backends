@@ -27,6 +27,16 @@ let options = omnia_redis::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) exercises the `wasi-keyvalue` boundary against a
+real Redis. It is `#[ignore]`d so it never runs in CI; run it explicitly:
+
+```bash
+REDIS_URL=redis://localhost:6379 \
+  cargo nextest run -p omnia-redis --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

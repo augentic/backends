@@ -25,6 +25,16 @@ let options = omnia_opentelemetry::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) exercises the `wasi-otel` boundary against a real
+OTLP/gRPC collector. It is `#[ignore]`d so it never runs in CI; run it explicitly:
+
+```bash
+OTEL_GRPC_URL=http://localhost:4317 \
+  cargo nextest run -p omnia-opentelemetry --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

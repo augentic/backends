@@ -485,32 +485,32 @@ mod tests {
     }
 
     #[test]
-    fn parse_collection_empty_errors() {
+    fn parse_collection_empty() {
         parse_collection("").unwrap_err();
     }
 
     #[test]
-    fn parse_collection_empty_pk_errors() {
+    fn parse_collection_empty_pk() {
         parse_collection("users/").unwrap_err();
     }
 
     #[test]
-    fn parse_collection_rejects_short_table_name() {
+    fn parse_collection_short_table() {
         parse_collection("ab/pk").unwrap_err();
     }
 
     #[test]
-    fn parse_collection_rejects_special_chars_in_table() {
+    fn parse_collection_special_chars() {
         parse_collection("my-table/pk").unwrap_err();
     }
 
     #[test]
-    fn parse_collection_rejects_reserved_table_name() {
+    fn parse_collection_reserved() {
         parse_collection("Tables/pk").unwrap_err();
     }
 
     #[test]
-    fn sign_request_uses_shared_key_lite_format() {
+    fn sign_request_shared_key_lite() {
         let key = Base64::encode_string(b"fake-key-for-unit-test-1234567!");
         let hmac_key = Base64::decode_vec(&key).unwrap();
         let auth = sign_request(
@@ -524,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    fn sign_request_azurite_preserves_account_in_path() {
+    fn sign_request_azurite() {
         let key = Base64::encode_string(b"fake-key-for-unit-test-1234567!");
         let hmac_key = Base64::decode_vec(&key).unwrap();
         // Azurite and cloud produce DIFFERENT signatures because the
