@@ -18,7 +18,10 @@ async fn insert_get_delete() -> Result<()> {
     let collection = "omnialive".to_owned();
     // Composite id is `{PartitionKey}\0{RowKey}` (see `document::encode_id`).
     let id = format!("live\u{0}row-{}", std::process::id());
-    let doc = Document { id: id.clone(), data: br#"{"hello":"world"}"#.to_vec() };
+    let doc = Document {
+        id: id.clone(),
+        data: br#"{"hello":"world"}"#.to_vec(),
+    };
 
     client.insert(collection.clone(), doc).await?;
     let got = client.get(collection.clone(), id.clone()).await?.expect("document present");

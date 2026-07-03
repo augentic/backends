@@ -13,6 +13,7 @@ use omnia_wasi_model::{
 };
 use serde_json::Value;
 use tokio::process::Command;
+use tracing::instrument;
 
 use crate::{CURSOR_AGENT_BIN, Client, mcp};
 
@@ -79,10 +80,13 @@ impl WasiModelCtx for Client {
                 approve_mcps: !selected.is_empty(),
             };
 
+            tracing::info!(model = spawn.model, ?format, "cursor completion");
+
             for attempt in 1..=MAX_ATTEMPTS {
                 let stdout = spawn_agent(&prompt, &spawn).await?;
                 let AgentOutput { result, transcript } = parse_output(&stdout)?;
                 let last = attempt == MAX_ATTEMPTS;
+                tracing::debug!(attempt, result = result.len(), "cursor-agent answer");
 
                 match parse_result(&result, &format) {
                     Ok(value) => match check_answer(&value, &format) {
@@ -91,6 +95,7 @@ impl WasiModelCtx for Client {
                         Ok(()) => return Ok(Answer { value, usage: None, transcript }),
                         Err(_) if last => return Ok(Answer { value, usage: None, transcript }),
                         Err(reason) => {
+                            tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
                             prompt = append_repair(&prompt, &result, &reason);
                         }
                     },
@@ -100,6 +105,7 @@ impl WasiModelCtx for Client {
                         );
                     }
                     Err(reason) => {
+                        tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
                         prompt = append_repair(&prompt, &result, &reason);
                     }
                 }
@@ -164,6 +170,14 @@ fn mcp_hint(servers: &[McpServer]) -> String {
     )
 }
 
+#[instrument(
+    skip(prompt, options),
+    fields(
+        model = options.model,
+        workspace = %options.workspace.display(),
+        approve_mcps = options.approve_mcps,
+    )
+)]
 async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>> {
     // if the prompt is too large, spill it to a file and pass the file path to the agent
     let (prompt, _file) = if prompt.len() <= MAX_INLINE_SIZE {

@@ -23,6 +23,9 @@ name = "azure_table"
 path = "azure_table/main.rs"
 
 [dependencies]
+omnia-wasi-http.workspace = true
+omnia-wasi-model.workspace = true
+omnia-wasi-otel.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -34,10 +37,7 @@ omnia-azure-blob = { path = "../crates/azure-blob" }
 omnia-azure-table = { path = "../crates/azure-table" }
 omnia-cursor = { path = "../crates/cursor" }
 omnia-wasi-blobstore.workspace = true
-omnia-wasi-http.workspace = true
 omnia-wasi-docstore.workspace = true
-omnia-wasi-model.workspace = true
-omnia-wasi-otel.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing.workspace = true
@@ -45,7 +45,6 @@ tracing-subscriber = "0.3.23"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 axum = { workspace = true, features = ["macros"] }
-omnia-wasi-http.workspace = true
-omnia-wasi-model.workspace = true
+tracing.workspace = true
 wasip3.workspace = true
 wit-bindgen.workspace = true

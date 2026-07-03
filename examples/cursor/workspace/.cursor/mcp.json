@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "docs": {
+      "url": "http://localhost:8080/mcp/docs"
+    }
+  }
+}

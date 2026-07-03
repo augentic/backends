@@ -15,9 +15,11 @@ use omnia_wasi_identity::{Identity, WasiIdentityCtx};
 #[ignore = "live: needs an ambient Azure credential; run with --run-ignored"]
 async fn acquires_token() -> Result<()> {
     let client = <Client as Backend>::connect().await?;
-    let identity: std::sync::Arc<dyn Identity> = client.get_identity("omnia-live".to_owned()).await?;
+    let identity: std::sync::Arc<dyn Identity> =
+        client.get_identity("omnia-live".to_owned()).await?;
 
-    let token = identity.get_token(vec!["https://management.azure.com/.default".to_owned()]).await?;
+    let token =
+        identity.get_token(vec!["https://management.azure.com/.default".to_owned()]).await?;
     assert!(!token.token.is_empty(), "a non-empty access token is issued");
     Ok(())
 }

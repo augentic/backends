@@ -14,7 +14,8 @@ cargo build -p examples --example cursor-wasm --target wasm32-wasip2
 mkdir -p examples/cursor/workspace
 
 # set Cursor API key
-export CURSOR_API_KEY=
+export CURSOR_API_KEY=<cursor API key>
+export RUST_LOG=info,omnia_cursor=debug,cursor_wasm=debug
 
 # run the host (no config)
 cargo run --example cursor -- run ./target/wasm32-wasip2/debug/examples/cursor_wasm.wasm --mount path=examples/cursor/workspace,name=.,writable

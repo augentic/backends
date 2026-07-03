@@ -19,6 +19,7 @@
 use axum::Router;
 use axum::routing::get;
 use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Sections, Tool};
+use tracing::Level;
 use wasip3::filesystem::preopens;
 use wasip3::http::types as http;
 
@@ -26,12 +27,15 @@ struct CliGuest;
 wasip3::cli::command::export!(CliGuest);
 
 impl wasip3::exports::cli::run::Guest for CliGuest {
+    #[omnia_wasi_otel::instrument(name = "cursor_example_run", level = Level::DEBUG)]
     async fn run() -> Result<(), ()> {
         // Read the preopen table the host populated from `[[mount]]` and lend the
         // tree named `.` as the working tree. `directories` must outlive the
         // `create` call — the lent `workspace` borrows one of its descriptors.
         let directories = preopens::get_directories();
         let workspace = directories.iter().find_map(|(dir, name)| (name == ".").then_some(dir));
+
+        tracing::info!(workspace = workspace.is_some(), mcp = "docs", "cursor example completion");
 
         let request = completion::Request {
             model: None,
@@ -55,7 +59,7 @@ impl wasip3::exports::cli::run::Guest for CliGuest {
             tools: vec![Tool::Mcp(Mcp {
                 name: "docs".to_string(),
                 tools: vec![],
-                url: Some("http://localhost:8080/mcp/docs".to_string()),
+                url: Some("http://localhost:8080/mcp".to_string()),
             })],
             grants: Grants {
                 references: None,
@@ -65,8 +69,14 @@ impl wasip3::exports::cli::run::Guest for CliGuest {
         };
 
         let answer = match completion::create(request).await {
-            Ok(reply) => reply.answer,
-            Err(error) => format!("error: {error:?}"),
+            Ok(reply) => {
+                tracing::info!("cursor example answered");
+                reply.answer
+            }
+            Err(error) => {
+                tracing::warn!(?error, "cursor example completion failed");
+                format!("error: {error:?}")
+            }
         };
 
         println!("{answer}");
@@ -78,14 +88,15 @@ struct HttpMcp;
 wasip3::http::service::export!(HttpMcp);
 
 impl wasip3::exports::http::handler::Guest for HttpMcp {
+    #[omnia_wasi_otel::instrument(name = "http_mcp_handle", level = Level::DEBUG)]
     async fn handle(request: http::Request) -> Result<http::Response, http::ErrorCode> {
-        let router = Router::new().route("/", get(mcp));
+        let router = Router::new().route("/mcp", get(mcp));
         omnia_wasi_http::serve(router, request).await
     }
 }
 
 // Trigger the same completion over HTTP and return its validated answer.
 async fn mcp() -> String {
-    println!("mcp_request");
+    tracing::debug!("cursor example /mcp request");
     "mcp response".to_string()
 }
