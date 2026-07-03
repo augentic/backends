@@ -35,7 +35,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn continuation_roundtrip() {
+    fn continuation() {
         let token = encode_continuation(Some("pk1"), Some("rk1")).unwrap();
         let (pk, rk) = decode_continuation(&token);
         assert_eq!(pk, "pk1");

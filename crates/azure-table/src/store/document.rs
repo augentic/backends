@@ -373,7 +373,7 @@ mod tests {
     // ── round-trip ───────────────────────────────────────────────────
 
     #[test]
-    fn nested_objects_roundtrip() {
+    fn nested_objects() {
         let doc = Document {
             id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"tags": ["a", "b"], "meta": {"x": 1}})).unwrap(),
