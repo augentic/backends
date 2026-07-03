@@ -84,6 +84,12 @@ omnia-wasi-otel = "0.35.0"
 omnia-wasi-sql = "0.35.0"
 omnia-wasi-vault = "0.35.0"
 
+# `wrpc-wasmtime` 0.1.0 is unpublished (the crate was renamed from
+# `wrpc-runtime-wasmtime` upstream); it is supplied by [patch.crates-io] below
+# until the first crates.io release.
+wrpc-transport = "0.29.0"
+wrpc-wasmtime = "0.1.0"
+
 [patch.crates-io]
 # omnia = { git = "https://github.com/augentic/omnia.git" }
 # omnia-wasi-blobstore = { git = "https://github.com/augentic/omnia.git" }
@@ -108,6 +114,13 @@ omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 omnia-wasi-sql = { path = "../omnia/crates/wasi-sql" }
 omnia-wasi-vault = { path = "../omnia/crates/wasi-vault" }
 omnia-wasi-websocket = { path = "../omnia/crates/wasi-websocket" }
+
+# Mirrors omnia's wrpc patches: patches only apply from the top-level
+# workspace, so omnia's transitive wrpc deps must be re-declared here.
+# `wrpc-wasmtime` 0.1.0 is unpublished (renamed from `wrpc-runtime-wasmtime`
+# upstream); drop both once a wasmtime-46-compatible release hits crates.io.
+wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
+wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
 
 [profile.release]
 lto = true
