@@ -1,32 +1,19 @@
 # Azure Table Storage Desk Test
 
-Self-seeding desk test for the `omnia-azure-table` crate's `wasi-jsondb`
-implementation. It creates the table, seeds five records across two partitions
-(`desk` and `mobile`) covering multiple `OData` types, exercises every filter
-variant, CRUD operation, and cross-partition identity, then cleans up after
-itself.
+Self-seeding desk test for the `omnia-azure-table` crate's `wasi-docstore` implementation. It creates the table, seeds five records across two partitions (`desk` and `mobile`) covering multiple `OData` types, exercises every filter variant, CRUD operation, and cross-partition identity, then cleans up after itself.
 
 No manual data pre-seeding is required.
 
 ## Covered scenarios
 
-- **CRUD**: insert, get round-trip, put (upsert), delete, double-delete,
-  duplicate insert rejected, get non-existent returns None
-- **Multi-partition identity**: same RowKey in different partitions coexists
-  with distinct composite IDs; partition-scoped vs cross-partition queries
-  return correct subsets
-- **Cross-partition round-trip**: query all → put/delete using only the
-  document's composite id (no partition key in the collection string)
-- **Filters**: `Compare` (Eq/Ne/Gt/Gte/Lte across Boolean, Int32, Float64,
-  String), `InList`, `NotInList`, `And`, `Or`, `Not`
-- **Unsupported filter rejection**: `Contains`, `StartsWith`, `EndsWith`,
-  `IsNull`, `IsNotNull` are rejected with an error (Azure Table `OData`
-  does not support string functions or null checks)
+- **CRUD**: insert, get round-trip, put (upsert), delete, double-delete, duplicate insert rejected, get non-existent returns None
+- **Multi-partition identity**: same RowKey in different partitions coexists with distinct composite IDs; partition-scoped vs cross-partition queries return correct subsets
+- **Cross-partition round-trip**: query all → put/delete using only the document's composite id (no partition key in the collection string)
+- **Filters**: `Compare` (Eq/Ne/Gt/Gte/Lte across Boolean, Int32, Float64, String), `InList`, `NotInList`, `And`, `Or`, `Not`
+- **Unsupported filter rejection**: `Contains`, `StartsWith`, `EndsWith`, `IsNull`, `IsNotNull` are rejected with an error (Azure Table `OData` does not support string functions or null checks)
 - **Query options**: `offset`, `limit`, continuation tokens
-- **OData type annotations**: `Edm.Int64` round-trip, `Edm.Guid` and
-  `Edm.DateTime` via serde `#[serde(rename = "Field@odata.type")]` pattern
-- **Error paths**: bare RowKey (missing partition separator) rejected for
-  point operations; table-only collection accepted with composite id
+- **OData type annotations**: `Edm.Int64` round-trip, `Edm.Guid` and `Edm.DateTime` via serde `#[serde(rename = "Field@odata.type")]` pattern
+- **Error paths**: bare RowKey (missing partition separator) rejected for point operations; table-only collection accepted with composite id
 
 ## Running with Azurite
 
@@ -61,8 +48,7 @@ No manual data pre-seeding is required.
 
 ## Running against Azure
 
-Set the storage account name and key. Leave `AZURE_TABLE_ENDPOINT` unset
-(defaults to `https://{account}.table.core.windows.net`):
+Set the storage account name and key. Leave `AZURE_TABLE_ENDPOINT` unset (defaults to `https://{account}.table.core.windows.net`):
 
 ```bash
 AZURE_STORAGE_ACCOUNT=myaccount \
@@ -73,7 +59,7 @@ cargo run --example azure_table
 ## Expected output
 
 ```
-Azure Table JSONDB desk test
+Azure Table document store desk test
 ============================
 
 Table 'testJsondb': created

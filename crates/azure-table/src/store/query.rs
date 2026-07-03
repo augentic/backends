@@ -11,7 +11,6 @@ const TOKEN_SEP: char = '\0';
 /// `x-ms-continuation-NextRowKey` response headers. We pack both
 /// into one string separated by a null byte.
 #[must_use]
-#[allow(clippy::similar_names)]
 pub fn encode_continuation(
     next_partition_key: Option<&str>, next_row_key: Option<&str>,
 ) -> Option<String> {
@@ -36,7 +35,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn continuation_roundtrip() {
+    fn continuation() {
         let token = encode_continuation(Some("pk1"), Some("rk1")).unwrap();
         let (pk, rk) = decode_continuation(&token);
         assert_eq!(pk, "pk1");

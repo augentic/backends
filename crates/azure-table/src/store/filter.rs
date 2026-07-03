@@ -13,7 +13,7 @@
 use std::fmt::Write;
 
 use anyhow::bail;
-use omnia_wasi_jsondb::{ComparisonOp, FilterTree, ScalarValue};
+use omnia_wasi_docstore::{ComparisonOp, FilterTree, ScalarValue};
 
 /// Validates that a field name is a safe `OData` property identifier
 /// (letters, digits, and underscores, starting with a letter or underscore).
@@ -155,7 +155,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compare_eq_to_odata() {
+    fn compare_eq() {
         let f = FilterTree::Compare {
             field: "Name".into(),
             op: ComparisonOp::Eq,
@@ -166,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn in_list_to_odata() {
+    fn in_list() {
         let f = FilterTree::InList {
             field: "Status".into(),
             values: vec![ScalarValue::Int32(1), ScalarValue::Int32(2)],
@@ -176,13 +176,13 @@ mod tests {
     }
 
     #[test]
-    fn is_null_rejected() {
+    fn is_null() {
         let f = FilterTree::IsNull("Zone".into());
         to_odata(&f).unwrap_err();
     }
 
     #[test]
-    fn contains_rejected() {
+    fn contains() {
         let f = FilterTree::Contains {
             field: "Name".into(),
             pattern: "Alice".into(),
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn starts_with_rejected() {
+    fn starts_with() {
         let f = FilterTree::StartsWith {
             field: "Name".into(),
             pattern: "Al".into(),
@@ -200,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn ends_with_rejected() {
+    fn ends_with() {
         let f = FilterTree::EndsWith {
             field: "Name".into(),
             pattern: "ce".into(),
@@ -209,13 +209,13 @@ mod tests {
     }
 
     #[test]
-    fn is_not_null_rejected() {
+    fn is_not_null() {
         let f = FilterTree::IsNotNull("Zone".into());
         to_odata(&f).unwrap_err();
     }
 
     #[test]
-    fn and_with_unsupported_child_rejected() {
+    fn and_unsupported_child() {
         let f = FilterTree::And(vec![
             FilterTree::Compare {
                 field: "Active".into(),
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn timestamp_odata() {
+    fn timestamp() {
         let f = FilterTree::Compare {
             field: "Created".into(),
             op: ComparisonOp::Gte,
@@ -242,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn not_in_list_to_odata() {
+    fn not_in_list() {
         let f = FilterTree::NotInList {
             field: "Name".into(),
             values: vec![ScalarValue::Str("Alice".into()), ScalarValue::Str("Bob".into())],
@@ -252,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn not_compare_to_odata() {
+    fn not_compare() {
         let f = FilterTree::Not(Box::new(FilterTree::Compare {
             field: "IsActive".into(),
             op: ComparisonOp::Eq,
@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn field_with_injection_rejected() {
+    fn field_injection() {
         let f = FilterTree::Compare {
             field: "RowKey eq 'admin' or 1 eq 1 and Name".into(),
             op: ComparisonOp::Eq,
@@ -274,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_field_rejected() {
+    fn empty_field() {
         let f = FilterTree::Compare {
             field: String::new(),
             op: ComparisonOp::Eq,
@@ -284,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn field_with_underscore_allowed() {
+    fn field_underscore() {
         let f = FilterTree::Compare {
             field: "_internal_flag".into(),
             op: ComparisonOp::Eq,
@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn null_comparison_rejected() {
+    fn null_comparison() {
         let f = FilterTree::Compare {
             field: "Region".into(),
             op: ComparisonOp::Eq,
@@ -306,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_in_list_rejected() {
+    fn empty_in_list() {
         let f = FilterTree::InList {
             field: "Status".into(),
             values: vec![],
@@ -316,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_not_in_list_rejected() {
+    fn empty_not_in_list() {
         let f = FilterTree::NotInList {
             field: "Status".into(),
             values: vec![],
@@ -325,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn float_whole_number_preserves_decimal() {
+    fn float_whole_number() {
         let f = FilterTree::Compare {
             field: "Rating".into(),
             op: ComparisonOp::Gt,
@@ -336,7 +336,7 @@ mod tests {
     }
 
     #[test]
-    fn timestamp_with_single_quote_escaped() {
+    fn timestamp_single_quote() {
         let f = FilterTree::Compare {
             field: "Created".into(),
             op: ComparisonOp::Eq,
@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    fn or_to_odata() {
+    fn or() {
         let f = FilterTree::Or(vec![
             FilterTree::Compare {
                 field: "Points".into(),
@@ -365,14 +365,14 @@ mod tests {
     }
 
     #[test]
-    fn empty_and_rejected() {
+    fn empty_and() {
         let f = FilterTree::And(vec![]);
         let err = to_odata(&f).unwrap_err().to_string();
         assert!(err.contains("at least one child"), "{err}");
     }
 
     #[test]
-    fn empty_or_rejected() {
+    fn empty_or() {
         let f = FilterTree::Or(vec![]);
         let err = to_odata(&f).unwrap_err().to_string();
         assert!(err.contains("at least one child"), "{err}");

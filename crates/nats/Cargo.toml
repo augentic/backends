@@ -31,3 +31,8 @@ omnia-wasi-keyvalue.workspace = true
 omnia-wasi-messaging.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+# The live test (`tests/live.rs`) is a separate crate; it needs tokio's test
+# runtime features, which the library dependency does not enable.
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

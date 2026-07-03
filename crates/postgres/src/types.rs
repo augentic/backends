@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_types_serialization() {
+    fn simple_types() {
         assert_serializes_successfully(&PgType::Int32(Some(42)), &Type::INT4);
         assert_serializes_successfully(&PgType::Int64(Some(i64::MAX)), &Type::INT8);
         assert_serializes_successfully(&PgType::Uint32(Some(u32::MAX)), &Type::INT8);
@@ -117,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn temporal_types_serializtion() {
+    fn temporal_types() {
         let date = NaiveDate::from_ymd_opt(2024, 12, 25).unwrap();
         assert_serializes_successfully(&PgType::Date(Some(date)), &Type::DATE);
 
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn binary_types_serialization() {
+    fn binary_types() {
         let data = vec![0x01, 0x02, 0x03, 0x04, 0xFF];
         assert_serializes_successfully(&PgType::Binary(Some(data)), &Type::BYTEA);
 
@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn json_serialization() {
+    fn json() {
         let valid_json = PgType::Text(Some(r#"{"name":"test","value":42}"#.to_string()));
         assert_serializes_successfully(&valid_json, &Type::JSON);
 
@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn null_values_serialization() {
+    fn null_values() {
         assert_serializes_as_null(&PgType::Int32(None), &Type::INT4);
         assert_serializes_as_null(&PgType::Int64(None), &Type::INT8);
         assert_serializes_as_null(&PgType::Float(None), &Type::FLOAT4);
@@ -176,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn pgtype_uses_binary_format() {
+    fn pgtype_binary_format() {
         let value = PgType::Int32(Some(42));
         assert!(matches!(value.encode_format(&Type::INT4), tokio_postgres::types::Format::Binary));
     }

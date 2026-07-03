@@ -6,6 +6,15 @@ version.workspace = true
 rust-version.workspace = true
 
 [[example]]
+name = "cursor-wasm"
+path = "cursor/guest.rs"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "cursor"
+path = "cursor/runtime.rs"
+
+[[example]]
 name = "azure_blob"
 path = "azure_blob/main.rs"
 
@@ -14,14 +23,28 @@ name = "azure_table"
 path = "azure_table/main.rs"
 
 [dependencies]
+omnia-wasi-http.workspace = true
+omnia-wasi-model.workspace = true
+omnia-wasi-otel.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+cfg-if = "1.0.4"
 dotenvy = "0.15.7"
 omnia.workspace = true
 omnia-azure-blob = { path = "../crates/azure-blob" }
 omnia-azure-table = { path = "../crates/azure-table" }
+omnia-cursor = { path = "../crates/cursor" }
 omnia-wasi-blobstore.workspace = true
-omnia-wasi-jsondb.workspace = true
+omnia-wasi-docstore.workspace = true
 serde.workspace = true
-serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing.workspace = true
 tracing-subscriber = "0.3.23"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+axum = { workspace = true, features = ["macros"] }
+tracing.workspace = true
+wasip3 = { version = "0.7.0", features = ["http-compat"] }
+wit-bindgen = { version = "0.58.0", features = ["async-spawn"] }

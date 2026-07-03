@@ -16,43 +16,6 @@ use omnia_wasi_blobstore::{
 
 use crate::Client;
 
-fn now_unix_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
-}
-
-/// Build download options with an HTTP `Range` header for partial reads.
-///
-/// Returns `Ok(None)` for full-object reads (the convention is `start=0, end=0`
-/// or `start=0, end=u64::MAX`). When `end` is `0` or `u64::MAX` but `start > 0`,
-/// an open-ended range (`bytes=start-`) is used.
-///
-/// Returns `Err` when `end` is a concrete (non-sentinel) value that is less than
-/// `start`, which would produce an invalid HTTP Range header.
-fn range_options(
-    start: u64, end: u64,
-) -> anyhow::Result<Option<BlobClientDownloadOptions<'static>>> {
-    if start == 0 && (end == 0 || end == u64::MAX) {
-        return Ok(None);
-    }
-
-    let unbounded = end == 0 || end == u64::MAX;
-
-    if !unbounded && end < start {
-        anyhow::bail!("invalid byte range: end ({end}) < start ({start})");
-    }
-
-    let range = if unbounded {
-        HttpRange::from_offset(start)
-    } else {
-        HttpRange::new(start, end - start + 1)
-    };
-
-    Ok(Some(BlobClientDownloadOptions {
-        range: Some(range),
-        ..Default::default()
-    }))
-}
-
 /// `wasi-blobstore` implementation backed by Azure Blob Storage.
 impl WasiBlobstoreCtx for Client {
     fn create_container(&self, name: String) -> FutureResult<Arc<dyn Container>> {
@@ -237,103 +200,45 @@ impl Container for AzureBlobContainer {
     }
 }
 
+fn now_unix_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+}
+
+// Download options with an HTTP `Range` header for partial reads.
+fn range_options(
+    start: u64, end: u64,
+) -> anyhow::Result<Option<BlobClientDownloadOptions<'static>>> {
+    if start == 0 && (end == 0 || end == u64::MAX) {
+        return Ok(None);
+    }
+
+    let unbounded = end == 0 || end == u64::MAX;
+
+    if !unbounded && end < start {
+        anyhow::bail!("invalid byte range: end ({end}) < start ({start})");
+    }
+
+    let range = if unbounded {
+        HttpRange::from_offset(start)
+    } else {
+        HttpRange::new(start, end - start + 1)
+    };
+
+    Ok(Some(BlobClientDownloadOptions {
+        range: Some(range),
+        ..Default::default()
+    }))
+}
+
 #[cfg(test)]
 mod tests {
-    use azure_storage_blob::models::{BlobItem, BlobProperties, HttpRange};
+    // Only `range_options` is unit-tested here: it is pure, deterministic logic.
+    // The list/metadata mappings (`list_objects`, `object_info`) are proven
+    // against the real service in `tests/live.rs` — a native unit test could
+    // only assert against a reimplementation of them, not the real code path.
+    use azure_storage_blob::models::HttpRange;
 
     use super::*;
-
-    fn collect_blob_names(items: Vec<BlobItem>) -> Vec<String> {
-        items.into_iter().filter_map(|item| item.name).collect()
-    }
-
-    fn object_metadata_from_properties(
-        name: String, container: String, props: &BlobProperties,
-    ) -> ObjectMetadata {
-        let size = props.content_length.unwrap_or(0);
-
-        let created_at =
-            props.creation_time.map_or(0, |t| u64::try_from(t.unix_timestamp()).unwrap_or(0));
-
-        ObjectMetadata {
-            name,
-            container,
-            size,
-            created_at,
-        }
-    }
-
-    fn blob_item(name: Option<&str>) -> BlobItem {
-        let mut item = BlobItem::default();
-        item.name = name.map(String::from);
-        item
-    }
-
-    fn blob_props(content_length: Option<u64>, unix_secs: Option<i64>) -> BlobProperties {
-        let mut props = BlobProperties::default();
-        props.content_length = content_length;
-        props.creation_time =
-            unix_secs.map(|s| azure_core::time::OffsetDateTime::from_unix_timestamp(s).unwrap());
-        props
-    }
-
-    #[test]
-    fn collect_names_from_blob_items() {
-        let items =
-            vec![blob_item(Some("file1.txt")), blob_item(Some("dir/file2.json")), blob_item(None)];
-
-        let names = collect_blob_names(items);
-        assert_eq!(names, vec!["file1.txt", "dir/file2.json"]);
-    }
-
-    #[test]
-    fn collect_names_empty_list() {
-        let names = collect_blob_names(vec![]);
-        assert!(names.is_empty());
-    }
-
-    #[test]
-    fn metadata_from_properties_with_values() {
-        let props = blob_props(Some(1024), Some(1_700_000_000));
-
-        let meta = object_metadata_from_properties("blob.bin".into(), "mycontainer".into(), &props);
-
-        assert_eq!(meta.name, "blob.bin");
-        assert_eq!(meta.container, "mycontainer");
-        assert_eq!(meta.size, 1024);
-        assert_eq!(meta.created_at, 1_700_000_000);
-    }
-
-    #[test]
-    fn metadata_from_properties_defaults_when_none() {
-        let props = blob_props(None, None);
-
-        let meta = object_metadata_from_properties("empty.txt".into(), "c".into(), &props);
-
-        assert_eq!(meta.name, "empty.txt");
-        assert_eq!(meta.container, "c");
-        assert_eq!(meta.size, 0);
-        assert_eq!(meta.created_at, 0);
-    }
-
-    #[test]
-    fn metadata_from_properties_large_blob() {
-        let props = blob_props(Some(5_368_709_120), Some(1_000_000_000));
-
-        let meta = object_metadata_from_properties("large.zip".into(), "backups".into(), &props);
-
-        assert_eq!(meta.size, 5_368_709_120);
-        assert_eq!(meta.created_at, 1_000_000_000);
-    }
-
-    #[test]
-    fn metadata_from_properties_negative_timestamp_defaults_to_zero() {
-        let props = blob_props(Some(256), Some(-86_400));
-
-        let meta = object_metadata_from_properties("old.dat".into(), "archive".into(), &props);
-
-        assert_eq!(meta.created_at, 0);
-    }
 
     #[test]
     fn range_options_full_read_zero_zero() {
@@ -370,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn range_options_rejects_end_less_than_start() {
+    fn range_options_end_before_start() {
         let err = range_options(10, 5).unwrap_err();
         assert!(err.to_string().contains("end (5) < start (10)"));
     }

@@ -1,119 +1,217 @@
-//! # Cursor Agent Backend
-
-use std::path::Path;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use futures::FutureExt as _;
 use omnia_wasi_model::{
-    Answer, Format, FutureResult, PreparedPrompt, ResponseFormat, ToolHost, WasiModelCtx,
+    Answer, Format, FutureResult, PreparedRequest, Request, Role, Tool, ToolHost, ToolTurn,
+    Transcript, WasiModelCtx,
 };
 use serde_json::Value;
+use tokio::process::Command;
+use tracing::instrument;
 
-use crate::{CURSOR_AGENT_BIN, Client};
+use crate::{CURSOR_AGENT_BIN, Client, mcp};
+
+const MAX_ATTEMPTS: usize = 3;
+const MAX_INLINE_SIZE: usize = 128_000;
+
+// A prompt-granted MCP server and the endpoint URL the guest supplied for it.
+struct McpServer {
+    name: String,
+    url: String,
+    tools: Vec<String>,
+}
+
+struct SpawnOptions<'a> {
+    model: Option<&'a str>,
+    workspace: &'a Path,
+    timeout: Duration,
+    approve_mcps: bool,
+}
+
+#[derive(Debug)]
+struct AgentOutput {
+    result: String,
+    transcript: Option<Transcript>,
+}
+
+static PROMPT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 impl WasiModelCtx for Client {
     fn complete(
-        &self, request: PreparedPrompt, tool_host: Arc<dyn ToolHost>,
+        &self, request: PreparedRequest, tool_host: Arc<dyn ToolHost>,
     ) -> FutureResult<Answer> {
-        // Cursor owns its own loop and edits the tree directly
-        let model = self.model.clone();
-        let workspace = tool_host
-            .local_path()
-            .map(Path::to_path_buf)
-            .or_else(|| self.workspace.as_deref().map(Path::to_path_buf));
+        let workspace = tool_host.local_path().map(Path::to_path_buf);
         let timeout = self.timeout;
 
         async move {
-            let kind = request.prompt.response_format.kind;
-            let agent_prompt = build_prompt(&request);
+            let format = request.request.format.clone();
+            let mut prompt = build_prompt(&request);
 
-            // an agent-driven build needs a node-local tree.
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
             };
+            std::fs::create_dir_all(&workspace)?;
+            let workspace = workspace
+                .canonicalize()
+                .with_context(|| format!("workspace {}", workspace.display()))?;
 
-            let stdout = spawn_agent(&agent_prompt, model.as_deref(), &workspace, timeout).await?;
-            let result = extract_result(&stdout)?;
-            let value = parse_result(&result, kind)?;
+            // Per-prompt MCP grants carry their own endpoint URL; no grant means
+            // no MCP wiring (MCP is opt-in per completion).
+            let selected = select_mcp_servers(&request.request)?;
+            let _mcp_guard = if selected.is_empty() {
+                None
+            } else {
+                prompt = format!("{}\n\n{prompt}", mcp_hint(&selected));
+                let map: BTreeMap<String, String> =
+                    selected.iter().map(|s| (s.name.clone(), s.url.clone())).collect();
+                Some(mcp::McpGuard::install(&workspace, &map)?)
+            };
 
-            Ok(Answer {
-                value,
-                transcript: None,
-            })
+            let spawn = SpawnOptions {
+                model: request.request.model.as_deref(),
+                workspace: &workspace,
+                timeout,
+                approve_mcps: !selected.is_empty(),
+            };
+
+            tracing::info!(model = spawn.model, ?format, "cursor completion");
+
+            for attempt in 1..=MAX_ATTEMPTS {
+                let stdout = spawn_agent(&prompt, &spawn).await?;
+                let AgentOutput { result, transcript } = parse_output(&stdout)?;
+                let last = attempt == MAX_ATTEMPTS;
+                tracing::debug!(attempt, result = result.len(), "cursor-agent answer");
+
+                match parse_result(&result, &format) {
+                    Ok(value) => match check_answer(&value, &format) {
+                        // a value of the wrong shape is better than no answer
+                        // on the last attempt
+                        Ok(()) => return Ok(Answer { value, usage: None, transcript }),
+                        Err(_) if last => return Ok(Answer { value, usage: None, transcript }),
+                        Err(reason) => {
+                            tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
+                            prompt = append_repair(&prompt, &result, &reason);
+                        }
+                    },
+                    Err(reason) if last => {
+                        bail!(
+                            "cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts: {reason}"
+                        );
+                    }
+                    Err(reason) => {
+                        tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
+                        prompt = append_repair(&prompt, &result, &reason);
+                    }
+                }
+            }
+
+            unreachable!("the final attempt always returns or bails");
         }
         .boxed()
     }
 }
 
-fn build_prompt(request: &PreparedPrompt) -> String {
+fn build_prompt(request: &PreparedRequest) -> String {
     let mut parts: Vec<String> = Vec::new();
     if let Some(system) = &request.system {
         parts.push(system.clone());
     }
     for message in &request.messages {
-        if message.role == "user" {
-            parts.push(message.content.clone());
-        } else {
-            parts.push(format!("[{}]\n{}", message.role, message.content));
+        match message.role {
+            Role::User => parts.push(message.content.clone()),
+            Role::System => parts.push(format!("[system]\n{}", message.content)),
+            Role::Assistant => parts.push(format!("[assistant]\n{}", message.content)),
         }
     }
-    parts.push(answer_instruction(&request.prompt.response_format));
+    parts.push(answer_instruction(&request.request.format));
     parts.join("\n\n")
 }
 
-// Constrain the agent's answer to the requested `response-format`.
-fn answer_instruction(response_format: &ResponseFormat) -> String {
-    match response_format.kind {
-        Format::JsonSchema => response_format.json_schema.as_ref().map_or_else(
-            || {
-                "When you are done, reply with only your final answer as a single JSON value and \
-                 nothing else."
-                    .to_owned()
-            },
-            |spec| {
-                format!(
-                    "When you are done, reply with only your final answer as a single JSON value \
-                     conforming to this JSON Schema, and nothing else:\n{}",
-                    spec.schema
-                )
-            },
-        ),
-        Format::JsonObject => "When you are done, reply with only your final answer as \
-             a single JSON object and nothing else."
-            .to_owned(),
-        Format::Text => {
-            "When you are done, reply with only your final answer as plain text and nothing else."
-                .to_owned()
-        }
+// Collect the prompt's MCP grants, each carrying its own endpoint URL. A grant
+// without a URL is an error: the backend has nowhere to point the spawned agent.
+fn select_mcp_servers(request: &Request) -> Result<Vec<McpServer>> {
+    let mut selected = Vec::new();
+    for tool in &request.tools {
+        let Tool::Mcp(grant) = tool else { continue };
+        let url = grant.url.clone().ok_or_else(|| {
+            anyhow!("MCP grant `{}` has no url; the guest must supply one", grant.name)
+        })?;
+        selected.push(McpServer {
+            name: grant.name.clone(),
+            url,
+            tools: grant.tools.clone(),
+        });
     }
+    Ok(selected)
 }
 
-async fn spawn_agent(
-    agent_prompt: &str, model: Option<&str>, workspace: &Path, timeout: Duration,
-) -> Result<Vec<u8>> {
-    let mut command = tokio::process::Command::new(CURSOR_AGENT_BIN);
-    command
+// A natural-language hint naming the granted MCP servers and any tool allowlist,
+// prepended so the spawned agent prefers them over assumptions.
+fn mcp_hint(servers: &[McpServer]) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    for server in servers {
+        if server.tools.is_empty() {
+            lines.push(format!("- `{}`", server.name));
+        } else {
+            lines.push(format!("- `{}` (use only: {})", server.name, server.tools.join(", ")));
+        }
+    }
+    format!(
+        "The following read-only MCP servers are available. Consult their tools and resources for \
+         authoritative reference material before answering, and prefer that material over \
+         assumptions:\n{}",
+        lines.join("\n")
+    )
+}
+
+#[instrument(
+    skip(prompt, options),
+    fields(
+        model = options.model,
+        workspace = %options.workspace.display(),
+        approve_mcps = options.approve_mcps,
+    )
+)]
+async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>> {
+    // if the prompt is too large, spill it to a file and pass the file path to the agent
+    let (prompt, _file) = if prompt.len() <= MAX_INLINE_SIZE {
+        (prompt.to_owned(), None)
+    } else {
+        into_prompt_file(prompt, options.workspace)?
+    };
+
+    let mut cmd = Command::new(CURSOR_AGENT_BIN);
+    cmd.kill_on_drop(true)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .arg("--print")
         .arg("--force")
         .arg("--trust")
         .arg("--output-format")
-        .arg("json")
+        .arg("stream-json")
         .arg("--workspace")
-        .arg(workspace);
-    if let Some(model) = model {
-        command.arg("--model").arg(model);
+        .arg(options.workspace);
+    if options.approve_mcps {
+        cmd.arg("--approve-mcps");
     }
-    command.arg(agent_prompt);
+    if let Some(model) = options.model {
+        cmd.arg("--model").arg(model);
+    }
+    cmd.arg(prompt);
 
-    // `cursor-agent --print` is known to occasionally hang after finishing, so
-    // the spawn is wrapped in a wall-clock bound (§5.3). The enclosing per-call
-    // `guest_timeout` is the outer bound.
-    let output = match tokio::time::timeout(timeout, command.output()).await {
-        Err(_elapsed) => bail!("cursor-agent timed out after {}s", timeout.as_secs()),
-        Ok(result) => result.with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?,
-    };
+    let child = cmd.spawn().with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?;
+
+    let output = tokio::time::timeout(options.timeout, child.wait_with_output())
+        .await
+        .map_err(|_elapsed| anyhow!("cursor-agent timed out after {}s", options.timeout.as_secs()))?
+        .with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?;
 
     if !output.status.success() {
         bail!(
@@ -126,111 +224,220 @@ async fn spawn_agent(
     Ok(output.stdout)
 }
 
-// Extract the result field from `cursor-agent`'s `--output-format json` payload.
-fn extract_result(stdout: &[u8]) -> Result<String> {
-    let text = std::str::from_utf8(stdout).context("cursor-agent did not emit valid UTF-8")?;
-
-    // extract result
-    let envelope = if let Ok(value) = serde_json::from_str::<Value>(text.trim()) {
-        value
-    } else {
-        let Some(last) = text.lines().rev().find(|line| !line.trim().is_empty()) else {
-            bail!("cursor-agent did not emit a JSON result object");
-        };
-        serde_json::from_str::<Value>(last.trim())?
-    };
-
-    if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
-        bail!(
-            "cursor-agent reported an error: {}",
-            envelope.get("result").and_then(Value::as_str).unwrap_or("<no detail>")
-        );
-    }
-
-    envelope
-        .get("result")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-        .context("cursor-agent JSON output has no string `result` field")
+// Removes a spill-to-disk prompt file when the spawn finishes.
+struct PromptFile {
+    path: PathBuf,
 }
 
-fn parse_result(result: &str, kind: Format) -> Result<Value> {
-    match kind {
-        Format::Text => Ok(Value::String(result.to_owned())),
-        Format::JsonObject | Format::JsonSchema => {
-            let json = strip_code_fence(result);
-            serde_json::from_str::<Value>(json)
-                .with_context(|| format!("cursor-agent answer was not valid JSON: {json}"))
+impl Drop for PromptFile {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_file(&self.path) {
+            tracing::warn!(path = %self.path.display(), %error, "failed to remove prompt file");
         }
     }
 }
 
-/// Strip a wrapping Markdown code fence (```` ```json … ``` ````), if present.
+// Write oversized prompts to the workspace and return a short CLI argument.
+fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, Option<PromptFile>)> {
+    let cursor_dir = workspace.join(".cursor");
+    std::fs::create_dir_all(&cursor_dir)
+        .with_context(|| format!("creating {}", cursor_dir.display()))?;
+
+    let id = PROMPT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let path = cursor_dir.join(format!("omnia-prompt-{id}.txt"));
+    std::fs::write(&path, prompt)
+        .with_context(|| format!("writing prompt file {}", path.display()))?;
+
+    let arg = format!(
+        "Follow every instruction in the file at `{}`. When you are done, reply exactly as that \
+         file instructs.",
+        path.display()
+    );
+
+    Ok((arg, Some(PromptFile { path })))
+}
+
+fn answer_instruction(format: &Format) -> String {
+    match format {
+        Format::Schema(spec) => format!(
+            "When you are done, reply with only your final answer as a single JSON value \
+             conforming to this JSON Schema, and nothing else:\n{}",
+            spec.schema
+        ),
+        Format::Json => "When you are done, reply with only your final answer as \
+             a single JSON object and nothing else."
+            .to_owned(),
+        Format::Text => {
+            "When you are done, reply with only your final answer as plain text and nothing else."
+                .to_owned()
+        }
+    }
+}
+
+fn append_repair(prompt: &str, answer: &str, reason: &str) -> String {
+    format!(
+        "{prompt}\n\nYour previous answer did not satisfy the required response format ({reason}). \
+         Your previous answer was:\n{answer}\n\nReply again with only the corrected answer and \
+         nothing else."
+    )
+}
+
+fn check_answer(value: &Value, format: &Format) -> Result<(), String> {
+    match format {
+        Format::Text if !value.is_string() => Err("answer is not a JSON string".to_owned()),
+        Format::Json if !value.is_object() => Err("answer is not a JSON object".to_owned()),
+        _ => Ok(()),
+    }
+}
+
+// Parse `stream-json` NDJSON (or a legacy single-line `json` payload).
+fn parse_output(stdout: &[u8]) -> Result<AgentOutput> {
+    let text = std::str::from_utf8(stdout).context("cursor-agent did not emit valid UTF-8")?;
+
+    let mut result: Option<String> = None;
+    let mut pending_tools: HashMap<String, (String, Value)> = HashMap::new();
+    let mut turns: Vec<ToolTurn> = Vec::new();
+    let mut parsed_lines = 0_u32;
+
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        parsed_lines += 1;
+        let event: Value =
+            serde_json::from_str(line).with_context(|| format!("invalid JSON event: {line}"))?;
+        match event.get("type").and_then(Value::as_str) {
+            Some("result") => {
+                result = result_payload(&event)?;
+            }
+            Some("tool_call") => match event.get("subtype").and_then(Value::as_str) {
+                Some("started") => {
+                    if let (Some(call_id), Some((tool, args))) = (
+                        event.get("call_id").and_then(Value::as_str),
+                        event.get("tool_call").and_then(tool_call_identity),
+                    ) {
+                        pending_tools.insert(call_id.to_owned(), (tool, args));
+                    }
+                }
+                Some("completed") => {
+                    if let (Some(call_id), Some(tool_call)) =
+                        (event.get("call_id").and_then(Value::as_str), event.get("tool_call"))
+                    {
+                        let (tool, args) = pending_tools.remove(call_id).unwrap_or_else(|| {
+                            tool_call_identity(tool_call)
+                                .unwrap_or_else(|| ("unknown".to_owned(), Value::Null))
+                        });
+                        let tool_result = tool_call_result(tool_call).unwrap_or(Value::Null);
+                        turns.push(ToolTurn {
+                            tool,
+                            args,
+                            result: tool_result,
+                        });
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    if let Some(result) = result {
+        let transcript = if turns.is_empty() { None } else { Some(Transcript { turns }) };
+        return Ok(AgentOutput { result, transcript });
+    }
+
+    if parsed_lines == 1 {
+        return parse_legacy_output(text.trim());
+    }
+
+    bail!("cursor-agent did not emit a terminal result event");
+}
+
+fn parse_legacy_output(text: &str) -> Result<AgentOutput> {
+    let envelope: Value =
+        serde_json::from_str(text).context("cursor-agent did not emit a JSON result object")?;
+    let result = result_payload(&envelope)?
+        .context("cursor-agent JSON output has no string `result` field")?;
+    Ok(AgentOutput {
+        result,
+        transcript: None,
+    })
+}
+
+// Extract the `result` string from a result envelope, surfacing agent errors.
+fn result_payload(envelope: &Value) -> Result<Option<String>> {
+    let result = envelope.get("result").and_then(Value::as_str);
+    if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
+        bail!("cursor-agent reported an error: {}", result.unwrap_or("<no detail>"));
+    }
+    Ok(result.map(ToOwned::to_owned))
+}
+
+fn tool_call_identity(tool_call: &Value) -> Option<(String, Value)> {
+    let object = tool_call.as_object()?;
+    for (key, value) in object {
+        if key.ends_with("ToolCall") {
+            let tool = key.strip_suffix("ToolCall")?.to_owned();
+            let args = value.get("args").cloned().unwrap_or_else(|| value.clone());
+            return Some((tool, args));
+        }
+        if key == "function" {
+            let name = value.get("name").and_then(Value::as_str).unwrap_or("function").to_owned();
+            let args = value.get("arguments").cloned().unwrap_or_else(|| value.clone());
+            return Some((name, args));
+        }
+    }
+    None
+}
+
+fn tool_call_result(tool_call: &Value) -> Option<Value> {
+    let object = tool_call.as_object()?;
+    for value in object.values() {
+        if let Some(result) = value.get("result") {
+            return Some(result.clone());
+        }
+    }
+    None
+}
+
+fn parse_result(result: &str, format: &Format) -> Result<Value, String> {
+    match format {
+        Format::Text => Ok(Value::String(result.to_owned())),
+        Format::Json | Format::Schema(_) => {
+            let json = strip_code_fence(result);
+            serde_json::from_str::<Value>(json)
+                .map_err(|error| format!("cursor-agent answer was not valid JSON: {error}"))
+        }
+    }
+}
+
+// Strip a wrapping Markdown code fence (```json ... ```), if present.
 fn strip_code_fence(text: &str) -> &str {
     let trimmed = text.trim();
     let Some(rest) = trimmed.strip_prefix("```") else {
         return trimmed;
     };
-    // Drop the remainder of the opening fence line (an optional language tag).
     let body = rest.split_once('\n').map_or(rest, |(_, body)| body).trim();
     body.strip_suffix("```").unwrap_or(body).trim()
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
     use std::sync::Arc;
-    use std::time::Duration;
 
-    use futures::FutureExt as _;
     use omnia_wasi_model::{
-        DirEntry, Format, FutureResult, PreparedPrompt, Prompt, Reference, ResponseFormat,
-        Sections, ToolGrants, ToolHost, VerifyReport, WasiModelCtx,
+        Format, Grants, PreparedRequest, Request, Schema, Sections, WasiModelCtx,
     };
     use serde_json::json;
 
-    use super::{answer_instruction, build_prompt, extract_result, parse_result};
-    use crate::Client;
+    use super::{
+        AgentOutput, MAX_INLINE_SIZE, build_prompt, into_prompt_file, parse_output, parse_result,
+    };
+    use crate::test_support::{NoopToolHost, client};
 
-    /// A no-op `ToolHost`: cursor ignores it, so every method just errors.
-    #[derive(Debug)]
-    struct NoopToolHost;
-
-    impl ToolHost for NoopToolHost {
-        fn resolve(&self, _reference: Reference) -> FutureResult<Vec<u8>> {
-            async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
-        }
-
-        fn read(&self, _path: String) -> FutureResult<Vec<u8>> {
-            async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
-        }
-
-        fn list(&self, _path: String) -> FutureResult<Vec<DirEntry>> {
-            async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
-        }
-
-        fn write(&self, _path: String, _bytes: Vec<u8>) -> FutureResult<()> {
-            async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
-        }
-
-        fn verify(&self, _check: String) -> FutureResult<VerifyReport> {
-            async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
-        }
-    }
-
-    /// Build a `Client` directly, bypassing `connect_with` (and its `PATH` check)
-    /// so these tests run in CI without `cursor-agent` installed.
-    fn client(workspace: Option<&str>) -> Client {
-        Client {
-            model: None,
-            workspace: workspace.map(|w| Arc::from(Path::new(w))),
-            // Nominal: no unit test reaches a spawn, so the bound is unused.
-            timeout: Duration::from_secs(1),
-        }
-    }
-
-    fn schema_prompt() -> Prompt {
-        Prompt {
+    fn schema_request() -> Request {
+        Request {
             model: None,
             system: None,
             messages: vec![],
@@ -243,23 +450,17 @@ mod tests {
                 variables: vec![],
             }),
             generation: None,
-            response_format: ResponseFormat {
-                kind: Format::JsonSchema,
-                json_schema: Some(omnia_wasi_model::JsonSchemaSpec {
-                    name: "verdict".to_owned(),
-                    schema: json!({
-                        "type": "object",
-                        "properties": { "verdict": { "type": "string" } },
-                        "required": ["verdict"],
-                    })
-                    .to_string(),
-                    strict: Some(true),
-                }),
-            },
+            format: Format::Schema(Schema {
+                name: "verdict".to_owned(),
+                schema: json!({
+                    "type": "object",
+                    "properties": { "verdict": { "type": "string" } },
+                    "required": ["verdict"],
+                })
+                .to_string(),
+            }),
             tools: vec![],
-            tool_choice: None,
-            metadata: vec![],
-            grants: ToolGrants {
+            grants: Grants {
                 references: None,
                 workspace: None,
                 verify: vec![],
@@ -269,12 +470,9 @@ mod tests {
 
     #[tokio::test]
     async fn no_local_tree() {
-        // With neither a lent working tree (the default `ToolHost::local_path`
-        // is `None`) nor an `OMNIA_WORKSPACE` override, `complete` must fail
-        // loud before any spawn — the §5.3 capability signal.
-        let err = client(None)
+        let err = client()
             .complete(
-                PreparedPrompt::try_from(schema_prompt()).expect("try_from"),
+                PreparedRequest::try_from(schema_request()).expect("try_from"),
                 Arc::new(NoopToolHost),
             )
             .await
@@ -284,7 +482,7 @@ mod tests {
 
     #[test]
     fn agent_prompt() {
-        let request = PreparedPrompt::try_from(schema_prompt()).expect("try_from");
+        let request = PreparedRequest::try_from(schema_request()).expect("try_from");
         let text = build_prompt(&request);
         assert!(text.contains("a terse judge"), "missing system channel: {text}");
         assert!(text.contains("decide pass or fail"), "missing user channel: {text}");
@@ -292,26 +490,18 @@ mod tests {
         assert!(text.contains("\"verdict\""), "missing schema body: {text}");
     }
 
-    #[test]
-    fn answer_kind() {
-        let text = answer_instruction(&ResponseFormat {
-            kind: Format::Text,
-            json_schema: None,
-        });
-        assert!(text.contains("plain text"), "text instruction: {text}");
-
-        let object = answer_instruction(&ResponseFormat {
-            kind: Format::JsonObject,
-            json_schema: None,
-        });
-        assert!(object.contains("JSON object"), "object instruction: {object}");
+    fn verdict_schema() -> Format {
+        Format::Schema(Schema {
+            name: "verdict".to_owned(),
+            schema: "{\"type\":\"object\"}".to_owned(),
+        })
     }
 
     #[test]
     fn parse_json() {
-        assert_eq!(parse_result("hello", Format::Text).unwrap(), json!("hello"));
+        assert_eq!(parse_result("hello", &Format::Text).unwrap(), json!("hello"));
         assert_eq!(
-            parse_result(r#"{"verdict":"pass"}"#, Format::JsonObject).unwrap(),
+            parse_result(r#"{"verdict":"pass"}"#, &Format::Json).unwrap(),
             json!({ "verdict": "pass" })
         );
     }
@@ -319,32 +509,55 @@ mod tests {
     #[test]
     fn parse_code_fence() {
         let fenced = "```json\n{\"verdict\":\"pass\"}\n```";
-        assert_eq!(parse_result(fenced, Format::JsonSchema).unwrap(), json!({ "verdict": "pass" }));
+        assert_eq!(parse_result(fenced, &verdict_schema()).unwrap(), json!({ "verdict": "pass" }));
     }
 
     #[test]
     fn parse_non_json() {
-        let err = parse_result("not json", Format::JsonObject).unwrap_err();
-        assert!(err.to_string().contains("not valid JSON"), "unexpected: {err}");
+        let err = parse_result("not json", &Format::Json).unwrap_err();
+        assert!(err.contains("not valid JSON"), "unexpected: {err}");
     }
 
     #[test]
-    fn extract_result_field() {
+    fn parse_legacy_result_field() {
         let stdout = br#"{"type":"result","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
-        let result = extract_result(stdout).expect("extract result");
+        let AgentOutput { result, transcript } = parse_output(stdout).expect("extract result");
         assert_eq!(result, r#"{"verdict":"pass"}"#);
+        assert!(transcript.is_none());
     }
 
     #[test]
-    fn extract_result_error() {
+    fn parse_result_error() {
         let stdout = br#"{"type":"result","is_error":true,"result":"boom"}"#;
-        let err = extract_result(stdout).expect_err("an agent error must surface");
+        let err = parse_output(stdout).expect_err("an agent error must surface");
         assert!(err.to_string().contains("cursor-agent reported an error"), "unexpected: {err}");
     }
 
     #[test]
-    fn extract_result_newline() {
-        let stdout = b"{\"is_error\":false,\"result\":\"hi\"}\n";
-        assert_eq!(extract_result(stdout).expect("extract"), "hi");
+    fn parse_stream_json() {
+        let stdout = br#"{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}
+{"type":"tool_call","subtype":"completed","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"},"result":{"success":{"content":"hi"}}}}}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
+        let AgentOutput { result, transcript } = parse_output(stdout).expect("parse stream");
+        assert_eq!(result, r#"{"verdict":"pass"}"#);
+        let transcript = transcript.expect("tool transcript");
+        assert_eq!(transcript.turns.len(), 1);
+        assert_eq!(transcript.turns[0].tool, "read");
+        assert_eq!(transcript.turns[0].args, json!({ "path": "README.md" }));
+    }
+
+    #[test]
+    fn spill_large_prompt() {
+        let workspace =
+            std::env::temp_dir().join(format!("omnia-cursor-prompt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&workspace);
+        std::fs::create_dir_all(&workspace).expect("temp workspace");
+
+        let large = "x".repeat(MAX_INLINE_SIZE + 1);
+        let (arg, spill) = into_prompt_file(&large, &workspace).expect("spill prompt");
+        assert!(spill.is_some(), "large prompt must spill to disk");
+        assert!(arg.contains("omnia-prompt-"), "arg references prompt file: {arg}");
+        drop(spill);
+        let _ = std::fs::remove_dir_all(&workspace);
     }
 }

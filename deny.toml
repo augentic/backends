@@ -9,7 +9,10 @@ feature-depth = 1
 
 [advisories]
 unmaintained = 'workspace'
-ignore = []
+ignore = [
+  { id = "RUSTSEC-2026-0194", reason = "typespec 1.0.0 pins quick-xml 0.39.x" },
+  { id = "RUSTSEC-2026-0195", reason = "same" },
+]
 
 [licenses]
 allow = [

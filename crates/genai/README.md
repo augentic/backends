@@ -4,7 +4,7 @@
 [![docs.rs](https://docs.rs/omnia-genai/badge.svg)](https://docs.rs/omnia-genai)
 
 Multi-provider generative-AI model backend for the Omnia WASI runtime,
-implementing the `augentic:model/completion` boundary (`wasi-model`).
+implementing the `omnia:model/completion` boundary (`wasi-model`).
 
 Wraps the [`genai`](https://crates.io/crates/genai) SDK (`OpenAI`, Anthropic,
 Gemini, Groq, Ollama, …). The host assembles a guest's typed `Prompt` into a
@@ -17,9 +17,9 @@ MSRV: Rust 1.95
 
 ## Configuration
 
-| Variable       | Required | Default   | Description                                               |
-| -------------- | -------- | --------- | --------------------------------------------------------- |
-| `CURSOR_MODEL` | no       | `gpt-5.5` | Provider model id; genai routes to the provider by prefix |
+The provider model id is carried per-request (`request.model`); when a request
+leaves it unset the backend falls back to `gpt-5.5`. genai routes to the
+provider by the model id's prefix.
 
 Provider API keys are read by genai from the ambient environment
 (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …) and are never
@@ -33,6 +33,17 @@ use omnia_genai::Client;
 
 let options = omnia_genai::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
+```
+
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) drives a real completion through the `wasi-model`
+boundary, exercising the in-process tool loop and `resolve` dispatch. It is
+`#[ignore]`d so it never touches the network in CI; run it with a provider key:
+
+```bash
+OPENAI_API_KEY=... \
+  cargo nextest run -p omnia-genai --run-ignored all
 ```
 
 ## License

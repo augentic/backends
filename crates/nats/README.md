@@ -28,6 +28,17 @@ let options = omnia_nats::ConnectOptions::from_env()?;
 let client = Client::connect_with(options).await?;
 ```
 
+## Live tests
+
+[`tests/live.rs`](tests/live.rs) exercises the `wasi-messaging` boundary against a
+real server. It is `#[ignore]`d so it never runs in CI; run it explicitly (the
+default `NATS_ADDR` is the public `demo.nats.io`):
+
+```bash
+NATS_ADDR=demo.nats.io \
+  cargo nextest run -p omnia-nats --run-ignored all
+```
+
 ## License
 
 MIT OR Apache-2.0

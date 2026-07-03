@@ -139,8 +139,7 @@ impl Container for MongoDbContainer {
                 name,
                 data,
                 size: bytes.len() as u64,
-                #[allow(clippy::cast_sign_loss)]
-                created_at: Utc::now().timestamp_millis() as u64,
+                created_at: u64::try_from(Utc::now().timestamp_millis()).unwrap_or_default(),
             };
             collection.insert_one(blob).await?;
 

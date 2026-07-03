@@ -4,8 +4,8 @@ use dotenvy::dotenv;
 use omnia::Backend;
 use omnia_azure_table::store::document::{decode_id, encode_id};
 use omnia_azure_table::{Client, ConnectOptions};
-use omnia_wasi_jsondb::{
-    ComparisonOp, Document, FilterTree, QueryOpts, QueryResult, ScalarValue, WasiJsonDbCtx,
+use omnia_wasi_docstore::{
+    ComparisonOp, Document, FilterTree, QueryOpts, QueryResult, ScalarValue, WasiDocStoreCtx,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -160,7 +160,7 @@ pub async fn main() {
     };
     let client = Client::connect_with(opts).await.expect("connect");
 
-    println!("Azure Table JSONDB desk test");
+    println!("Azure Table document store desk test");
     println!("============================\n");
 
     // ── Setup ────────────────────────────────────────────────────────

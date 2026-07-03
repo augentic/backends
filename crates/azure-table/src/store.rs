@@ -1,4 +1,4 @@
-//! `wasi-jsondb` implementation for Azure Table Storage.
+//! `wasi-docstore` implementation for Azure Table Storage.
 
 pub mod document;
 pub mod filter;
@@ -10,8 +10,8 @@ use anyhow::{Context, anyhow, bail};
 use base64ct::{Base64, Encoding};
 use futures::future::FutureExt;
 use hmac::{Hmac, KeyInit, Mac};
-use omnia_wasi_jsondb::{
-    Document, FilterTree, FutureResult, QueryOpts, QueryResult, WasiJsonDbCtx,
+use omnia_wasi_docstore::{
+    Document, FilterTree, FutureResult, QueryOpts, QueryResult, WasiDocStoreCtx,
 };
 use reqwest::Client as HttpClient;
 use serde_json::Value;
@@ -22,8 +22,8 @@ use crate::Client;
 const API_VERSION: &str = "2026-02-06";
 const ACCEPT_HEADER: &str = "application/json;odata=fullmetadata";
 
-/// `wasi-jsondb` implementation backed by Azure Table Storage REST API.
-impl WasiJsonDbCtx for Client {
+/// `wasi-docstore` implementation backed by Azure Table Storage REST API.
+impl WasiDocStoreCtx for Client {
     fn get(&self, collection: String, id: String) -> FutureResult<Option<Document>> {
         let opts = Arc::clone(&self.options);
         let http = self.http.clone();
@@ -259,7 +259,7 @@ impl WasiJsonDbCtx for Client {
     }
 }
 
-/// Azure Table Storage management operations (outside the `wasi-jsondb` trait).
+/// Azure Table Storage management operations (outside the `wasi-docstore` trait).
 impl Client {
     /// Creates the named table if it does not already exist.
     ///
@@ -318,7 +318,7 @@ fn build_odata_filter(pk: Option<&str>, server_filter: Option<&str>) -> Option<S
     if parts.is_empty() { None } else { Some(parts.join(" and ")) }
 }
 
-#[allow(clippy::similar_names, clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 async fn fetch_page(
     http: &HttpClient, opts: &crate::ConnectOptions, base: &str, hmac_key: &[u8], table: &str,
     odata_filter: Option<&str>, fetch_limit: Option<usize>, continuation: Option<&str>,
@@ -333,10 +333,10 @@ async fn fetch_page(
         query_params.push(format!("$top={limit}"));
     }
     if let Some(cont) = continuation {
-        let (next_pk, next_rk) = query::decode_continuation(cont);
-        query_params.push(format!("NextPartitionKey={}", urlencoding::encode(&next_pk)));
-        if let Some(rk) = next_rk {
-            query_params.push(format!("NextRowKey={}", urlencoding::encode(&rk)));
+        let (next_partition, next_row) = query::decode_continuation(cont);
+        query_params.push(format!("NextPartitionKey={}", urlencoding::encode(&next_partition)));
+        if let Some(row) = next_row {
+            query_params.push(format!("NextRowKey={}", urlencoding::encode(&row)));
         }
     }
 
@@ -364,12 +364,12 @@ async fn fetch_page(
         );
     }
 
-    let continuation_pk = response
+    let continuation_partition = response
         .headers()
         .get("x-ms-continuation-NextPartitionKey")
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
-    let continuation_rk = response
+    let continuation_row = response
         .headers()
         .get("x-ms-continuation-NextRowKey")
         .and_then(|v| v.to_str().ok())
@@ -378,7 +378,8 @@ async fn fetch_page(
     let body: Value =
         response.json().await.map_err(|e| anyhow!("failed to parse response JSON: {e}"))?;
 
-    let token = query::encode_continuation(continuation_pk.as_deref(), continuation_rk.as_deref());
+    let token =
+        query::encode_continuation(continuation_partition.as_deref(), continuation_row.as_deref());
     Ok((body, token))
 }
 
@@ -484,32 +485,32 @@ mod tests {
     }
 
     #[test]
-    fn parse_collection_empty_errors() {
+    fn parse_collection_empty() {
         parse_collection("").unwrap_err();
     }
 
     #[test]
-    fn parse_collection_empty_pk_errors() {
+    fn parse_collection_empty_pk() {
         parse_collection("users/").unwrap_err();
     }
 
     #[test]
-    fn parse_collection_rejects_short_table_name() {
+    fn parse_collection_short_table() {
         parse_collection("ab/pk").unwrap_err();
     }
 
     #[test]
-    fn parse_collection_rejects_special_chars_in_table() {
+    fn parse_collection_special_chars() {
         parse_collection("my-table/pk").unwrap_err();
     }
 
     #[test]
-    fn parse_collection_rejects_reserved_table_name() {
+    fn parse_collection_reserved() {
         parse_collection("Tables/pk").unwrap_err();
     }
 
     #[test]
-    fn sign_request_uses_shared_key_lite_format() {
+    fn sign_request_shared_key_lite() {
         let key = Base64::encode_string(b"fake-key-for-unit-test-1234567!");
         let hmac_key = Base64::decode_vec(&key).unwrap();
         let auth = sign_request(
@@ -523,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    fn sign_request_azurite_preserves_account_in_path() {
+    fn sign_request_azurite() {
         let key = Base64::encode_string(b"fake-key-for-unit-test-1234567!");
         let hmac_key = Base64::decode_vec(&key).unwrap();
         // Azurite and cloud produce DIFFERENT signatures because the

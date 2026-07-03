@@ -6,7 +6,7 @@
 //! are serialized as JSON string properties.
 
 use anyhow::{Context, anyhow};
-use omnia_wasi_jsondb::Document;
+use omnia_wasi_docstore::Document;
 use serde_json::{Map, Value};
 
 /// Azure Table system / `OData` metadata properties stripped during unflatten.
@@ -165,9 +165,8 @@ fn insert_typed_property(
                     entity.insert(format!("{key}@odata.type"), Value::String("Edm.Int64".into()));
                 }
             } else if let Some(u) = n.as_u64() {
-                #[allow(clippy::cast_possible_wrap)]
-                if i64::try_from(u).is_ok() {
-                    entity.insert(key.into(), Value::String((u as i64).to_string()));
+                if let Ok(v) = i64::try_from(u) {
+                    entity.insert(key.into(), Value::String(v.to_string()));
                     entity.insert(format!("{key}@odata.type"), Value::String("Edm.Int64".into()));
                 } else {
                     return Err(anyhow!(
@@ -196,7 +195,7 @@ mod tests {
     // ── encode_id / decode_id ────────────────────────────────────────
 
     #[test]
-    fn encode_decode_id_roundtrip() {
+    fn encode_decode_id() {
         let id = encode_id("pk1", "rk1");
         let (pk, rk) = decode_id(&id).unwrap();
         assert_eq!(pk, "pk1");
@@ -204,13 +203,13 @@ mod tests {
     }
 
     #[test]
-    fn decode_id_rejects_bare_rowkey() {
+    fn decode_id_bare_rowkey() {
         let err = decode_id("just-a-rowkey").unwrap_err().to_string();
         assert!(err.contains("invalid document id"), "{err}");
     }
 
     #[test]
-    fn decode_id_with_special_chars() {
+    fn decode_id_special_chars() {
         let id = encode_id("tenant/a", "row'key");
         let (pk, rk) = decode_id(&id).unwrap();
         assert_eq!(pk, "tenant/a");
@@ -220,7 +219,7 @@ mod tests {
     // ── flatten ──────────────────────────────────────────────────────
 
     #[test]
-    fn flatten_adds_keys_and_preserves_fields() {
+    fn flatten_keys_and_fields() {
         let doc = Document {
             id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"Name": "Alice", "Points": 42})).unwrap(),
@@ -234,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn flatten_annotates_large_int() {
+    fn flatten_large_int() {
         let doc = Document {
             id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"big": 9_223_372_036_854_775_807_i64})).unwrap(),
@@ -245,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn flatten_skips_null_fields() {
+    fn flatten_null_fields() {
         let doc = Document {
             id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"a": null, "b": "ok"})).unwrap(),
@@ -257,7 +256,7 @@ mod tests {
     }
 
     #[test]
-    fn flatten_serializes_nested_objects_as_strings() {
+    fn flatten_nested_objects() {
         let doc = Document {
             id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"nested": {"x": 1}})).unwrap(),
@@ -268,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn flatten_ignores_reserved_keys_in_body() {
+    fn flatten_reserved_keys() {
         let doc = Document {
             id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({
@@ -287,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn flatten_handles_u64_within_i64_range() {
+    fn flatten_u64() {
         let val: u64 = (i32::MAX as u64) + 1;
         let doc = Document {
             id: encode_id("pk1", "r1"),
@@ -299,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn flatten_rejects_bare_rowkey_id() {
+    fn flatten_bare_rowkey() {
         let doc = Document {
             id: "no-separator".into(),
             data: serde_json::to_vec(&json!({"a": 1})).unwrap(),
@@ -311,7 +310,7 @@ mod tests {
     // ── unflatten ────────────────────────────────────────────────────
 
     #[test]
-    fn unflatten_restores_edm_int64() {
+    fn unflatten_int64() {
         let entity = json!({
             "PartitionKey": "pk1",
             "RowKey": "r1",
@@ -325,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn unflatten_restores_edm_double() {
+    fn unflatten_double() {
         let entity = json!({
             "PartitionKey": "pk1",
             "RowKey": "r1",
@@ -340,7 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn unflatten_strips_system_keys() {
+    fn unflatten_system_keys() {
         let entity = json!({
             "PartitionKey": "pk1",
             "RowKey": "r1",
@@ -374,7 +373,7 @@ mod tests {
     // ── round-trip ───────────────────────────────────────────────────
 
     #[test]
-    fn nested_objects_remain_strings_after_roundtrip() {
+    fn nested_objects() {
         let doc = Document {
             id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({"tags": ["a", "b"], "meta": {"x": 1}})).unwrap(),

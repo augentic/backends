@@ -1,6 +1,6 @@
 [package]
 name = "omnia-cursor"
-description = "Spawned cursor-agent model backend (the augentic:model boundary)"
+description = "Spawned cursor-agent model backend (the omnia:model boundary)"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true
@@ -20,7 +20,6 @@ all-features = true
 
 [dependencies]
 anyhow.workspace = true
-fromenv.workspace = true
 futures.workspace = true
 # Pinned to the local omnia 0.35.0 line via the workspace `[patch.crates-io]`
 # override (the `omnia-wasi-model` host crate is unreleased on crates.io).
@@ -34,4 +33,4 @@ tracing.workspace = true
 # dependencies, so the ones the live run-3 test (`tests/live.rs`) drives are
 # repeated here.
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "time"] }

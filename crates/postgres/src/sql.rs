@@ -94,8 +94,7 @@ impl Connection for PostgresConnection {
                     return Err(anyhow!("exec failed: {e}"));
                 }
             };
-            #[allow(clippy::cast_possible_truncation)]
-            Ok(affected as u32)
+            Ok(u32::try_from(affected).unwrap_or(u32::MAX))
         }
         .boxed()
     }
@@ -114,17 +113,6 @@ fn parse_timestamp_naive(source: Option<&str>) -> anyhow::Result<Option<NaiveDat
         .map(|s| {
             NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f")
                 .context("invalid naive timestamp format")
-        })
-        .transpose()
-}
-
-#[cfg(test)]
-fn parse_timestamp_tz(source: Option<&str>) -> anyhow::Result<Option<DateTime<Utc>>> {
-    source
-        .map(|s| {
-            DateTime::parse_from_rfc3339(s)
-                .map(|ts| ts.with_timezone(&Utc))
-                .context("invalid RFC3339 timestamp")
         })
         .transpose()
 }
@@ -263,7 +251,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_date_valid() {
+    fn dates() {
         let valid = parse_date(Some("2024-12-25")).unwrap().unwrap();
         assert_eq!(valid.year(), 2024);
         assert_eq!(valid.month(), 12);
@@ -274,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_time_valid() {
+    fn times() {
         let valid = parse_time(Some("14:30:45.123456")).unwrap().unwrap();
         assert_eq!(valid.hour(), 14);
         assert_eq!(valid.minute(), 30);
@@ -284,22 +272,11 @@ mod tests {
         parse_time(Some("25:00:00")).unwrap_err();
     }
 
+    // The tz-detection path in `into_param` is covered by
+    // `into_param_timestamp_format_detection` (real production fn) and the live
+    // query round-trip; no separate reimplementation is unit-tested here.
     #[test]
-    fn parse_timestamp_tz_valid() {
-        let valid = parse_timestamp_tz(Some("2024-01-20T15:30:45Z")).unwrap().unwrap();
-        assert_eq!(valid.year(), 2024);
-        assert_eq!(valid.month(), 1);
-        assert_eq!(valid.day(), 20);
-
-        let with_offset = parse_timestamp_tz(Some("2024-01-20T15:30:45+05:00")).unwrap().unwrap();
-        assert_eq!(with_offset.hour(), 10);
-
-        assert!(parse_timestamp_tz(None).unwrap().is_none());
-        parse_timestamp_tz(Some("not a timestamp")).unwrap_err();
-    }
-
-    #[test]
-    fn parse_timestamp_naive_valid() {
+    fn naive_timestamps() {
         let valid = parse_timestamp_naive(Some("2024-01-20 15:30:45.123")).unwrap().unwrap();
         assert_eq!(valid.year(), 2024);
         assert_eq!(valid.month(), 1);
@@ -311,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn into_param_valid_conversions() {
+    fn into_param_valid() {
         // Basic types
         into_param(&DataType::Int32(Some(42))).unwrap();
         into_param(&DataType::Int64(Some(i64::MAX))).unwrap();
@@ -329,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn into_param_invalid_conversions() {
+    fn into_param_invalid() {
         let uint64_overflow = DataType::Uint64(Some(u64::MAX));
         let result = into_param(&uint64_overflow);
         assert!(result.is_err());
@@ -341,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn into_param_timestamp_format_detection() {
+    fn into_param_timestamp() {
         let with_tz = DataType::Timestamp(Some("2024-01-20T15:30:45Z".to_string()));
         into_param(&with_tz).unwrap();
 

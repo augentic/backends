@@ -1,11 +1,13 @@
 #![doc = include_str!("../README.md")]
 #![allow(clippy::multiple_crate_versions)]
 
+mod mcp;
 mod model;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 use std::fmt::Debug;
-use std::path::Path;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -13,14 +15,14 @@ use omnia::Backend;
 use tokio::process::Command;
 use tracing::instrument;
 
-/// The `cursor-agent` executable, resolved on `PATH`.
 pub(crate) const CURSOR_AGENT_BIN: &str = "cursor-agent";
+
+/// Wall-clock bound on one `cursor-agent` spawn; orphaned processes are killed on timeout.
+pub(crate) const DEFAULT_TIMEOUT_SECS: u64 = 120;
 
 /// Spawned, filesystem-capable `cursor-agent` model backend.
 #[derive(Clone, Debug)]
 pub struct Client {
-    model: Option<Arc<str>>,
-    workspace: Option<Arc<Path>>,
     timeout: Duration,
 }
 
@@ -29,26 +31,16 @@ impl Backend for Client {
 
     #[instrument(name = "Cursor::connect_with")]
     async fn connect_with(options: Self::ConnectOptions) -> Result<Self> {
-        ensure_cursor().await?;
-
-        tracing::info!(
-            model = options.model.as_deref().unwrap_or("<cursor-agent default>"),
-            workspace = options.workspace.as_deref().unwrap_or("<none>"),
-            timeout_secs = options.timeout_secs,
-            "configured cursor backend"
-        );
+        let ConnectOptions = options;
+        assert_cursor().await?;
 
         Ok(Self {
-            model: options.model.map(Arc::from),
-            workspace: options.workspace.map(|w| Arc::from(Path::new(&w))),
-            timeout: Duration::from_secs(options.timeout_secs),
+            timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
         })
     }
 }
 
-/// Validate that `cursor-agent` is installed and runnable by invoking
-/// `cursor-agent --version`.
-async fn ensure_cursor() -> Result<()> {
+async fn assert_cursor() -> Result<()> {
     let output = Command::new(CURSOR_AGENT_BIN)
         .arg("--version")
         .output()
@@ -66,28 +58,16 @@ async fn ensure_cursor() -> Result<()> {
     Ok(())
 }
 
-#[allow(missing_docs)]
-mod config {
-    use fromenv::FromEnv;
-
-    /// Connection options for the `cursor-agent` backend.
-    #[derive(Debug, Clone, FromEnv)]
-    pub struct ConnectOptions {
-        /// Model to use.
-        #[env(from = "CURSOR_MODEL")]
-        pub model: Option<String>,
-        /// Workspace path.
-        #[env(from = "OMNIA_WORKSPACE")]
-        pub workspace: Option<String>,
-        /// Wall-clock bound (seconds) on one `cursor-agent` spawn.
-        #[env(from = "CURSOR_TIMEOUT_SECS", default = "120")]
-        pub timeout_secs: u64,
-    }
-}
-pub use config::ConnectOptions;
+/// Connection options for the `cursor-agent` backend.
+///
+/// The backend reads no environment configuration; the working tree is lent per
+/// completion through the guest's `grants.workspace`, which the host resolves to
+/// a node-local path on the tool host.
+#[derive(Debug, Clone, Default)]
+pub struct ConnectOptions;
 
 impl omnia::FromEnv for ConnectOptions {
     fn from_env() -> Result<Self> {
-        Self::from_env().finalize().context("issue loading connection options")
+        Ok(Self)
     }
 }

@@ -204,7 +204,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn try_from_pool_entry_valid_uri() {
+    fn pool_entry_valid() {
         let entry = PoolEntry {
             name: "test".to_string(),
             uri: "postgresql://user:pass@localhost:5432/mydb".to_string(),
@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn try_from_pool_entry_missing_password() {
+    fn pool_entry_missing_password() {
         let entry = PoolEntry {
             name: "test".to_string(),
             uri: "postgresql://user@localhost/mydb".to_string(),
@@ -235,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn try_from_pool_entry_invalid_uri() {
+    fn pool_entry_invalid() {
         let entry = PoolEntry {
             name: "test".to_string(),
             uri: "not-a-valid-uri".to_string(),
