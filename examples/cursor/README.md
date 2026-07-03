@@ -17,7 +17,7 @@ mkdir -p examples/cursor/workspace
 export CURSOR_API_KEY=
 
 # run the host (no config)
-cargo run --example cursor -- run ./target/wasm32-wasip2/debug/examples/cursor_wasm.wasm --mount path=workspace,name=.,writable
+cargo run --example cursor -- run ./target/wasm32-wasip2/debug/examples/cursor_wasm.wasm --mount path=examples/cursor/workspace,name=.,writable
 
 # run the host (with config)
 cargo run --example cursor -- run --config examples/cursor/config.toml
