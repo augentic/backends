@@ -1,15 +1,15 @@
 # Cursor end-to-end example.
 
 [[guest]]
-id = "ask"
+id = "cursor"
 source.path = "../../target/wasm32-wasip2/debug/examples/cursor_wasm.wasm"
 
-# Working tree preopened by the host
+# Workspace preopened by the runtime
 [[mount]]
 name = "."
 path = "workspace"
 writable = true
 
 # [[route.http]]
-# prefix = "/ask"
-# guest = "ask"
+# prefix = "/"
+# guest = "cursor"
