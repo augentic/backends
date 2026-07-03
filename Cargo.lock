@@ -1756,7 +1756,7 @@ dependencies = [
  "axum",
  "cfg-if",
  "dotenvy",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-azure-blob",
  "omnia-azure-table",
  "omnia-cursor",
@@ -3454,7 +3454,40 @@ dependencies = [
  "fromenv",
  "futures",
  "http",
- "omnia-host-macros",
+ "omnia-host-macros 0.35.0 (git+https://github.com/augentic/omnia.git?branch=main)",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "pastey",
+ "serde",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-http",
+ "wrpc-transport",
+ "wrpc-wasmtime",
+]
+
+[[package]]
+name = "omnia"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "cap-fs-ext",
+ "cap-std",
+ "cfg-if",
+ "clap",
+ "fromenv",
+ "futures",
+ "http",
+ "omnia-host-macros 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -3483,7 +3516,7 @@ dependencies = [
  "azure_storage_blob",
  "fromenv",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-blobstore",
  "tokio",
  "tracing",
@@ -3498,7 +3531,7 @@ dependencies = [
  "azure_identity",
  "fromenv",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-identity",
  "tokio",
  "tracing",
@@ -3514,7 +3547,7 @@ dependencies = [
  "fromenv",
  "futures",
  "hmac 0.13.0",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-docstore",
  "reqwest 0.13.4",
  "serde_json",
@@ -3536,7 +3569,7 @@ dependencies = [
  "fromenv",
  "futures",
  "http",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-vault",
  "tokio",
  "tracing",
@@ -3548,7 +3581,7 @@ version = "0.28.0"
 dependencies = [
  "anyhow",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-model",
  "serde_json",
  "tokio",
@@ -3562,7 +3595,7 @@ dependencies = [
  "anyhow",
  "futures",
  "genai",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-model",
  "serde_json",
  "tokio",
@@ -3572,7 +3605,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3590,6 +3623,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-host-macros"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "omnia-kafka"
 version = "0.28.0"
 dependencies = [
@@ -3600,7 +3643,7 @@ dependencies = [
  "futures",
  "http",
  "jsonschema 0.46.9",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-messaging",
  "rand 0.10.2",
  "rdkafka",
@@ -3620,7 +3663,7 @@ dependencies = [
  "fromenv",
  "futures",
  "mongodb",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-blobstore",
  "serde",
  "serde_json",
@@ -3638,9 +3681,9 @@ dependencies = [
  "fromenv",
  "futures",
  "nkeys",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-blobstore",
- "omnia-wasi-keyvalue",
+ "omnia-wasi-keyvalue 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-messaging",
  "tokio",
  "tracing",
@@ -3653,7 +3696,7 @@ dependencies = [
  "anyhow",
  "fromenv",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-otel",
  "opentelemetry-proto",
  "tokio",
@@ -3670,7 +3713,7 @@ dependencies = [
  "deadpool-postgres",
  "fromenv",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-wasi-sql",
  "rustls",
  "serde_json",
@@ -3688,8 +3731,8 @@ dependencies = [
  "anyhow",
  "fromenv",
  "futures",
- "omnia",
- "omnia-wasi-keyvalue",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
+ "omnia-wasi-keyvalue 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "redis",
  "tokio",
  "tracing",
@@ -3698,12 +3741,12 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "anyhow",
  "bytes",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "parking_lot",
  "tracing",
  "wasmtime",
@@ -3714,13 +3757,13 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "anyhow",
  "chrono",
  "fromenv",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "parking_lot",
  "polodb_core",
  "regex",
@@ -3747,8 +3790,8 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper",
- "omnia",
- "omnia-wasi-keyvalue",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git?branch=main)",
+ "omnia-wasi-keyvalue 0.35.0 (git+https://github.com/augentic/omnia.git?branch=main)",
  "percent-encoding",
  "reqwest 0.13.4",
  "rkyv",
@@ -3766,13 +3809,13 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "anyhow",
  "fromenv",
  "futures",
  "oauth2",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "serde",
  "tracing",
  "wasmtime",
@@ -3789,7 +3832,25 @@ dependencies = [
  "chrono",
  "futures",
  "moka",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git?branch=main)",
+ "serde",
+ "serde_json",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "omnia-wasi-keyvalue"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "futures",
+ "moka",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "serde",
  "serde_json",
  "tracing",
@@ -3801,12 +3862,12 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "anyhow",
  "futures",
  "http",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "serde",
  "time",
  "tokio",
@@ -3820,13 +3881,13 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "anyhow",
  "cap-primitives",
  "cap-std",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "serde",
  "serde_json",
  "tokio",
@@ -3840,14 +3901,14 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "anyhow",
  "cfg-if",
  "futures",
  "hex",
  "num-traits",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "omnia-guest-macros",
  "opentelemetry",
  "opentelemetry-proto",
@@ -3864,14 +3925,14 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "anyhow",
  "base64ct",
  "chrono",
  "fromenv",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "parking_lot",
  "rusqlite",
  "sea-query",
@@ -3885,11 +3946,11 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git?branch=main#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
 dependencies = [
  "anyhow",
  "futures",
- "omnia",
+ "omnia 0.35.0 (git+https://github.com/augentic/omnia.git)",
  "parking_lot",
  "tracing",
  "wasmtime",
