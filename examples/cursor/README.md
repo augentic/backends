@@ -13,8 +13,12 @@ cargo build -p examples --example cursor-wasm --target wasm32-wasip2
 # create the working tree the `[[mount]]` lends
 mkdir -p examples/cursor/workspace
 
+# set Cursor API key
+export CURSOR_API_KEY=
+
 # run the host
-cargo run --example cursor -- run ./target/wasm32-wasip2/debug/examples/cursor_wasm.wasm
+# cargo run --example cursor -- run ./target/wasm32-wasip2/debug/examples/cursor_wasm.wasm
+cargo run --example cursor -- run --config examples/cursor/omnia.toml
 ```
 
 The guest's `docs` MCP grant carries its endpoint URL directly (`http://localhost:8080/mcp/docs` in `guest.rs`), pointing at the sibling docs guest. The `[[mount]]` in `omnia.toml` preopens `examples/cursor/workspace` as the tree named `.`; the guest lends it through `grants.workspace` and the cursor backend resolves it to the working tree the spawned agent edits.
