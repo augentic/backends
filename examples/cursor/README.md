@@ -11,13 +11,14 @@ Requires a sibling [`omnia`](https://github.com/augentic/omnia) checkout (for th
 cargo build -p examples --example cursor-wasm --target wasm32-wasip2
 
 # omnia repo (sibling checkout) — docs MCP guest
-cargo build -p examples --example mcp-wasm --target wasm32-wasip2
+# cargo build -p examples --example mcp-wasm --target wasm32-wasip2
 
 # backends repo — create the working tree the `[[mount]]` lends
 mkdir -p examples/cursor/workspace
 
 # backends repo — run the deployment
-cargo run -p examples --example cursor -- run --config examples/cursor/omnia.toml
+# cargo run -p examples --example cursor -- run --config examples/cursor/omnia.toml
+cargo run --example cursor -- run ./target/wasm32-wasip2/debug/examples/cursor_wasm.wasm
 ```
 
 The guest's `docs` MCP grant carries its endpoint URL directly (`http://localhost:8080/mcp/docs` in `guest.rs`), pointing at the sibling docs guest. The `[[mount]]` in `omnia.toml` preopens `examples/cursor/workspace` as the tree named `.`; the guest lends it through `grants.workspace` and the cursor backend resolves it to the working tree the spawned agent edits.

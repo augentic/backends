@@ -77,10 +77,9 @@ impl WasiBlobstoreCtx for Client {
 }
 
 fn metadata(name: String) -> ContainerMetadata {
-    #[allow(clippy::cast_sign_loss)]
     ContainerMetadata {
         name,
-        created_at: Utc::now().timestamp() as u64,
+        created_at: u64::try_from(Utc::now().timestamp()).unwrap_or_default(),
     }
 }
 

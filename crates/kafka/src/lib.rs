@@ -133,6 +133,7 @@ mod config {
         pub(crate) cache_ttl_secs: u64,
     }
 
+    // The `FromEnv` `with =` hook requires a `ParseResult` return type.
     #[allow(clippy::unnecessary_wraps)]
     fn split(s: &str) -> ParseResult<Vec<String>> {
         Ok(s.split(',').map(ToOwned::to_owned).collect())

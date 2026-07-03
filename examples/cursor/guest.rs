@@ -22,7 +22,7 @@ use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Sections, Tool};
 use wasip3::exports::cli::run::Guest;
 use wasip3::exports::http::handler::Guest as HttpGuest;
 use wasip3::filesystem::preopens;
-use wasip3::http::types::{ErrorCode, Request as HttpRequest, Response};
+use wasip3::http::types as http;
 
 struct CliGuest;
 wasip3::cli::command::export!(CliGuest);
@@ -80,7 +80,7 @@ struct HttpMcp;
 wasip3::http::service::export!(HttpMcp);
 
 impl HttpGuest for HttpMcp {
-    async fn handle(request: HttpRequest) -> Result<Response, ErrorCode> {
+    async fn handle(request: http::Request) -> Result<http::Response, ErrorCode> {
         let router = Router::new().route("/", get(mcp));
         omnia_wasi_http::serve(router, request).await
     }

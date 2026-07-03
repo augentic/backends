@@ -165,9 +165,8 @@ fn insert_typed_property(
                     entity.insert(format!("{key}@odata.type"), Value::String("Edm.Int64".into()));
                 }
             } else if let Some(u) = n.as_u64() {
-                #[allow(clippy::cast_possible_wrap)]
-                if i64::try_from(u).is_ok() {
-                    entity.insert(key.into(), Value::String((u as i64).to_string()));
+                if let Ok(v) = i64::try_from(u) {
+                    entity.insert(key.into(), Value::String(v.to_string()));
                     entity.insert(format!("{key}@odata.type"), Value::String("Edm.Int64".into()));
                 } else {
                     return Err(anyhow!(

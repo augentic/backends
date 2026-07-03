@@ -58,7 +58,7 @@ impl Registry {
                         }
                     };
 
-                    if let Err(e) = self.validate(&schema, &payload) {
+                    if let Err(e) = Self::validate(&schema, &payload) {
                         tracing::error!("JSON validation failed: {}", e);
                         return buffer;
                     }
@@ -77,7 +77,6 @@ impl Registry {
     }
 
     /// Deserialize payload to JSON with optional schema registry
-    #[allow(unused)]
     #[instrument(skip(self, buffer))]
     pub async fn decode(&self, topic: &str, buffer: &[u8]) -> Vec<u8> {
         if self.client.is_some() {
@@ -102,7 +101,7 @@ impl Registry {
                 }
             };
 
-            if let Err(e) = self.validate(&schema, &payload) {
+            if let Err(e) = Self::validate(&schema, &payload) {
                 tracing::error!("Schema validation failed: {}", e);
             }
 
@@ -112,11 +111,12 @@ impl Registry {
         }
     }
 
-    /// # Errors`RegisteredSchema`
+    /// Validate a JSON payload against a provided schema.
     ///
-    /// Validate a JSON payload against a provided `RegisteredSchema`
-    #[allow(clippy::unused_self)]
-    pub fn validate(&self, schema: &Value, payload: &Value) -> Result<(), String> {
+    /// # Errors
+    ///
+    /// Returns an error string when the payload does not conform to the schema.
+    pub fn validate(schema: &Value, payload: &Value) -> Result<(), String> {
         validate(schema, payload).map_err(|e| format!("Validation error: {e}"))?;
         Ok(())
     }
@@ -182,9 +182,11 @@ impl Registry {
 }
 
 /// Confluent Schema Registry wire-format payload (magic byte + schema ID + data).
-#[allow(unused)]
 pub struct Payload<'a> {
+    // Decoded for wire-format completeness; only asserted in tests today.
+    #[allow(dead_code)]
     magic_byte: u8,
+    #[allow(dead_code)]
     registry_id: i32,
     data: &'a [u8],
 }

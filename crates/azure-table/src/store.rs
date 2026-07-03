@@ -318,7 +318,7 @@ fn build_odata_filter(pk: Option<&str>, server_filter: Option<&str>) -> Option<S
     if parts.is_empty() { None } else { Some(parts.join(" and ")) }
 }
 
-#[allow(clippy::similar_names, clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 async fn fetch_page(
     http: &HttpClient, opts: &crate::ConnectOptions, base: &str, hmac_key: &[u8], table: &str,
     odata_filter: Option<&str>, fetch_limit: Option<usize>, continuation: Option<&str>,
@@ -333,10 +333,10 @@ async fn fetch_page(
         query_params.push(format!("$top={limit}"));
     }
     if let Some(cont) = continuation {
-        let (next_pk, next_rk) = query::decode_continuation(cont);
-        query_params.push(format!("NextPartitionKey={}", urlencoding::encode(&next_pk)));
-        if let Some(rk) = next_rk {
-            query_params.push(format!("NextRowKey={}", urlencoding::encode(&rk)));
+        let (next_partition, next_row) = query::decode_continuation(cont);
+        query_params.push(format!("NextPartitionKey={}", urlencoding::encode(&next_partition)));
+        if let Some(row) = next_row {
+            query_params.push(format!("NextRowKey={}", urlencoding::encode(&row)));
         }
     }
 
@@ -364,12 +364,12 @@ async fn fetch_page(
         );
     }
 
-    let continuation_pk = response
+    let continuation_partition = response
         .headers()
         .get("x-ms-continuation-NextPartitionKey")
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
-    let continuation_rk = response
+    let continuation_row = response
         .headers()
         .get("x-ms-continuation-NextRowKey")
         .and_then(|v| v.to_str().ok())
@@ -378,7 +378,8 @@ async fn fetch_page(
     let body: Value =
         response.json().await.map_err(|e| anyhow!("failed to parse response JSON: {e}"))?;
 
-    let token = query::encode_continuation(continuation_pk.as_deref(), continuation_rk.as_deref());
+    let token =
+        query::encode_continuation(continuation_partition.as_deref(), continuation_row.as_deref());
     Ok((body, token))
 }
 

@@ -94,8 +94,7 @@ impl Connection for PostgresConnection {
                     return Err(anyhow!("exec failed: {e}"));
                 }
             };
-            #[allow(clippy::cast_possible_truncation)]
-            Ok(affected as u32)
+            Ok(u32::try_from(affected).unwrap_or(u32::MAX))
         }
         .boxed()
     }
