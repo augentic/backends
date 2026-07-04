@@ -159,7 +159,7 @@ impl WasiDocStoreCtx for Client {
             let auth = sign_request(&opts.name, &hmac_key, &now, &uri)?;
 
             let mut headers = azure_headers(&now, &auth)?;
-            headers.insert("If-Match", "*".parse().expect("valid header value"));
+            headers.insert("If-Match", reqwest::header::HeaderValue::from_static("*"));
 
             let response = http
                 .delete(&uri)
@@ -460,9 +460,9 @@ fn sign_request(
 fn azure_headers(date: &str, auth: &str) -> anyhow::Result<reqwest::header::HeaderMap> {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert("x-ms-date", date.parse().context("invalid x-ms-date header value")?);
-    headers.insert("x-ms-version", API_VERSION.parse().expect("valid header value"));
+    headers.insert("x-ms-version", reqwest::header::HeaderValue::from_static(API_VERSION));
     headers.insert("Authorization", auth.parse().context("invalid Authorization header value")?);
-    headers.insert("Accept", ACCEPT_HEADER.parse().expect("valid header value"));
+    headers.insert("Accept", reqwest::header::HeaderValue::from_static(ACCEPT_HEADER));
     Ok(headers)
 }
 

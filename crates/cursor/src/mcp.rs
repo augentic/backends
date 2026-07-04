@@ -161,7 +161,9 @@ impl Drop for McpGuard {
 
         let restore = match merged {
             None => {
-                let state = registry.remove(&self.workspace).expect("the entry was just seen");
+                let Some(state) = registry.remove(&self.workspace) else {
+                    return;
+                };
                 match state.original {
                     Some(bytes) => fs::write(&self.path, bytes),
                     None => match fs::remove_file(&self.path) {

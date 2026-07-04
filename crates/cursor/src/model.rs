@@ -115,7 +115,7 @@ impl WasiModelCtx for Client {
                 }
             }
 
-            unreachable!("cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts");
+            bail!("cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts");
         })
     }
 }

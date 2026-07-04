@@ -2,8 +2,7 @@
 //! `omnia:identity` host boundary (`WasiIdentityCtx`).
 //!
 //! `#[ignore]`d so it never touches the network in CI. Run in an environment
-//! with an ambient Azure credential (managed identity, or `CREDENTIAL_TYPE`
-//! plus service-principal env):
+//! with an ambient Azure managed-identity credential:
 //! `cargo nextest run -p omnia-azure-id --run-ignored all`.
 
 use anyhow::Result;

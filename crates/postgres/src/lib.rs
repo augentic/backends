@@ -4,14 +4,13 @@ mod sql;
 mod types;
 
 use std::collections::HashMap;
-use std::str;
 
 use anyhow::{Context as _, Result, anyhow};
 use deadpool_postgres::{Pool, PoolConfig, Runtime};
 use omnia::Backend;
 use rustls::crypto::ring;
 use rustls::{ClientConfig, RootCertStore};
-use tokio_postgres::config::{Host, SslMode};
+use tokio_postgres::config::SslMode;
 use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::instrument;
 use webpki_roots::TLS_SERVER_ROOTS;
@@ -32,15 +31,20 @@ impl Backend for Client {
         let mut tls_factory: Option<MakeRustlsConnect> = None; // factory is cheaper to clone
 
         for entry in std::iter::once(&options.default_pool).chain(&options.additional_pools) {
-            let pool_config = deadpool_postgres::Config::try_from(entry)?;
+            // deadpool parses `url` itself (via tokio_postgres); parse here only
+            // to decide whether the connection needs TLS.
+            let tokio: tokio_postgres::Config =
+                entry.uri.parse().context("parsing Postgres URI")?;
+            let use_tls = matches!(tokio.get_ssl_mode(), SslMode::Require | SslMode::Prefer);
 
-            let pool = if pool_config.ssl_mode.is_none() {
-                // Non-TLS mode
-                pool_config
-                    .create_pool(runtime, tokio_postgres::NoTls)
-                    .context(format!("failed to create postgres pool: '{}'", entry.name))?
-            } else {
-                // TLS mode
+            let mut pool_config = deadpool_postgres::Config::new();
+            pool_config.url = Some(entry.uri.clone());
+            pool_config.pool = Some(PoolConfig {
+                max_size: entry.pool_size,
+                ..PoolConfig::default()
+            });
+
+            let pool = if use_tls {
                 let factory = if let Some(f) = &tls_factory {
                     f.clone()
                 } else {
@@ -62,7 +66,11 @@ impl Backend for Client {
                 };
 
                 pool_config
-                    .create_pool(runtime, factory) // unwrap is safe here
+                    .create_pool(runtime, factory)
+                    .context(format!("failed to create postgres pool: '{}'", entry.name))?
+            } else {
+                pool_config
+                    .create_pool(runtime, tokio_postgres::NoTls)
                     .context(format!("failed to create postgres pool: '{}'", entry.name))?
             };
 
@@ -74,9 +82,9 @@ impl Backend for Client {
 
             tracing::info!(
                 "connected to Postgres database {:?}, with pool name '{}', tls '{}'",
-                pool_config.dbname.unwrap_or_default(),
+                tokio.get_dbname().unwrap_or_default(),
                 entry.name,
-                pool_config.ssl_mode.is_none()
+                use_tls
             );
             pools.insert(entry.name.clone(), pool);
         }
@@ -153,96 +161,5 @@ impl omnia::FromEnv for ConnectOptions {
             additional_pools: extras,
         })
         // Self::from_env().finalize().context("issue loading connection options")
-    }
-}
-
-impl TryFrom<&PoolEntry> for deadpool_postgres::Config {
-    type Error = anyhow::Error;
-
-    fn try_from(options: &PoolEntry) -> Result<Self> {
-        // parse postgres uri
-        let tokio: tokio_postgres::Config = options.uri.parse().context("parsing Postgres URI")?;
-        let host = tokio
-            .get_hosts()
-            .first()
-            .map(|h| match h {
-                Host::Tcp(name) => name.to_owned(),
-                Host::Unix(path) => path.to_string_lossy().to_string(),
-            })
-            .unwrap_or_default();
-        let port = tokio.get_ports().first().copied().ok_or_else(|| anyhow!("Port is missing"))?;
-        let username = tokio.get_user().ok_or_else(|| anyhow!("Username is missing"))?;
-        let password = tokio.get_password().ok_or_else(|| anyhow!("Password is missing"))?;
-        let database = tokio.get_dbname().ok_or_else(|| anyhow!("Database is missing"))?;
-        let password = str::from_utf8(password).context("Password contains invalid UTF-8")?;
-        let cli_options = tokio.get_options().unwrap_or_default();
-
-        // convert tokio_postgres::Config to deadpool_postgres::Config
-        let mut deadpool = Self::new();
-        deadpool.host = Some(host);
-        deadpool.dbname = Some(database.to_string());
-        deadpool.port = Some(port);
-        deadpool.user = Some(username.to_string());
-        deadpool.password = Some(password.to_owned());
-        deadpool.pool = Some(PoolConfig {
-            max_size: options.pool_size,
-            ..PoolConfig::default()
-        });
-        deadpool.ssl_mode = match tokio.get_ssl_mode() {
-            SslMode::Require => Some(deadpool_postgres::SslMode::Require),
-            SslMode::Prefer => Some(deadpool_postgres::SslMode::Prefer),
-            _ => None,
-        };
-        deadpool.options = Some(cli_options.to_string());
-
-        Ok(deadpool)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pool_entry_valid() {
-        let entry = PoolEntry {
-            name: "test".to_string(),
-            uri: "postgresql://user:pass@localhost:5432/mydb".to_string(),
-            pool_size: 10,
-        };
-
-        let config = deadpool_postgres::Config::try_from(&entry).unwrap();
-
-        assert_eq!(config.host, Some("localhost".to_string()));
-        assert_eq!(config.port, Some(5432));
-        assert_eq!(config.user, Some("user".to_string()));
-        assert_eq!(config.password, Some("pass".to_string()));
-        assert_eq!(config.dbname, Some("mydb".to_string()));
-        assert_eq!(config.pool.unwrap().max_size, 10);
-    }
-
-    #[test]
-    fn pool_entry_missing_password() {
-        let entry = PoolEntry {
-            name: "test".to_string(),
-            uri: "postgresql://user@localhost/mydb".to_string(),
-            pool_size: 10,
-        };
-
-        let result = deadpool_postgres::Config::try_from(&entry);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Password is missing"));
-    }
-
-    #[test]
-    fn pool_entry_invalid() {
-        let entry = PoolEntry {
-            name: "test".to_string(),
-            uri: "not-a-valid-uri".to_string(),
-            pool_size: 10,
-        };
-
-        let result = deadpool_postgres::Config::try_from(&entry);
-        result.unwrap_err();
     }
 }

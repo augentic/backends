@@ -255,10 +255,8 @@ impl Client for crate::Client {
             let partition = partition.parse().unwrap_or(-1);
             if partition >= 0 {
                 record = record.partition(partition);
-            } else if let Some(partitioner) = &client.partitioner
-                && let Some(key) = metadata.get("key")
-            {
-                let partition = partitioner.partition(key.as_bytes());
+            } else if let Some(key) = metadata.get("key") {
+                let partition = client.partitioner.partition(key.as_bytes());
                 record = record.partition(partition);
             }
 
@@ -291,34 +289,3 @@ impl Stream for Subscriber {
         self.receiver.poll_recv(cx)
     }
 }
-
-// async fn into_message(kafka_msg: &BorrowedMessage<'_>, registry: Option<&Registry>) -> Message {
-//     let metadata = kafka_msg.headers().map(|headers| {
-//         let mut md = HashMap::new();
-//         for h in headers.iter() {
-//             let bytes = h.value.unwrap_or_default();
-//             let v = String::from_utf8_lossy(bytes).to_string();
-//             md.insert(h.key.to_string(), v);
-//         }
-//         Metadata { inner: md }
-//     });
-
-//     let topic = kafka_msg.topic();
-//     let payload_bytes = kafka_msg.payload().unwrap_or_default().to_vec();
-
-//     let payload = if let Some(sr) = &registry {
-//         sr.validate_and_decode_json(topic, &payload_bytes).await
-//     } else {
-//         payload_bytes
-//     };
-
-//     let length = payload.len();
-
-//     Message {
-//         topic: topic.to_string(),
-//         payload,
-//         metadata,
-//         length,
-//         ..Message::default()
-//     }
-// }

@@ -11,9 +11,8 @@ MSRV: Rust 1.95
 
 ## Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `CREDENTIAL_TYPE` | no | `ManagedIdentity` | Credential type to use (only `ManagedIdentity` is implemented today) |
+No environment variables are required; the backend always authenticates via
+Managed Identity.
 
 ## Usage
 

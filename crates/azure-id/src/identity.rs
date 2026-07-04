@@ -7,30 +7,24 @@ use azure_identity::{ManagedIdentityCredential, ManagedIdentityCredentialOptions
 use futures::future::FutureExt;
 use omnia_wasi_identity::{AccessToken, FutureResult, Identity, WasiIdentityCtx};
 
-use crate::{Client, CredentialType};
+use crate::Client;
 
 /// `wasi-identity` implementation backed by Azure managed identity.
 impl WasiIdentityCtx for Client {
     fn get_identity(&self, name: String) -> FutureResult<Arc<dyn Identity>> {
         tracing::trace!("opening identity: {name}");
 
-        let credential_type = self.credential_type.clone();
-
         async move {
-            let identity = AzIdentity {
-                name,
-                credential_type,
-            };
+            let identity = AzIdentity { name };
             Ok(Arc::new(identity) as Arc<dyn Identity>)
         }
         .boxed()
     }
 }
 
-/// A named Azure identity that acquires tokens via the configured credential.
+/// A named Azure identity that acquires tokens via managed identity.
 pub struct AzIdentity {
     name: String,
-    credential_type: CredentialType,
 }
 
 impl Debug for AzIdentity {
@@ -45,17 +39,13 @@ impl Identity for AzIdentity {
         let name = self.name.clone();
 
         async move {
-            let access_token = match self.credential_type {
-                CredentialType::ManagedIdentity => {
-                    let options = ManagedIdentityCredentialOptions {
-                        user_assigned_id: Some(UserAssignedId::ClientId(name)),
-                        ..Default::default()
-                    };
-                    let credential = ManagedIdentityCredential::new(Some(options))?;
-                    let scope = scopes.iter().map(AsRef::as_ref).collect::<Vec<_>>();
-                    credential.get_token(&scope, None).await?
-                }
+            let options = ManagedIdentityCredentialOptions {
+                user_assigned_id: Some(UserAssignedId::ClientId(name)),
+                ..Default::default()
             };
+            let credential = ManagedIdentityCredential::new(Some(options))?;
+            let scope = scopes.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+            let access_token = credential.get_token(&scope, None).await?;
 
             let now_ts = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
             let expires_ts = access_token.expires_on.to_utc().unix_timestamp().unsigned_abs();
