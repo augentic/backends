@@ -405,9 +405,11 @@ impl OutputParser {
             && let Some(line) = &self.first_line
         {
             // extract the result
-            let envelope: Value = serde_json::from_str(line)
-                .context("cursor-agent did not emit a JSON result object")?;
-            let result = envelope.get("result").and_then(Value::as_str).unwrap_or("<no detail>");
+            let envelope: Value = serde_json::from_str(line).context("no JSON envelope")?;
+            let result = envelope
+                .get("result")
+                .and_then(Value::as_str)
+                .context("JSON output has no `result`")?;
 
             // check if the agent reported an error
             if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
