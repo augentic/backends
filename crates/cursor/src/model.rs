@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -6,12 +7,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
-use futures::FutureExt as _;
 use omnia_wasi_model::{
     Answer, Format, FutureResult, PreparedRequest, Request, Role, Tool, ToolHost, ToolTurn,
     Transcript, WasiModelCtx,
 };
+use serde::Deserialize;
 use serde_json::Value;
+use tokio::io::{AsyncBufReadExt as _, AsyncRead, AsyncReadExt as _, BufReader};
 use tokio::process::Command;
 use tracing::instrument;
 
@@ -49,17 +51,18 @@ impl WasiModelCtx for Client {
         let workspace = tool_host.local_path().map(Path::to_path_buf);
         let timeout = self.timeout;
 
-        async move {
-            let format = request.request.format.clone();
+        Box::pin(async move {
+            let format = &request.request.format;
             let mut prompt = build_prompt(&request);
 
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
             };
-            std::fs::create_dir_all(&workspace)?;
-            let workspace =& workspace
+            std::fs::create_dir_all(&workspace)
+                .with_context(|| format!("creating {}", workspace.display()))?;
+            let workspace = workspace
                 .canonicalize()
-                .context("issue canonicalizing workspace")?;
+                .with_context(|| format!("canonicalizing {}", workspace.display()))?;
 
             // Per-prompt MCP grants carry their own endpoint URL.
             // No grant means no MCP wiring (MCP is opt-in per completion).
@@ -70,29 +73,42 @@ impl WasiModelCtx for Client {
                 prompt = format!("{}\n\n{prompt}", mcp_hint(&selected));
                 let map: BTreeMap<String, String> =
                     selected.iter().map(|s| (s.name.clone(), s.url.clone())).collect();
-                Some(mcp::McpGuard::install(workspace, &map)?)
+                Some(mcp::McpGuard::install(&workspace, &map)?)
             };
 
             let spawn = SpawnOptions {
                 model: request.request.model.as_deref(),
-                workspace,
+                workspace: &workspace,
                 timeout,
                 approve_mcps: !selected.is_empty(),
             };
 
             tracing::info!(model = spawn.model, ?format, "cursor completion");
 
-            for attempt in 1..=MAX_ATTEMPTS {
-                let stdout = spawn_agent(&prompt, &spawn).await?;
-                let AgentOutput { result, transcript } = parse_output(&stdout)?;
+            let mut attempt = 0;
+            loop {
+                attempt += 1;
                 let last = attempt == MAX_ATTEMPTS;
+                let AgentOutput { result, transcript } = spawn_agent(&prompt, &spawn).await?;
                 tracing::debug!(attempt, result = result.len(), "cursor-agent answer");
 
-                match parse_result(&result, &format) {
-                    Ok(value) => match check_answer(&value, &format) {
+                match parse_result(&result, format) {
+                    Ok(value) => match check_answer(&value, format) {
                         // the wrong shape is better than no answer on the last attempt
-                        Ok(()) => return Ok(Answer { value, usage: None, transcript }),
-                        Err(_) if last => return Ok(Answer { value, usage: None, transcript }),
+                        Ok(()) => {
+                            return Ok(Answer {
+                                value,
+                                usage: None,
+                                transcript,
+                            });
+                        }
+                        Err(_) if last => {
+                            return Ok(Answer {
+                                value,
+                                usage: None,
+                                transcript,
+                            });
+                        }
                         Err(reason) => {
                             tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
                             prompt = append_repair(&prompt, &result, &reason);
@@ -109,58 +125,62 @@ impl WasiModelCtx for Client {
                     }
                 }
             }
-
-            unreachable!("the final attempt always returns or bails");
-        }
-        .boxed()
+        })
     }
 }
 
 fn build_prompt(request: &PreparedRequest) -> String {
-    let mut parts: Vec<String> = Vec::new();
+    let mut parts: Vec<Cow<'_, str>> = Vec::new();
     if let Some(system) = &request.system {
-        parts.push(system.clone());
+        parts.push(Cow::Borrowed(system.as_str()));
     }
     for message in &request.messages {
-        match message.role {
-            Role::User => parts.push(message.content.clone()),
-            Role::System => parts.push(format!("[system]\n{}", message.content)),
-            Role::Assistant => parts.push(format!("[assistant]\n{}", message.content)),
-        }
+        parts.push(match message.role {
+            Role::User => Cow::Borrowed(message.content.as_str()),
+            Role::System => Cow::Owned(format!("[system]\n{}", message.content)),
+            Role::Assistant => Cow::Owned(format!("[assistant]\n{}", message.content)),
+        });
     }
-    parts.push(answer_instruction(&request.request.format));
+    parts.push(Cow::Owned(answer_instruction(&request.request.format)));
     parts.join("\n\n")
 }
 
 // Collect the prompt's MCP grants, each carrying its own endpoint URL. A grant
 // without a URL is an error: the backend has nowhere to point the spawned agent.
 fn select_mcp_servers(request: &Request) -> Result<Vec<McpServer>> {
-    let mut selected = Vec::new();
-    for tool in &request.tools {
-        let Tool::Mcp(grant) = tool else { continue };
-        let url = grant.url.clone().ok_or_else(|| {
-            anyhow!("MCP grant `{}` has no url; the guest must supply one", grant.name)
-        })?;
-        selected.push(McpServer {
-            name: grant.name.clone(),
-            url,
-            tools: grant.tools.clone(),
-        });
-    }
-    Ok(selected)
+    request
+        .tools
+        .iter()
+        .filter_map(|tool| match tool {
+            Tool::Mcp(grant) => Some(grant),
+            Tool::Function(_) => None,
+        })
+        .map(|grant| {
+            let url = grant.url.clone().ok_or_else(|| {
+                anyhow!("MCP grant `{}` has no url; the guest must supply one", grant.name)
+            })?;
+            Ok(McpServer {
+                name: grant.name.clone(),
+                url,
+                tools: grant.tools.clone(),
+            })
+        })
+        .collect()
 }
 
 // A natural-language hint naming the granted MCP servers and any tool allowlist,
 // prepended so the spawned agent prefers them over assumptions.
 fn mcp_hint(servers: &[McpServer]) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    for server in servers {
-        if server.tools.is_empty() {
-            lines.push(format!("- `{}`", server.name));
-        } else {
-            lines.push(format!("- `{}` (use only: {})", server.name, server.tools.join(", ")));
-        }
-    }
+    let lines: Vec<String> = servers
+        .iter()
+        .map(|server| {
+            if server.tools.is_empty() {
+                format!("- `{}`", server.name)
+            } else {
+                format!("- `{}` (use only: {})", server.name, server.tools.join(", "))
+            }
+        })
+        .collect();
     format!(
         "The following read-only MCP servers are available. Consult their tools and resources for \
          authoritative reference material before answering, and prefer that material over \
@@ -177,12 +197,13 @@ fn mcp_hint(servers: &[McpServer]) -> String {
         approve_mcps = options.approve_mcps,
     )
 )]
-async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>> {
+async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<AgentOutput> {
     // if the prompt is too large, spill it to a file and pass the file path to the agent
-    let (prompt, _file) = if prompt.len() <= MAX_INLINE_SIZE {
-        (prompt.to_owned(), None)
+    let (prompt, _file): (Cow<'_, str>, Option<PromptFile>) = if prompt.len() <= MAX_INLINE_SIZE {
+        (Cow::Borrowed(prompt), None)
     } else {
-        into_prompt_file(prompt, options.workspace)?
+        let (arg, file) = into_prompt_file(prompt, options.workspace)?;
+        (Cow::Owned(arg), Some(file))
     };
 
     let mut cmd = Command::new(CURSOR_AGENT_BIN);
@@ -203,24 +224,47 @@ async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>
     if let Some(model) = options.model {
         cmd.arg("--model").arg(model);
     }
-    cmd.arg(prompt);
+    cmd.arg(prompt.as_ref());
 
-    let child = cmd.spawn().with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?;
+    let mut child = cmd.spawn().with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?;
+    let stdout = child.stdout.take().context("child stdout is piped")?;
+    let stderr = child.stderr.take().context("child stderr is piped")?;
 
-    let output = tokio::time::timeout(options.timeout, child.wait_with_output())
-        .await
-        .map_err(|_elapsed| anyhow!("cursor-agent timed out after {}s", options.timeout.as_secs()))?
-        .with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?;
+    // Parse stdout as it streams so memory stays bounded on chatty runs, and
+    // drain stderr concurrently so the child can never block on a full pipe.
+    let drive = async {
+        let (parsed, stderr) = tokio::join!(parse_stream(stdout), drain(stderr));
+        let status =
+            child.wait().await.with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?;
+        anyhow::Ok((parsed, stderr, status))
+    };
 
-    if !output.status.success() {
-        bail!(
-            "cursor-agent exited with {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+    // On timeout `drive` is dropped, and `kill_on_drop` reaps the orphaned agent.
+    let (parsed, stderr, status) =
+        tokio::time::timeout(options.timeout, drive).await.map_err(|_elapsed| {
+            anyhow!("cursor-agent timed out after {}s", options.timeout.as_secs())
+        })??;
+
+    if !status.success() {
+        bail!("cursor-agent exited with {status}: {}", String::from_utf8_lossy(&stderr).trim());
     }
 
-    Ok(output.stdout)
+    parsed
+}
+
+async fn parse_stream(stdout: impl AsyncRead + Unpin) -> Result<AgentOutput> {
+    let mut lines = BufReader::new(stdout).lines();
+    let mut parser = OutputParser::default();
+    while let Some(line) = lines.next_line().await? {
+        parser.line(&line)?;
+    }
+    parser.finish()
+}
+
+async fn drain(mut stream: impl AsyncRead + Unpin) -> Vec<u8> {
+    let mut buffer = Vec::new();
+    let _ = stream.read_to_end(&mut buffer).await;
+    buffer
 }
 
 // Removes a spill-to-disk prompt file when the spawn finishes.
@@ -237,13 +281,14 @@ impl Drop for PromptFile {
 }
 
 // Write oversized prompts to the workspace and return a short CLI argument.
-fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, Option<PromptFile>)> {
+fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, PromptFile)> {
     let cursor_dir = workspace.join(".cursor");
     std::fs::create_dir_all(&cursor_dir)
         .with_context(|| format!("creating {}", cursor_dir.display()))?;
 
+    // The name carries the pid: concurrent host processes may lend the same workspace.
     let id = PROMPT_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = cursor_dir.join(format!("omnia-prompt-{id}.txt"));
+    let path = cursor_dir.join(format!("omnia-prompt-{}-{id}.txt", std::process::id()));
     std::fs::write(&path, prompt)
         .with_context(|| format!("writing prompt file {}", path.display()))?;
 
@@ -253,7 +298,7 @@ fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, Option<Pr
         path.display()
     );
 
-    Ok((arg, Some(PromptFile { path })))
+    Ok((arg, PromptFile { path }))
 }
 
 fn answer_instruction(format: &Format) -> String {
@@ -285,72 +330,145 @@ fn check_answer(value: &Value, format: &Format) -> Result<(), String> {
     match format {
         Format::Text if !value.is_string() => Err("answer is not a JSON string".to_owned()),
         Format::Json if !value.is_object() => Err("answer is not a JSON object".to_owned()),
-        _ => Ok(()),
+        Format::Schema(spec) => check_schema(value, &spec.schema),
+        Format::Text | Format::Json => Ok(()),
     }
 }
 
-// Parse `stream-json` NDJSON (or a legacy single-line `json` payload).
-fn parse_output(stdout: &[u8]) -> Result<AgentOutput> {
-    let text = std::str::from_utf8(stdout).context("cursor-agent did not emit valid UTF-8")?;
+// A schema that fails to compile disables validation rather than failing the
+// completion: the repair loop can only act on defects in the answer itself.
+fn check_schema(value: &Value, schema: &str) -> Result<(), String> {
+    let schema: Value = match serde_json::from_str(schema) {
+        Ok(schema) => schema,
+        Err(error) => {
+            tracing::warn!(%error, "request schema is not valid JSON; skipping validation");
+            return Ok(());
+        }
+    };
+    let validator = match jsonschema::validator_for(&schema) {
+        Ok(validator) => validator,
+        Err(error) => {
+            tracing::warn!(%error, "request schema does not compile; skipping validation");
+            return Ok(());
+        }
+    };
+    validator
+        .validate(value)
+        .map_err(|error| format!("answer does not conform to the required schema: {error}"))
+}
 
-    let mut result: Option<String> = None;
-    let mut pending_tools: HashMap<String, (String, Value)> = HashMap::new();
-    let mut turns: Vec<ToolTurn> = Vec::new();
-    let mut parsed_lines = 0_u32;
+/// The subset of `cursor-agent` stream events the backend consumes; everything
+/// else (assistant deltas, thinking, …) parses to `Other` without building a
+/// JSON tree.
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Event {
+    Result {
+        is_error: Option<bool>,
+        result: Option<String>,
+    },
+    ToolCall {
+        subtype: String,
+        call_id: Option<String>,
+        tool_call: Option<Value>,
+    },
+    #[serde(other)]
+    Other,
+}
 
-    for line in text.lines() {
+// Incremental parser for `stream-json` NDJSON (with a fallback for a legacy
+// single-line `json` payload).
+#[derive(Default)]
+struct OutputParser {
+    result: Option<String>,
+    pending_tools: HashMap<String, (String, Value)>,
+    turns: Vec<ToolTurn>,
+    lines: u32,
+    first_line: Option<String>,
+}
+
+impl OutputParser {
+    fn line(&mut self, line: &str) -> Result<()> {
         let line = line.trim();
         if line.is_empty() {
-            continue;
+            return Ok(());
         }
-        parsed_lines += 1;
-        let event: Value =
-            serde_json::from_str(line).with_context(|| format!("invalid JSON event: {line}"))?;
-        match event.get("type").and_then(Value::as_str) {
-            Some("result") => {
-                result = result_payload(&event)?;
+        self.lines += 1;
+        if self.lines == 1 {
+            self.first_line = Some(line.to_owned());
+        }
+
+        // One garbled line must not cost an otherwise-successful answer.
+        let event = match serde_json::from_str::<Event>(line) {
+            Ok(event) => event,
+            Err(error) => {
+                tracing::debug!(%error, line, "skipping unparsable cursor-agent event");
+                return Ok(());
             }
-            Some("tool_call") => match event.get("subtype").and_then(Value::as_str) {
-                Some("started") => {
-                    if let (Some(call_id), Some((tool, args))) = (
-                        event.get("call_id").and_then(Value::as_str),
-                        event.get("tool_call").and_then(tool_call_identity),
-                    ) {
-                        pending_tools.insert(call_id.to_owned(), (tool, args));
-                    }
+        };
+
+        match event {
+            Event::Result { is_error, result } => {
+                if is_error == Some(true) {
+                    bail!(
+                        "cursor-agent reported an error: {}",
+                        result.as_deref().unwrap_or("<no detail>")
+                    );
                 }
-                Some("completed") => {
-                    if let (Some(call_id), Some(tool_call)) =
-                        (event.get("call_id").and_then(Value::as_str), event.get("tool_call"))
-                    {
-                        let (tool, args) = pending_tools.remove(call_id).unwrap_or_else(|| {
-                            tool_call_identity(tool_call)
-                                .unwrap_or_else(|| ("unknown".to_owned(), Value::Null))
-                        });
-                        let tool_result = tool_call_result(tool_call).unwrap_or(Value::Null);
-                        turns.push(ToolTurn {
-                            tool,
-                            args,
-                            result: tool_result,
-                        });
-                    }
+                if result.is_some() {
+                    self.result = result;
                 }
-                _ => {}
-            },
+            }
+            Event::ToolCall {
+                subtype,
+                call_id,
+                tool_call,
+            } => {
+                self.tool_call(&subtype, call_id, tool_call);
+            }
+            Event::Other => {}
+        }
+        Ok(())
+    }
+
+    fn tool_call(&mut self, subtype: &str, call_id: Option<String>, tool_call: Option<Value>) {
+        match subtype {
+            "started" => {
+                if let (Some(call_id), Some(identity)) =
+                    (call_id, tool_call.as_ref().and_then(tool_call_identity))
+                {
+                    self.pending_tools.insert(call_id, identity);
+                }
+            }
+            "completed" => {
+                if let (Some(call_id), Some(tool_call)) = (call_id, tool_call) {
+                    let (tool, args) = self.pending_tools.remove(&call_id).unwrap_or_else(|| {
+                        tool_call_identity(&tool_call)
+                            .unwrap_or_else(|| ("unknown".to_owned(), Value::Null))
+                    });
+                    let result = tool_call_result(&tool_call).unwrap_or(Value::Null);
+                    self.turns.push(ToolTurn { tool, args, result });
+                }
+            }
             _ => {}
         }
     }
 
-    if let Some(result) = result {
-        let transcript = if turns.is_empty() { None } else { Some(Transcript { turns }) };
-        return Ok(AgentOutput { result, transcript });
-    }
+    fn finish(self) -> Result<AgentOutput> {
+        if let Some(result) = self.result {
+            let transcript =
+                if self.turns.is_empty() { None } else { Some(Transcript { turns: self.turns }) };
+            return Ok(AgentOutput { result, transcript });
+        }
 
-    if parsed_lines == 1 {
-        return parse_legacy_output(text.trim());
-    }
+        if self.lines == 1
+            && let Some(line) = &self.first_line
+        {
+            return parse_legacy_output(line);
+        }
 
-    bail!("cursor-agent did not emit a terminal result event");
+        bail!("cursor-agent did not emit a terminal result event");
+    }
 }
 
 fn parse_legacy_output(text: &str) -> Result<AgentOutput> {
@@ -431,9 +549,19 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        AgentOutput, MAX_INLINE_SIZE, build_prompt, into_prompt_file, parse_output, parse_result,
+        AgentOutput, MAX_INLINE_SIZE, OutputParser, build_prompt, check_answer, into_prompt_file,
+        parse_result,
     };
     use crate::test_support::{NoopToolHost, client};
+
+    fn parse_output(stdout: &[u8]) -> anyhow::Result<AgentOutput> {
+        let text = std::str::from_utf8(stdout).expect("test payloads are UTF-8");
+        let mut parser = OutputParser::default();
+        for line in text.lines() {
+            parser.line(line)?;
+        }
+        parser.finish()
+    }
 
     fn schema_request() -> Request {
         Request {
@@ -546,6 +674,33 @@ mod tests {
     }
 
     #[test]
+    fn skip_garbled_line() {
+        let stdout =
+            b"warning: not an event\n{\"type\":\"result\",\"is_error\":false,\"result\":\"ok\"}";
+        let AgentOutput { result, .. } = parse_output(stdout).expect("garbled line is skipped");
+        assert_eq!(result, "ok");
+    }
+
+    #[test]
+    fn schema_mismatch_repairable() {
+        let format = verdict_schema();
+        check_answer(&json!({ "verdict": "pass" }), &format).expect("a conforming answer passes");
+
+        let strict = Format::Schema(Schema {
+            name: "verdict".to_owned(),
+            schema: json!({
+                "type": "object",
+                "properties": { "verdict": { "type": "string" } },
+                "required": ["verdict"],
+                "additionalProperties": false,
+            })
+            .to_string(),
+        });
+        let reason = check_answer(&json!({ "other": 1 }), &strict).unwrap_err();
+        assert!(reason.contains("does not conform"), "unexpected reason: {reason}");
+    }
+
+    #[test]
     fn spill_large_prompt() {
         let workspace =
             std::env::temp_dir().join(format!("omnia-cursor-prompt-{}", std::process::id()));
@@ -554,9 +709,11 @@ mod tests {
 
         let large = "x".repeat(MAX_INLINE_SIZE + 1);
         let (arg, spill) = into_prompt_file(&large, &workspace).expect("spill prompt");
-        assert!(spill.is_some(), "large prompt must spill to disk");
         assert!(arg.contains("omnia-prompt-"), "arg references prompt file: {arg}");
+        assert!(spill.path.exists(), "the prompt file is on disk while the guard lives");
+        let path = spill.path.clone();
         drop(spill);
+        assert!(!path.exists(), "the prompt file is removed on drop");
         let _ = std::fs::remove_dir_all(&workspace);
     }
 }

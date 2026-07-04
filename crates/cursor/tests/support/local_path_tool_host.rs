@@ -3,7 +3,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use futures::FutureExt as _;
 use omnia_wasi_model::{DirEntry, FutureResult, Reference, ToolHost, VerifyReport};
 
 /// Tool host that resolves the lent workspace to a fixed path; cursor ignores
@@ -15,23 +14,23 @@ pub struct LocalPathToolHost {
 
 impl ToolHost for LocalPathToolHost {
     fn resolve(&self, _reference: Reference) -> FutureResult<Vec<u8>> {
-        async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
+        Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
     }
 
     fn read(&self, _path: String) -> FutureResult<Vec<u8>> {
-        async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
+        Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
     }
 
     fn list(&self, _path: String) -> FutureResult<Vec<DirEntry>> {
-        async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
+        Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
     }
 
     fn write(&self, _path: String, _bytes: Vec<u8>) -> FutureResult<()> {
-        async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
+        Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
     }
 
     fn verify(&self, _check: String) -> FutureResult<VerifyReport> {
-        async { Err(anyhow::anyhow!("cursor ignores the tool host")) }.boxed()
+        Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
     }
 
     fn local_path(&self) -> Option<&Path> {
