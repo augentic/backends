@@ -16,7 +16,7 @@ use anyhow::Result;
 use omnia::Backend as _;
 use omnia_cursor::{Client, ConnectOptions};
 use omnia_wasi_model::{
-    Answer, Format, Grants, Mcp, PreparedRequest, Request, Schema, Sections, Tool, WasiModelCtx,
+    Answer, Format, Grants, Mcp, Message, Request, Role, Schema, Tool, WasiModelCtx,
 };
 use serde_json::json;
 use support::{SENTINEL, local_path_tool_host, serve};
@@ -30,17 +30,12 @@ fn verdict_request() -> Request {
              required JSON object."
                 .to_owned(),
         ),
-        messages: vec![],
-        sections: Some(Sections {
-            role: None,
-            task: "Judge the trivial candidate and return a verdict of \"pass\" with a one-line \
-                   reason."
+        messages: vec![Message {
+            role: Role::User,
+            content: "Judge the trivial candidate and return a verdict of \"pass\" with a \
+                      one-line reason.\n\nThe candidate is a no-op; it should pass."
                 .to_owned(),
-            context: Some("The candidate is a no-op; it should pass.".to_owned()),
-            constraints: vec![],
-            examples: vec![],
-            variables: vec![],
-        }),
+        }],
         generation: None,
         format: Format::Schema(Schema {
             name: "verdict".to_owned(),
@@ -73,9 +68,8 @@ async fn live_cursor_completes() -> Result<()> {
 
     let client = Client::connect_with(ConnectOptions).await?;
 
-    let prepared = PreparedRequest::try_from(verdict_request()).expect("assemble verdict request");
     let answer: Answer =
-        client.complete(prepared, local_path_tool_host(workspace)).await.map_err(|e| {
+        client.complete(verdict_request(), local_path_tool_host(workspace)).await.map_err(|e| {
             anyhow::anyhow!(
                 "live cursor completion failed (is cursor-agent installed and authed?): {e}"
             )
@@ -95,17 +89,12 @@ fn secret_request(url: String) -> Request {
     Request {
         model: None,
         system: Some("Answer only from tools. Do not guess or fabricate values.".to_owned()),
-        messages: vec![],
-        sections: Some(Sections {
-            role: None,
-            task: "Call the `read_secret` tool on the `omnia` MCP server to obtain the project \
-                   secret token, then return it unchanged."
+        messages: vec![Message {
+            role: Role::User,
+            content: "Call the `read_secret` tool on the `omnia` MCP server to obtain the \
+                      project secret token, then return it unchanged."
                 .to_owned(),
-            context: None,
-            constraints: vec![],
-            examples: vec![],
-            variables: vec![],
-        }),
+        }],
         generation: None,
         format: Format::Schema(Schema {
             name: "secret".to_owned(),
@@ -122,7 +111,7 @@ fn secret_request(url: String) -> Request {
         tools: vec![Tool::Mcp(Mcp {
             name: "omnia".to_owned(),
             tools: vec![],
-            url: Some(url),
+            url,
         })],
         grants: Grants {
             references: None,
@@ -145,11 +134,11 @@ async fn live_cursor_uses_mcp() -> Result<()> {
 
     let client = Client::connect_with(ConnectOptions).await?;
 
-    let prepared =
-        PreparedRequest::try_from(secret_request(format!("http://127.0.0.1:{port}/mcp")))
-            .expect("assemble secret request");
     let answer: Answer = client
-        .complete(prepared, local_path_tool_host(workspace))
+        .complete(
+            secret_request(format!("http://127.0.0.1:{port}/mcp")),
+            local_path_tool_host(workspace),
+        )
         .await
         .map_err(|e| anyhow::anyhow!("live cursor MCP completion failed: {e}"))?;
 

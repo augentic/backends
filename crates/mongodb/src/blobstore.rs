@@ -92,10 +92,6 @@ impl Container for MongoDbContainer {
         let collection = self.collection.clone();
 
         async move {
-            // let mut object = collection.get(name).await.context("getting object")?;
-            // let mut bytes = vec![];
-            // object.read_to_end(&mut bytes).await?;
-
             let Some(blob) = collection.find_one(bson::doc! { "name": name }).await? else {
                 return Err(anyhow!("Object not found"));
             };

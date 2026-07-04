@@ -16,9 +16,14 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use axum::Router;
-use axum::routing::get;
-use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Sections, Tool};
+use omnia_guest::mcp::{
+    self, CallToolResult, Implementation, McpError, McpServer, Resource, ResourceContents,
+    Tool as McpTool,
+};
+use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Tool};
+use omnia_wasi_model::prompt::Sections;
+use serde::Deserialize;
+use serde_json::{Value, json};
 use tracing::Level;
 use wasip3::filesystem::preopens;
 use wasip3::http::types as http;
@@ -29,37 +34,33 @@ wasip3::cli::command::export!(CliGuest);
 impl wasip3::exports::cli::run::Guest for CliGuest {
     #[omnia_wasi_otel::instrument(name = "cursor_example_run", level = Level::DEBUG)]
     async fn run() -> Result<(), ()> {
-        // Read the preopen table the host populated from `[[mount]]` and lend the
-        // tree named `.` as the working tree. `directories` must outlive the
-        // `create` call — the lent `workspace` borrows one of its descriptors.
+        // Read the preopen table the host populated from `[[mount]]`.
         let directories = preopens::get_directories();
         let workspace = directories.iter().find_map(|(dir, name)| (name == ".").then_some(dir));
 
         tracing::info!(workspace = workspace.is_some(), mcp = "docs", "cursor example completion");
 
+        let (system, messages) = Sections {
+            role: Some("a terse technical writer".to_string()),
+            task: "Using the docs MCP server, state the lifecycle stages a widget moves through, \
+                   in order."
+                .to_string(),
+            ..Sections::default()
+        }
+        .channels(Some(
+            "You answer strictly from the read-only `docs` MCP documentation tools. Do not guess.",
+        ));
+
         let request = completion::Request {
             model: None,
-            system: Some(
-                "You answer strictly from the read-only `docs` MCP documentation tools. Do not guess."
-                    .to_string(),
-            ),
-            messages: vec![],
-            sections: Some(Sections {
-                role: Some("a terse technical writer".to_string()),
-                task: "Using the docs MCP server, state the lifecycle stages a widget moves \
-                    through, in order."
-                    .to_string(),
-                context: None,
-                constraints: vec![],
-                examples: vec![],
-                variables: vec![],
-            }),
+            system,
+            messages,
             generation: None,
-            format: Format::Json,
+            format: Format::Text,
             tools: vec![Tool::Mcp(Mcp {
                 name: "docs".to_string(),
                 tools: vec![],
-                url: Some("http://localhost:8080/mcp".to_string()),
+                url: "http://localhost:8080/mcp".to_string(),
             })],
             grants: Grants {
                 references: None,
@@ -84,19 +85,126 @@ impl wasip3::exports::cli::run::Guest for CliGuest {
     }
 }
 
-struct HttpMcp;
-wasip3::http::service::export!(HttpMcp);
+struct HttpGuest;
+wasip3::http::service::export!(HttpGuest);
 
-impl wasip3::exports::http::handler::Guest for HttpMcp {
+impl wasip3::exports::http::handler::Guest for HttpGuest {
     #[omnia_wasi_otel::instrument(name = "http_mcp_handle", level = Level::DEBUG)]
     async fn handle(request: http::Request) -> Result<http::Response, http::ErrorCode> {
-        let router = Router::new().route("/mcp", get(mcp));
-        omnia_wasi_http::serve(router, request).await
+        tracing::debug!("cursor example mcp request");
+        omnia_wasi_http::serve(mcp::router(References), request).await
     }
 }
 
-// Trigger the same completion over HTTP and return its validated answer.
-async fn mcp() -> String {
-    tracing::debug!("cursor example /mcp request");
-    "mcp response".to_string()
+#[derive(Deserialize)]
+struct ReadDocArgs {
+    name: String,
 }
+
+struct References;
+
+impl References {
+    pub fn find_doc(name: &str) -> Option<&'static (&'static str, &'static str, &'static str)> {
+        REFERENCES.iter().find(|(doc_name, ..)| *doc_name == name)
+    }
+
+    pub fn map_docs<T, F>(f: F) -> Vec<T>
+    where
+        F: Fn(&'static str, &'static str, &'static str) -> T,
+    {
+        REFERENCES.iter().copied().map(|(name, title, body)| f(name, title, body)).collect()
+    }
+}
+
+impl McpServer for References {
+    fn info(&self) -> Implementation {
+        Implementation::new("omnia-docs", env!("CARGO_PKG_VERSION"))
+    }
+
+    fn tools(&self) -> Vec<McpTool> {
+        vec![
+            McpTool::new(
+                "list_docs",
+                "List the name and title of every available document.",
+                json!({ "type": "object", "properties": {} }),
+            ),
+            McpTool::new(
+                "read_doc",
+                "Read one document in full by its `name` (as returned by `list_docs`).",
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "the document name, e.g. `overview`",
+                        }
+                    },
+                    "required": ["name"],
+                }),
+            ),
+        ]
+    }
+
+    fn call_tool(&self, name: &str, arguments: &Value) -> Result<CallToolResult, McpError> {
+        tracing::debug!(tool = name, "mcp tool call");
+
+        match name {
+            "list_docs" => {
+                let listing =
+                    References::map_docs(|name, title, _| format!("- {name}: {title}")).join("\n");
+                Ok(CallToolResult::text(listing))
+            }
+            "read_doc" => {
+                let ReadDocArgs { name } = mcp::arguments(arguments)?;
+                References::find_doc(&name).map_or_else(
+                    || Ok(CallToolResult::error(format!("no reference named `{name}`"))),
+                    |(.., body)| Ok(CallToolResult::text(*body)),
+                )
+            }
+            other => Err(McpError::unknown_tool(other)),
+        }
+    }
+
+    fn resources(&self) -> Vec<Resource> {
+        References::map_docs(|name, title, _| {
+            Resource::new(
+                format!("doc://{name}"),
+                title,
+                format!("The {title} document."),
+                "text/markdown",
+            )
+        })
+    }
+
+    fn read_resource(&self, uri: &str) -> Result<ResourceContents, McpError> {
+        tracing::debug!(uri, "mcp resource read");
+        let name = uri.strip_prefix("doc://").unwrap_or(uri);
+        References::find_doc(name).map_or_else(
+            || Err(McpError::resource_not_found(uri)),
+            |(.., body)| Ok(ResourceContents::text(uri, "text/markdown", *body)),
+        )
+    }
+}
+
+const REFERENCES: &[(&str, &str, &str)] = &[
+    (
+        "overview",
+        "Widget Service Overview",
+        "# Widget Service Overview\n\n\
+         Widgets move through `draft`, `assembled`, and `shipped` in order. They \
+         never move backwards.\n",
+    ),
+    (
+        "api-reference",
+        "Widget Service API Reference",
+        "# Widget Service API Reference\n\n\
+         `POST /widgets` creates a draft widget. `POST /widgets/{id}/assemble` \
+         advances it to `assembled`.\n",
+    ),
+    (
+        "style-guide",
+        "Widget Service Style Guide",
+        "# Widget Service Style Guide\n\n\
+         Labels are kebab-case. IDs are ULIDs.\n",
+    ),
+];

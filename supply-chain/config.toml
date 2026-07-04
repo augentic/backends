@@ -158,14 +158,6 @@ criteria = "safe-to-deploy"
 version = "2.15.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.bytecheck]]
-version = "0.8.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.bytecheck_derive]]
-version = "0.8.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.bytecount]]
 version = "0.6.9"
 criteria = "safe-to-deploy"
@@ -790,14 +782,6 @@ criteria = "safe-to-deploy"
 version = "0.10.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.munge]]
-version = "0.4.7"
-criteria = "safe-to-deploy"
-
-[[exemptions.munge_macro]]
-version = "0.4.7"
-criteria = "safe-to-deploy"
-
 [[exemptions.nkeys]]
 version = "0.4.5"
 criteria = "safe-to-deploy"
@@ -1006,14 +990,6 @@ criteria = "safe-to-deploy"
 version = "0.14.4"
 criteria = "safe-to-deploy"
 
-[[exemptions.ptr_meta]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.ptr_meta_derive]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.pulldown-cmark]]
 version = "0.9.6"
 criteria = "safe-to-deploy"
@@ -1044,10 +1020,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.radium]]
 version = "0.7.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.rancor]]
-version = "0.1.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.rand]]
@@ -1090,24 +1062,12 @@ criteria = "safe-to-deploy"
 version = "0.1.9"
 criteria = "safe-to-deploy"
 
-[[exemptions.rend]]
-version = "0.5.4"
-criteria = "safe-to-deploy"
-
 [[exemptions.resolv-conf]]
 version = "0.7.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.ring]]
 version = "0.17.14"
-criteria = "safe-to-deploy"
-
-[[exemptions.rkyv]]
-version = "0.8.17"
-criteria = "safe-to-deploy"
-
-[[exemptions.rkyv_derive]]
-version = "0.8.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.rsqlite-vfs]]
@@ -1338,6 +1298,10 @@ criteria = "safe-to-deploy"
 version = "0.1.18"
 criteria = "safe-to-deploy"
 
+[[exemptions.tokio-tungstenite]]
+version = "0.29.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.tokio-websockets]]
 version = "0.10.1"
 criteria = "safe-to-deploy"
@@ -1400,6 +1364,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tryhard]]
 version = "0.5.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.tungstenite]]
+version = "0.29.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.typed-builder]]

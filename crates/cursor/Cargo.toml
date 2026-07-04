@@ -20,13 +20,13 @@ all-features = true
 
 [dependencies]
 anyhow.workspace = true
-futures.workspace = true
 # Pinned to the local omnia 0.35.0 line via the workspace `[patch.crates-io]`
 # override (the `omnia-wasi-model` host crate is unreleased on crates.io).
 omnia.workspace = true
 omnia-wasi-model.workspace = true
+serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["process", "time"] }
+tokio = { workspace = true, features = ["io-util", "process", "time"] }
 tracing.workspace = true
 
 # Integration tests are separate crates and do not inherit the library's normal

@@ -24,7 +24,7 @@ const DEFAULT_GROUP: &str = "wrt-kafka-consumer";
 #[derive(Clone)]
 pub struct Client {
     producer: ThreadedProducer<Tracer>,
-    partitioner: Option<Partitioner>,
+    partitioner: Partitioner,
     registry: Option<Registry>,
     consumer: Option<Arc<StreamConsumer>>,
 }
@@ -45,7 +45,7 @@ impl Backend for Client {
         // producer
         let producer = config.create_with_context(Tracer {}).context("issue creating producer")?;
 
-        // maybe custom partitioner and schema registry
+        // custom partitioner and maybe schema registry
         let partitioner = Partitioner::new(options.partition_count);
         let registry = options.registry.map(Registry::new);
 
@@ -68,7 +68,7 @@ impl Backend for Client {
 
         Ok(Self {
             producer,
-            partitioner: Some(partitioner),
+            partitioner,
             registry,
             consumer,
         })
@@ -147,8 +147,6 @@ impl From<&ConnectOptions> for ClientConfig {
 
         config.set("client.id", format!("{}-{}", &kafka.client_id, random_range(1000..9999)));
         config.set("bootstrap.servers", &kafka.brokers);
-        // config.set("auto.offset.reset", "earliest");
-        // config.set("enable.auto.commit", "true");
 
         // SASL authentication
         if let Some(user) = &kafka.username

@@ -1,124 +1,48 @@
 # Architecture
 
-This document describes the architecture of Omnia (Quick WebAssembly Safe Runtime), a modular WASI component runtime built on [wasmtime](https://github.com/bytecodealliance/wasmtime).
+This document describes how the crates in this repository plug production services into the [Omnia](https://github.com/augentic/omnia) WASI component runtime. For the runtime's own architecture (engine, registry, execution flow), see [Omnia's Architecture doc](https://github.com/augentic/omnia/blob/main/docs/Architecture.md).
 
-## Overview
+## Where backends sit
 
-Omnia provides a thin wrapper around wasmtime for ergonomic integration of host-based services for WASI components. It enables WebAssembly guests to interact with external services (databases, message queues, etc.) through standardized WASI interfaces, while allowing hosts to swap backend implementations without changing guest code.
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                           Host Runtime                              │
-│                                                                     │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐     │
-│  │  Backend   │  │  Backend   │  │  Backend   │  │  Backend   │     │
-│  │  (Redis)   │  │  (Kafka)   │  │  (Azure)   │  │  (NATS)    │     │
-│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘     │
-│        │               │               │               │            │
-│  ┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐     │
-│  │ wasi-kv    │  │ wasi-msg   │  │ wasi-vault │  │ wasi-blob  │     │
-│  │ (WASI API) │  │ (WASI API) │  │ (WASI API) │  │ (WASI API) │     │
-│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘     │
-│        │               │               │               │            │
-│        └───────────────┴───────┬───────┴───────────────┘            │
-│                                │                                    │
-│                         ┌──────┴──────┐                             │
-│                         │   kernel    │                             │
-│                         │ (wasmtime)  │                             │
-│                         └──────┬──────┘                             │
-│                                │                                    │
-│   ┌────────────────────────────┴────────────────────────────────┐   │
-│   │                     WebAssembly Guest                       │   │
-│   │              (Your application logic - .wasm)               │   │
-│   └─────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## Core Concepts
-
-### Guest/Host Architecture
-
-Omnia follows the WebAssembly Component Model's guest/host pattern:
-
-- **Guest**: Application code compiled to WebAssembly (`.wasm`). Uses WASI interfaces to interact with the outside world. The guest is portable and omnia-agnostic.
-
-- **Host**: The native runtime that loads and executes the WebAssembly guest. Provides concrete implementations of WASI interfaces by connecting to actual backends (Redis, Kafka, Postgres, etc.).
-
-This separation allows the same guest code to run with different backends—swap Redis for NATS without changing application logic.
-
-### Three-Layer Architecture
-
-Omnia is organized into three distinct layers:
+Omnia is organized into three layers; this repository is the top one:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Layer 3: Backends (*) (this repo)                              │
+│  Layer 3: Backends (this repo)                                  │
 │  Concrete connections to external services                      │
-│  Examples: redis, kafka, nats, azure, postgres                  │
+│  redis, kafka, nats, postgres, mongodb, azure-*, genai, cursor  │
 ├─────────────────────────────────────────────────────────────────┤
-│  Layer 2: WASI Interfaces (wasi-*)                              │
+│  Layer 2: WASI Interfaces (omnia: crates/wasi-*)                │
 │  Abstract service capabilities defined by WIT interfaces        │
-│  Examples: wasi-keyvalue, wasi-messaging, wasi-blobstore        │
 ├─────────────────────────────────────────────────────────────────┤
-│  Layer 1: Kernel                                                │
-│  Core runtime infrastructure (wasmtime, CLI, traits)            │
+│  Layer 1: Runtime core (omnia: crates/omnia)                    │
+│  wasmtime engine, CLI, deployment registry, dispatch, traits    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Crate Organization
+Guests are compiled against Layer 2 interfaces only. A guest that calls `wasi:keyvalue` neither knows nor cares whether the host answers with Omnia's in-memory default or this repo's Redis client — swapping backends is a host-side, one-line change and never requires recompiling the guest.
 
-### Kernel (`crates/kernel`)
+## What a backend implements
 
-The foundation of the runtime. Provides:
+Every backend crate implements two things from the `omnia` runtime:
 
-- **CLI infrastructure**: Command-line interface for running and compiling WebAssembly components
-- **Core traits**: `Runtime`, `Host`, `Server`, and `Backend` traits that all components implement
-- **Wasmtime integration**: Re-exports and wrappers for wasmtime functionality
-
-Key traits:
+1. **`omnia::Backend`** — connection management. `connect()` reads a `ConnectOptions` struct from environment variables (via `FromEnv`) and establishes the client:
 
 ```rust
-/// Implemented by all WASI hosts to link their dependencies
-pub trait Host<T>: Debug + Sync + Send {
-    fn add_to_linker(linker: &mut Linker<T>) -> Result<()>;
-}
-
-/// Implemented by WASI hosts that are servers
-pub trait Server<S: Runtime>: Debug + Sync + Send {
-    fn run(&self, state: &S) -> impl Future<Output = Result<()>>;
-}
-
-/// Implemented by backend resources for connection management
 pub trait Backend: Sized + Sync + Send {
     type ConnectOptions: FromEnv;
+
+    /// Connect using options parsed from the environment.
+    fn connect() -> impl Future<Output = Result<Self>>;
+
+    /// Connect with explicit options.
     fn connect_with(options: Self::ConnectOptions) -> impl Future<Output = Result<Self>>;
 }
 ```
 
-### Backend Crates (`crates/*`)
+2. **One or more `WasiXxxCtx` context traits** — the behavior behind a WASI interface. For example, `omnia-redis` implements `WasiKeyValueCtx`; `omnia-nats` implements `WasiMessagingCtx`, `WasiKeyValueCtx`, and `WasiBlobstoreCtx`.
 
-Backend crates provide concrete implementations connecting to external services:
-
-| Crate           | Service            | Supports                       |
-| --------------- | ------------------ | ------------------------------ |
-| `redis`         | Redis              | keyvalue                       |
-| `nats`          | NATS               | keyvalue, messaging, blobstore |
-| `kafka`         | Apache Kafka       | messaging                      |
-| `mongodb`       | MongoDB            | blobstore                      |
-| `postgres`      | PostgreSQL         | sql                            |
-| `azure_blob`    | Azure Blob Storage | blobstore                      |
-| `azure_id`      | Azure Identity     | identity.                      |
-| `azure_vault`   | Azure Key Vault    | vault                          |
-| `azure_table`   | Azure Table Store  | docstore                       |
-| `opentelemetry` | OTEL Collector     | otel                           |
-
-Each backend:
-
-1. Implements the `Backend` trait for connection management
-2. Implements the context trait for its supported WASI interfaces (e.g., `WasiKeyValueCtx`)
-3. Loads configuration from environment variables via `FromEnv`
-
-Example backend structure:
+A typical backend:
 
 ```rust
 #[derive(Clone)]
@@ -132,7 +56,6 @@ impl Backend for Client {
     }
 }
 
-// Implement WASI interface contexts
 impl WasiKeyValueCtx for Client {
     fn open_bucket(&self, identifier: String) -> FutureResult<Arc<dyn Bucket>> {
         // Provide keyvalue functionality via Redis...
@@ -140,31 +63,58 @@ impl WasiKeyValueCtx for Client {
 }
 ```
 
-## Runtime Execution Flow
+## Interface coverage
 
-1. **CLI Parsing**: The kernel parses command-line arguments (`run` or `compile`)
+| Crate           | Service                 | Implements                              |
+| --------------- | ----------------------- | --------------------------------------- |
+| `redis`         | Redis                   | keyvalue                                |
+| `nats`          | NATS / JetStream        | keyvalue, messaging, blobstore          |
+| `kafka`         | Apache Kafka            | messaging                               |
+| `mongodb`       | MongoDB                 | blobstore                               |
+| `postgres`      | PostgreSQL              | sql                                     |
+| `azure-blob`    | Azure Blob Storage      | blobstore                               |
+| `azure-id`      | Azure Managed Identity  | identity                                |
+| `azure-vault`   | Azure Key Vault         | vault                                   |
+| `azure-table`   | Azure Table Storage     | docstore                                |
+| `opentelemetry` | OTEL Collector          | otel                                    |
+| `genai`         | LLM provider APIs       | model                                   |
+| `cursor`        | `cursor-agent` CLI      | model                                   |
 
-2. **Backend Connection**: The `runtime!` macro-generated code connects to all configured backends using environment variables
+No backend here implements `wasi-http`, `wasi-config`, or `wasi-websocket`; those use Omnia's in-tree defaults.
 
-3. **Component Compilation**: The WebAssembly component is compiled (or loaded if pre-compiled)
+### Model backends
 
-4. **Linker Setup**: Each WASI interface's `add_to_linker` method is called to register host functions
+The two `wasi-model` backends serve `omnia:model/completion` requests and differ in execution model:
 
-5. **Instance Pre-instantiation**: The component is pre-instantiated for efficient spawning
+- **`genai`** calls provider APIs (OpenAI, Anthropic, Gemini, Groq, Ollama, ...) in-process via the [`genai`](https://crates.io/crates/genai) SDK, with a bounded tool loop for the host-injected `resolve` tool. Provider API keys are read from the environment at call time. MCP tool grants are rejected — use `cursor` for those.
+- **`cursor`** spawns the [`cursor-agent`](https://cursor.com/docs/cli) CLI per completion, running an agentic session inside the workspace the guest granted. MCP server grants are honoured by writing the workspace's `.cursor/mcp.json` for the session. Requires `cursor-agent` on `PATH` and `CURSOR_API_KEY` (or a prior `cursor-agent login`).
 
-6. **Server Start**: Server interfaces (HTTP, messaging, WebSockets) start listening for requests
+## Wiring a backend into a host runtime
 
-7. **Request Handling**: Incoming requests spawn new instances, execute guest code, and return responses
+Backends slot into the `omnia::runtime!` host map in place of an in-tree default:
 
-```text
-CLI → Backend Connect → Compile → Link → Pre-instantiate → Server Loop
-                                                              ↓
-                                              Request → Instance → Response
+```rust
+use omnia_redis::Client as Redis;
+use omnia_wasi_http::{HttpDefault, WasiHttp};
+use omnia_wasi_keyvalue::WasiKeyValue;
+use omnia_wasi_otel::{OtelDefault, WasiOtel};
+
+omnia::runtime!({
+    hosts: {
+        WasiHttp: HttpDefault,
+        WasiOtel: OtelDefault,
+        WasiKeyValue: Redis,
+    }
+});
 ```
+
+At startup the generated code calls each backend's `connect()` (reading its environment variables), links every WASI interface into the shared linker, and starts the trigger servers. See the [Production Backends guide](https://github.com/augentic/omnia/blob/main/docs/guides/production-backends.md) for the full walk-through.
+
+This workspace consumes the `omnia` runtime from the sibling checkout via `[patch.crates-io]` on `../omnia/crates/*`, so local development needs both repositories checked out side by side.
 
 ## Configuration
 
-All backends use environment variables for configuration. The `FromEnv` derive macro (from the `fromenv` crate) provides automatic parsing:
+All backends configure themselves from environment variables through the `FromEnv` derive:
 
 ```rust
 #[derive(Debug, Clone, FromEnv)]
@@ -176,19 +126,30 @@ pub struct ConnectOptions {
 }
 ```
 
-See individual backend READMEs for specific environment variables.
+Each crate's README documents its variable set.
+
+## Testing
+
+CI cannot stand up the real services, so the testing policy (see [AGENTS.md](../AGENTS.md)) splits coverage:
+
+- **Unit tests** cover pure, service-free translation logic (OData filter building, Postgres type mapping, the Kafka partitioner, cursor prompt build/parse). These run in CI.
+- **Live tests** (`tests/live.rs`, `#[ignore]`-gated) drive the backend's `WasiXxxCtx` implementation against the real service. Run them locally:
+
+```bash
+cargo nextest run -p <crate> --run-ignored all   # with the service + credentials available
+```
 
 ## Adding a New Backend
 
 1. Create `crates/<name>/`
-2. Implement the `Backend` trait for connection management
-3. Implement context traits for supported WASI interfaces (e.g., `WasiKeyValueCtx`)
-4. Add `ConnectOptions` with `FromEnv` derive
-5. Create example(s) demonstrating the backend
+2. Implement the `Backend` trait with a `FromEnv`-derived `ConnectOptions`
+3. Implement the `WasiXxxCtx` context trait(s) for the interfaces it serves
+4. Add `#[ignore]`-gated live tests in `tests/live.rs` and document the run recipe in the crate README
+5. Add example(s) under `examples/` if the backend benefits from an end-to-end demo
 
 ## Related Documentation
 
+- [Omnia Architecture](https://github.com/augentic/omnia/blob/main/docs/Architecture.md) — the runtime this repo plugs into
+- [Production Backends guide](https://github.com/augentic/omnia/blob/main/docs/guides/production-backends.md) — wiring and configuration
 - [wasmtime Component Model](https://docs.wasmtime.dev/api/wasmtime/component/)
-- [WASI Proposals](https://github.com/WebAssembly/WASI/blob/main/Proposals.md)
 - [WIT Format](https://component-model.bytecodealliance.org/design/wit.html)
-- [examples/README.md](./examples/README.md) - Running examples

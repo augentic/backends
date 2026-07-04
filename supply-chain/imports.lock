@@ -904,6 +904,11 @@ version = "46.0.1"
 when = "2026-06-24"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
+[[publisher.wasmtime-wasi-config]]
+version = "46.0.1"
+when = "2026-06-24"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+
 [[publisher.wasmtime-wasi-http]]
 version = "46.0.1"
 when = "2026-06-24"
@@ -1497,6 +1502,14 @@ end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-config]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 trusted-publisher = "github:bytecodealliance/wasmtime"

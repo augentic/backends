@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -6,18 +7,19 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
-use futures::FutureExt as _;
 use omnia_wasi_model::{
-    Answer, Format, FutureResult, PreparedRequest, Request, Role, Tool, ToolHost, ToolTurn,
-    Transcript, WasiModelCtx,
+    Answer, FutureResult, Request, Role, Tool, ToolHost, ToolTurn, Transcript, WasiModelCtx,
+    check_answer, parse_answer, repair_instruction,
 };
+use serde::Deserialize;
 use serde_json::Value;
+use tokio::io::{AsyncBufReadExt as _, AsyncRead, AsyncReadExt as _, BufReader};
 use tokio::process::Command;
 use tracing::instrument;
 
 use crate::{CURSOR_AGENT_BIN, Client, mcp};
 
-const MAX_ATTEMPTS: usize = 3;
+const MAX_ATTEMPTS: usize = 2;
 const MAX_INLINE_SIZE: usize = 128_000;
 
 // A prompt-granted MCP server and the endpoint URL the guest supplied for it.
@@ -43,27 +45,26 @@ struct AgentOutput {
 static PROMPT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 impl WasiModelCtx for Client {
-    fn complete(
-        &self, request: PreparedRequest, tool_host: Arc<dyn ToolHost>,
-    ) -> FutureResult<Answer> {
+    fn complete(&self, request: Request, tool_host: Arc<dyn ToolHost>) -> FutureResult<Answer> {
         let workspace = tool_host.local_path().map(Path::to_path_buf);
         let timeout = self.timeout;
 
-        async move {
-            let format = request.request.format.clone();
+        Box::pin(async move {
+            let format = &request.format;
             let mut prompt = build_prompt(&request);
 
             let Some(workspace) = workspace else {
                 bail!("no local tree on this node");
             };
-            std::fs::create_dir_all(&workspace)?;
+            std::fs::create_dir_all(&workspace)
+                .with_context(|| format!("creating {}", workspace.display()))?;
             let workspace = workspace
                 .canonicalize()
-                .with_context(|| format!("workspace {}", workspace.display()))?;
+                .with_context(|| format!("canonicalizing {}", workspace.display()))?;
 
-            // Per-prompt MCP grants carry their own endpoint URL; no grant means
-            // no MCP wiring (MCP is opt-in per completion).
-            let selected = select_mcp_servers(&request.request)?;
+            // Per-prompt MCP grants carry their own endpoint URL.
+            // No grant means no MCP wiring (MCP is opt-in per completion).
+            let selected = select_mcp_servers(&request);
             let _mcp_guard = if selected.is_empty() {
                 None
             } else {
@@ -74,7 +75,7 @@ impl WasiModelCtx for Client {
             };
 
             let spawn = SpawnOptions {
-                model: request.request.model.as_deref(),
+                model: request.model.as_deref(),
                 workspace: &workspace,
                 timeout,
                 approve_mcps: !selected.is_empty(),
@@ -83,20 +84,23 @@ impl WasiModelCtx for Client {
             tracing::info!(model = spawn.model, ?format, "cursor completion");
 
             for attempt in 1..=MAX_ATTEMPTS {
-                let stdout = spawn_agent(&prompt, &spawn).await?;
-                let AgentOutput { result, transcript } = parse_output(&stdout)?;
                 let last = attempt == MAX_ATTEMPTS;
+                let AgentOutput { result, transcript } = spawn_agent(&prompt, &spawn).await?;
                 tracing::debug!(attempt, result = result.len(), "cursor-agent answer");
 
-                match parse_result(&result, &format) {
-                    Ok(value) => match check_answer(&value, &format) {
-                        // a value of the wrong shape is better than no answer
-                        // on the last attempt
-                        Ok(()) => return Ok(Answer { value, usage: None, transcript }),
-                        Err(_) if last => return Ok(Answer { value, usage: None, transcript }),
-                        Err(reason) => {
+                match parse_answer(&result, format) {
+                    Ok(value) => match check_answer(&value, format) {
+                        Err(reason) if !last => {
                             tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
                             prompt = append_repair(&prompt, &result, &reason);
+                        }
+                        _ => {
+                            // the wrong shape is better than no answer on the last attempt
+                            return Ok(Answer {
+                                value,
+                                usage: None,
+                                transcript,
+                            });
                         }
                     },
                     Err(reason) if last => {
@@ -111,57 +115,56 @@ impl WasiModelCtx for Client {
                 }
             }
 
-            unreachable!("the final attempt always returns or bails");
-        }
-        .boxed()
+            bail!("cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts");
+        })
     }
 }
 
-fn build_prompt(request: &PreparedRequest) -> String {
-    let mut parts: Vec<String> = Vec::new();
+fn build_prompt(request: &Request) -> String {
+    let mut parts: Vec<Cow<'_, str>> = Vec::new();
     if let Some(system) = &request.system {
-        parts.push(system.clone());
+        parts.push(Cow::Borrowed(system.as_str()));
     }
     for message in &request.messages {
-        match message.role {
-            Role::User => parts.push(message.content.clone()),
-            Role::System => parts.push(format!("[system]\n{}", message.content)),
-            Role::Assistant => parts.push(format!("[assistant]\n{}", message.content)),
-        }
+        parts.push(match message.role {
+            Role::User => Cow::Borrowed(message.content.as_str()),
+            Role::System => Cow::Owned(format!("[system]\n{}", message.content)),
+            Role::Assistant => Cow::Owned(format!("[assistant]\n{}", message.content)),
+        });
     }
-    parts.push(answer_instruction(&request.request.format));
+    parts.push(Cow::Owned(request.format.instruction()));
     parts.join("\n\n")
 }
 
-// Collect the prompt's MCP grants, each carrying its own endpoint URL. A grant
-// without a URL is an error: the backend has nowhere to point the spawned agent.
-fn select_mcp_servers(request: &Request) -> Result<Vec<McpServer>> {
-    let mut selected = Vec::new();
-    for tool in &request.tools {
-        let Tool::Mcp(grant) = tool else { continue };
-        let url = grant.url.clone().ok_or_else(|| {
-            anyhow!("MCP grant `{}` has no url; the guest must supply one", grant.name)
-        })?;
-        selected.push(McpServer {
-            name: grant.name.clone(),
-            url,
-            tools: grant.tools.clone(),
-        });
-    }
-    Ok(selected)
+// Collect the prompt's MCP grants, each carrying its own endpoint URL.
+fn select_mcp_servers(request: &Request) -> Vec<McpServer> {
+    request
+        .tools
+        .iter()
+        .filter_map(|tool| match tool {
+            Tool::Mcp(grant) => Some(McpServer {
+                name: grant.name.clone(),
+                url: grant.url.clone(),
+                tools: grant.tools.clone(),
+            }),
+            Tool::Function(_) => None,
+        })
+        .collect()
 }
 
 // A natural-language hint naming the granted MCP servers and any tool allowlist,
 // prepended so the spawned agent prefers them over assumptions.
 fn mcp_hint(servers: &[McpServer]) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    for server in servers {
-        if server.tools.is_empty() {
-            lines.push(format!("- `{}`", server.name));
-        } else {
-            lines.push(format!("- `{}` (use only: {})", server.name, server.tools.join(", ")));
-        }
-    }
+    let lines: Vec<String> = servers
+        .iter()
+        .map(|server| {
+            if server.tools.is_empty() {
+                format!("- `{}`", server.name)
+            } else {
+                format!("- `{}` (use only: {})", server.name, server.tools.join(", "))
+            }
+        })
+        .collect();
     format!(
         "The following read-only MCP servers are available. Consult their tools and resources for \
          authoritative reference material before answering, and prefer that material over \
@@ -178,12 +181,13 @@ fn mcp_hint(servers: &[McpServer]) -> String {
         approve_mcps = options.approve_mcps,
     )
 )]
-async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>> {
+async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<AgentOutput> {
     // if the prompt is too large, spill it to a file and pass the file path to the agent
-    let (prompt, _file) = if prompt.len() <= MAX_INLINE_SIZE {
-        (prompt.to_owned(), None)
+    let (prompt, _file): (Cow<'_, str>, Option<PromptFile>) = if prompt.len() <= MAX_INLINE_SIZE {
+        (Cow::Borrowed(prompt), None)
     } else {
-        into_prompt_file(prompt, options.workspace)?
+        let (arg, file) = into_prompt_file(prompt, options.workspace)?;
+        (Cow::Owned(arg), Some(file))
     };
 
     let mut cmd = Command::new(CURSOR_AGENT_BIN);
@@ -204,24 +208,47 @@ async fn spawn_agent(prompt: &str, options: &SpawnOptions<'_>) -> Result<Vec<u8>
     if let Some(model) = options.model {
         cmd.arg("--model").arg(model);
     }
-    cmd.arg(prompt);
+    cmd.arg(prompt.as_ref());
 
-    let child = cmd.spawn().with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?;
+    let mut child = cmd.spawn().with_context(|| format!("spawning `{CURSOR_AGENT_BIN}`"))?;
+    let stdout = child.stdout.take().context("child stdout is piped")?;
+    let stderr = child.stderr.take().context("child stderr is piped")?;
 
-    let output = tokio::time::timeout(options.timeout, child.wait_with_output())
-        .await
-        .map_err(|_elapsed| anyhow!("cursor-agent timed out after {}s", options.timeout.as_secs()))?
-        .with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?;
+    // Parse stdout as it streams so memory stays bounded on chatty runs, and
+    // drain stderr concurrently so the child can never block on a full pipe.
+    let drive = async {
+        let (parsed, stderr) = tokio::join!(parse_stream(stdout), drain(stderr));
+        let status =
+            child.wait().await.with_context(|| format!("waiting on `{CURSOR_AGENT_BIN}`"))?;
+        anyhow::Ok((parsed, stderr, status))
+    };
 
-    if !output.status.success() {
-        bail!(
-            "cursor-agent exited with {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+    // On timeout `drive` is dropped, and `kill_on_drop` reaps the orphaned agent.
+    let (parsed, stderr, status) =
+        tokio::time::timeout(options.timeout, drive).await.map_err(|_elapsed| {
+            anyhow!("cursor-agent timed out after {}s", options.timeout.as_secs())
+        })??;
+
+    if !status.success() {
+        bail!("cursor-agent exited with {status}: {}", String::from_utf8_lossy(&stderr).trim());
     }
 
-    Ok(output.stdout)
+    parsed
+}
+
+async fn parse_stream(stdout: impl AsyncRead + Unpin) -> Result<AgentOutput> {
+    let mut lines = BufReader::new(stdout).lines();
+    let mut parser = OutputParser::default();
+    while let Some(line) = lines.next_line().await? {
+        parser.line(&line)?;
+    }
+    parser.finish()
+}
+
+async fn drain(mut stream: impl AsyncRead + Unpin) -> Vec<u8> {
+    let mut buffer = Vec::new();
+    let _ = stream.read_to_end(&mut buffer).await;
+    buffer
 }
 
 // Removes a spill-to-disk prompt file when the spawn finishes.
@@ -238,13 +265,14 @@ impl Drop for PromptFile {
 }
 
 // Write oversized prompts to the workspace and return a short CLI argument.
-fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, Option<PromptFile>)> {
+fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, PromptFile)> {
     let cursor_dir = workspace.join(".cursor");
     std::fs::create_dir_all(&cursor_dir)
         .with_context(|| format!("creating {}", cursor_dir.display()))?;
 
+    // The name carries the pid: concurrent host processes may lend the same workspace.
     let id = PROMPT_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = cursor_dir.join(format!("omnia-prompt-{id}.txt"));
+    let path = cursor_dir.join(format!("omnia-prompt-{}-{id}.txt", std::process::id()));
     std::fs::write(&path, prompt)
         .with_context(|| format!("writing prompt file {}", path.display()))?;
 
@@ -254,126 +282,149 @@ fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, Option<Pr
         path.display()
     );
 
-    Ok((arg, Some(PromptFile { path })))
-}
-
-fn answer_instruction(format: &Format) -> String {
-    match format {
-        Format::Schema(spec) => format!(
-            "When you are done, reply with only your final answer as a single JSON value \
-             conforming to this JSON Schema, and nothing else:\n{}",
-            spec.schema
-        ),
-        Format::Json => "When you are done, reply with only your final answer as \
-             a single JSON object and nothing else."
-            .to_owned(),
-        Format::Text => {
-            "When you are done, reply with only your final answer as plain text and nothing else."
-                .to_owned()
-        }
-    }
+    Ok((arg, PromptFile { path }))
 }
 
 fn append_repair(prompt: &str, answer: &str, reason: &str) -> String {
-    format!(
-        "{prompt}\n\nYour previous answer did not satisfy the required response format ({reason}). \
-         Your previous answer was:\n{answer}\n\nReply again with only the corrected answer and \
-         nothing else."
-    )
+    format!("{prompt}\n\nYour previous answer was:\n{answer}\n\n{}", repair_instruction(reason))
 }
 
-fn check_answer(value: &Value, format: &Format) -> Result<(), String> {
-    match format {
-        Format::Text if !value.is_string() => Err("answer is not a JSON string".to_owned()),
-        Format::Json if !value.is_object() => Err("answer is not a JSON object".to_owned()),
-        _ => Ok(()),
-    }
+/// The subset of `cursor-agent` stream events the backend consumes; everything
+/// else (assistant deltas, thinking, …) parses to `Other` without building a
+/// JSON tree.
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Event {
+    Result {
+        is_error: Option<bool>,
+        result: Option<String>,
+    },
+    ToolCall {
+        subtype: String,
+        call_id: Option<String>,
+        tool_call: Option<Value>,
+    },
+    #[serde(other)]
+    Other,
 }
 
-// Parse `stream-json` NDJSON (or a legacy single-line `json` payload).
-fn parse_output(stdout: &[u8]) -> Result<AgentOutput> {
-    let text = std::str::from_utf8(stdout).context("cursor-agent did not emit valid UTF-8")?;
+// Incremental parser for `stream-json` NDJSON (with a fallback for a legacy
+// single-line `json` payload).
+#[derive(Default)]
+struct OutputParser {
+    result: Option<String>,
+    pending_tools: HashMap<String, (String, Value)>,
+    turns: Vec<ToolTurn>,
+    lines: u32,
+    first_line: Option<String>,
+}
 
-    let mut result: Option<String> = None;
-    let mut pending_tools: HashMap<String, (String, Value)> = HashMap::new();
-    let mut turns: Vec<ToolTurn> = Vec::new();
-    let mut parsed_lines = 0_u32;
-
-    for line in text.lines() {
+impl OutputParser {
+    fn line(&mut self, line: &str) -> Result<()> {
         let line = line.trim();
         if line.is_empty() {
-            continue;
+            return Ok(());
         }
-        parsed_lines += 1;
-        let event: Value =
-            serde_json::from_str(line).with_context(|| format!("invalid JSON event: {line}"))?;
-        match event.get("type").and_then(Value::as_str) {
-            Some("result") => {
-                result = result_payload(&event)?;
+        self.lines += 1;
+        if self.lines == 1 {
+            self.first_line = Some(line.to_owned());
+        }
+
+        // One garbled line must not cost an otherwise-successful answer.
+        let event = match serde_json::from_str::<Event>(line) {
+            Ok(event) => event,
+            Err(error) => {
+                tracing::debug!(%error, line, "skipping unparsable cursor-agent event");
+                return Ok(());
             }
-            Some("tool_call") => match event.get("subtype").and_then(Value::as_str) {
-                Some("started") => {
-                    if let (Some(call_id), Some((tool, args))) = (
-                        event.get("call_id").and_then(Value::as_str),
-                        event.get("tool_call").and_then(tool_call_identity),
-                    ) {
-                        pending_tools.insert(call_id.to_owned(), (tool, args));
-                    }
+        };
+
+        match event {
+            Event::Result { is_error, result } => {
+                if is_error == Some(true) {
+                    bail!(
+                        "cursor-agent reported an error: {}",
+                        result.as_deref().unwrap_or("<no detail>")
+                    );
                 }
-                Some("completed") => {
-                    if let (Some(call_id), Some(tool_call)) =
-                        (event.get("call_id").and_then(Value::as_str), event.get("tool_call"))
-                    {
-                        let (tool, args) = pending_tools.remove(call_id).unwrap_or_else(|| {
-                            tool_call_identity(tool_call)
-                                .unwrap_or_else(|| ("unknown".to_owned(), Value::Null))
-                        });
-                        let tool_result = tool_call_result(tool_call).unwrap_or(Value::Null);
-                        turns.push(ToolTurn {
-                            tool,
-                            args,
-                            result: tool_result,
-                        });
-                    }
+                if result.is_some() {
+                    self.result = result;
                 }
-                _ => {}
-            },
+            }
+            Event::ToolCall {
+                subtype,
+                call_id,
+                tool_call,
+            } => {
+                self.tool_call(&subtype, call_id, tool_call);
+            }
+            Event::Other => {}
+        }
+        Ok(())
+    }
+
+    fn tool_call(&mut self, subtype: &str, call_id: Option<String>, tool_call: Option<Value>) {
+        match subtype {
+            "started" => {
+                if let (Some(call_id), Some(identity)) =
+                    (call_id, tool_call.as_ref().and_then(tool_call_identity))
+                {
+                    self.pending_tools.insert(call_id, identity);
+                }
+            }
+            "completed" => {
+                if let (Some(call_id), Some(tool_call)) = (call_id, tool_call) {
+                    let (tool, args) = self.pending_tools.remove(&call_id).unwrap_or_else(|| {
+                        tool_call_identity(&tool_call)
+                            .unwrap_or_else(|| ("unknown".to_owned(), Value::Null))
+                    });
+
+                    let result = tool_call.as_object().map_or_else(
+                        || Value::Null,
+                        |map| {
+                            map.values().find_map(|v| v.get("result").cloned()).unwrap_or_default()
+                        },
+                    );
+
+                    self.turns.push(ToolTurn { tool, args, result });
+                }
+            }
             _ => {}
         }
     }
 
-    if let Some(result) = result {
-        let transcript = if turns.is_empty() { None } else { Some(Transcript { turns }) };
-        return Ok(AgentOutput { result, transcript });
-    }
+    fn finish(self) -> Result<AgentOutput> {
+        if let Some(result) = self.result {
+            let transcript =
+                if self.turns.is_empty() { None } else { Some(Transcript { turns: self.turns }) };
+            return Ok(AgentOutput { result, transcript });
+        }
 
-    if parsed_lines == 1 {
-        return parse_legacy_output(text.trim());
-    }
+        // legacy output format
+        if self.lines == 1
+            && let Some(line) = &self.first_line
+        {
+            // extract the result
+            let envelope: Value = serde_json::from_str(line)
+                .context("cursor-agent did not emit a JSON result object")?;
+            let result = envelope.get("result").and_then(Value::as_str).unwrap_or("<no detail>");
 
-    bail!("cursor-agent did not emit a terminal result event");
+            // check if the agent reported an error
+            if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
+                bail!("cursor-agent reported an error: {result}");
+            }
+
+            return Ok(AgentOutput {
+                result: result.to_string(),
+                transcript: None,
+            });
+        }
+
+        bail!("cursor-agent did not emit a terminal result event");
+    }
 }
 
-fn parse_legacy_output(text: &str) -> Result<AgentOutput> {
-    let envelope: Value =
-        serde_json::from_str(text).context("cursor-agent did not emit a JSON result object")?;
-    let result = result_payload(&envelope)?
-        .context("cursor-agent JSON output has no string `result` field")?;
-    Ok(AgentOutput {
-        result,
-        transcript: None,
-    })
-}
-
-// Extract the `result` string from a result envelope, surfacing agent errors.
-fn result_payload(envelope: &Value) -> Result<Option<String>> {
-    let result = envelope.get("result").and_then(Value::as_str);
-    if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
-        bail!("cursor-agent reported an error: {}", result.unwrap_or("<no detail>"));
-    }
-    Ok(result.map(ToOwned::to_owned))
-}
-
+// Extract the tool name and arguments from a tool call.
 fn tool_call_identity(tool_call: &Value) -> Option<(String, Value)> {
     let object = tool_call.as_object()?;
     for (key, value) in object {
@@ -391,64 +442,37 @@ fn tool_call_identity(tool_call: &Value) -> Option<(String, Value)> {
     None
 }
 
-fn tool_call_result(tool_call: &Value) -> Option<Value> {
-    let object = tool_call.as_object()?;
-    for value in object.values() {
-        if let Some(result) = value.get("result") {
-            return Some(result.clone());
-        }
-    }
-    None
-}
-
-fn parse_result(result: &str, format: &Format) -> Result<Value, String> {
-    match format {
-        Format::Text => Ok(Value::String(result.to_owned())),
-        Format::Json | Format::Schema(_) => {
-            let json = strip_code_fence(result);
-            serde_json::from_str::<Value>(json)
-                .map_err(|error| format!("cursor-agent answer was not valid JSON: {error}"))
-        }
-    }
-}
-
-// Strip a wrapping Markdown code fence (```json ... ```), if present.
-fn strip_code_fence(text: &str) -> &str {
-    let trimmed = text.trim();
-    let Some(rest) = trimmed.strip_prefix("```") else {
-        return trimmed;
-    };
-    let body = rest.split_once('\n').map_or(rest, |(_, body)| body).trim();
-    body.strip_suffix("```").unwrap_or(body).trim()
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::Duration;
 
     use omnia_wasi_model::{
-        Format, Grants, PreparedRequest, Request, Schema, Sections, WasiModelCtx,
+        DirEntry, Format, FutureResult, Grants, Message, Reference, Request, Role, Schema,
+        ToolHost, VerifyReport, WasiModelCtx as _,
     };
     use serde_json::json;
 
-    use super::{
-        AgentOutput, MAX_INLINE_SIZE, build_prompt, into_prompt_file, parse_output, parse_result,
-    };
-    use crate::test_support::{NoopToolHost, client};
+    use super::{AgentOutput, MAX_INLINE_SIZE, OutputParser, into_prompt_file};
+    use crate::Client;
+
+    fn parse_output(stdout: &[u8]) -> anyhow::Result<AgentOutput> {
+        let text = std::str::from_utf8(stdout).expect("test payloads are UTF-8");
+        let mut parser = OutputParser::default();
+        for line in text.lines() {
+            parser.line(line)?;
+        }
+        parser.finish()
+    }
 
     fn schema_request() -> Request {
         Request {
             model: None,
-            system: None,
-            messages: vec![],
-            sections: Some(Sections {
-                role: Some("a terse judge".to_owned()),
-                task: "decide pass or fail".to_owned(),
-                context: None,
-                constraints: vec![],
-                examples: vec![],
-                variables: vec![],
-            }),
+            system: Some("a terse judge".to_owned()),
+            messages: vec![Message {
+                role: Role::User,
+                content: "decide pass or fail".to_owned(),
+            }],
             generation: None,
             format: Format::Schema(Schema {
                 name: "verdict".to_owned(),
@@ -471,59 +495,10 @@ mod tests {
     #[tokio::test]
     async fn no_local_tree() {
         let err = client()
-            .complete(
-                PreparedRequest::try_from(schema_request()).expect("try_from"),
-                Arc::new(NoopToolHost),
-            )
+            .complete(schema_request(), Arc::new(NoopToolHost))
             .await
             .expect_err("a backend with no local tree must fail");
         assert!(err.to_string().contains("no local tree on this node"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn agent_prompt() {
-        let request = PreparedRequest::try_from(schema_request()).expect("try_from");
-        let text = build_prompt(&request);
-        assert!(text.contains("a terse judge"), "missing system channel: {text}");
-        assert!(text.contains("decide pass or fail"), "missing user channel: {text}");
-        assert!(text.contains("JSON Schema"), "missing schema instruction: {text}");
-        assert!(text.contains("\"verdict\""), "missing schema body: {text}");
-    }
-
-    fn verdict_schema() -> Format {
-        Format::Schema(Schema {
-            name: "verdict".to_owned(),
-            schema: "{\"type\":\"object\"}".to_owned(),
-        })
-    }
-
-    #[test]
-    fn parse_json() {
-        assert_eq!(parse_result("hello", &Format::Text).unwrap(), json!("hello"));
-        assert_eq!(
-            parse_result(r#"{"verdict":"pass"}"#, &Format::Json).unwrap(),
-            json!({ "verdict": "pass" })
-        );
-    }
-
-    #[test]
-    fn parse_code_fence() {
-        let fenced = "```json\n{\"verdict\":\"pass\"}\n```";
-        assert_eq!(parse_result(fenced, &verdict_schema()).unwrap(), json!({ "verdict": "pass" }));
-    }
-
-    #[test]
-    fn parse_non_json() {
-        let err = parse_result("not json", &Format::Json).unwrap_err();
-        assert!(err.contains("not valid JSON"), "unexpected: {err}");
-    }
-
-    #[test]
-    fn parse_legacy_result_field() {
-        let stdout = br#"{"type":"result","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
-        let AgentOutput { result, transcript } = parse_output(stdout).expect("extract result");
-        assert_eq!(result, r#"{"verdict":"pass"}"#);
-        assert!(transcript.is_none());
     }
 
     #[test]
@@ -547,6 +522,14 @@ mod tests {
     }
 
     #[test]
+    fn skip_garbled_line() {
+        let stdout =
+            b"warning: not an event\n{\"type\":\"result\",\"is_error\":false,\"result\":\"ok\"}";
+        let AgentOutput { result, .. } = parse_output(stdout).expect("garbled line is skipped");
+        assert_eq!(result, "ok");
+    }
+
+    #[test]
     fn spill_large_prompt() {
         let workspace =
             std::env::temp_dir().join(format!("omnia-cursor-prompt-{}", std::process::id()));
@@ -555,9 +538,43 @@ mod tests {
 
         let large = "x".repeat(MAX_INLINE_SIZE + 1);
         let (arg, spill) = into_prompt_file(&large, &workspace).expect("spill prompt");
-        assert!(spill.is_some(), "large prompt must spill to disk");
         assert!(arg.contains("omnia-prompt-"), "arg references prompt file: {arg}");
+        assert!(spill.path.exists(), "the prompt file is on disk while the guard lives");
+        let path = spill.path.clone();
         drop(spill);
+        assert!(!path.exists(), "the prompt file is removed on drop");
         let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[derive(Debug)]
+    pub struct NoopToolHost;
+
+    impl ToolHost for NoopToolHost {
+        fn resolve(&self, _reference: Reference) -> FutureResult<Vec<u8>> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+
+        fn read(&self, _path: String) -> FutureResult<Vec<u8>> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+
+        fn list(&self, _path: String) -> FutureResult<Vec<DirEntry>> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+
+        fn write(&self, _path: String, _bytes: Vec<u8>) -> FutureResult<()> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+
+        fn verify(&self, _check: String) -> FutureResult<VerifyReport> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+    }
+
+    /// Build a [`Client`] directly, bypassing `connect_with` (and its `PATH` check).
+    pub fn client() -> Client {
+        Client {
+            timeout: Duration::from_secs(1),
+        }
     }
 }

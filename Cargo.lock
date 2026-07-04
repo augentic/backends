@@ -318,6 +318,7 @@ dependencies = [
  "axum-core",
  "axum-macros",
  "bytes",
+ "form_urlencoded",
  "futures-util",
  "http",
  "http-body",
@@ -331,6 +332,7 @@ dependencies = [
  "serde_core",
  "serde_json",
  "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
  "tower",
  "tower-layer",
@@ -629,29 +631,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 dependencies = [
  "allocator-api2",
-]
-
-[[package]]
-name = "bytecheck"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0caa33a2c0edca0419d15ac723dff03f1956f7978329b1e3b5fdaaaed9d3ca8b"
-dependencies = [
- "bytecheck_derive",
- "ptr_meta",
- "rancor",
- "simdutf8",
-]
-
-[[package]]
-name = "bytecheck_derive"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89385e82b5d1821d2219e0b095efa2cc1f246cbf99080f3be46a1a85c0d392d9"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1760,6 +1739,7 @@ dependencies = [
  "omnia-azure-blob",
  "omnia-azure-table",
  "omnia-cursor",
+ "omnia-guest",
  "omnia-wasi-blobstore",
  "omnia-wasi-docstore",
  "omnia-wasi-http",
@@ -3204,26 +3184,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
 
 [[package]]
-name = "munge"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e17401f259eba956ca16491461b6e8f72913a0a114e39736ce404410f915a0c"
-dependencies = [
- "munge_macro",
-]
-
-[[package]]
-name = "munge_macro"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4568f25ccbd45ab5d5603dc34318c1ec56b117531781260002151b8530a9f931"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "ndk-context"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3443,7 +3403,7 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3496,7 +3456,6 @@ dependencies = [
  "anyhow",
  "azure_core",
  "azure_identity",
- "fromenv",
  "futures",
  "omnia",
  "omnia-wasi-identity",
@@ -3547,9 +3506,9 @@ name = "omnia-cursor"
 version = "0.28.0"
 dependencies = [
  "anyhow",
- "futures",
  "omnia",
  "omnia-wasi-model",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",
@@ -3570,9 +3529,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-guest"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "chrono",
+ "http",
+ "http-body",
+ "omnia-guest-macros",
+ "omnia-wasi-blobstore",
+ "omnia-wasi-config",
+ "omnia-wasi-docstore",
+ "omnia-wasi-http",
+ "omnia-wasi-identity",
+ "omnia-wasi-keyvalue",
+ "omnia-wasi-messaging",
+ "omnia-wasi-model",
+ "omnia-wasi-otel",
+ "omnia-wasi-sql",
+ "omnia-wasi-websocket",
+ "sea-query",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
 name = "omnia-guest-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3582,7 +3573,7 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3698,7 +3689,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3712,9 +3703,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-wasi-config"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
+dependencies = [
+ "anyhow",
+ "omnia",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi-config",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
 name = "omnia-wasi-docstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3735,7 +3739,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "axum",
@@ -3751,7 +3755,6 @@ dependencies = [
  "omnia-wasi-keyvalue",
  "percent-encoding",
  "reqwest 0.13.4",
- "rkyv",
  "serde",
  "serde_json",
  "tokio",
@@ -3766,7 +3769,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -3783,7 +3786,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3801,7 +3804,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "futures",
@@ -3820,12 +3823,13 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "cap-primitives",
  "cap-std",
  "futures",
+ "jsonschema 0.46.9",
  "omnia",
  "serde",
  "serde_json",
@@ -3840,7 +3844,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -3864,7 +3868,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -3885,13 +3889,35 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
 dependencies = [
  "anyhow",
  "futures",
  "omnia",
  "parking_lot",
  "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "omnia-wasi-websocket"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#92504f215c407a859bc2de479829db25b7d80326"
+dependencies = [
+ "anyhow",
+ "dashmap 6.2.1",
+ "fromenv",
+ "futures",
+ "futures-channel",
+ "futures-util",
+ "omnia",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tracing",
+ "tungstenite",
  "wasmtime",
  "wasmtime-wasi",
  "wit-bindgen 0.58.0",
@@ -4447,26 +4473,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ptr_meta"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b9a0cf95a1196af61d4f1cbdab967179516d9a4a4312af1f31948f8f6224a79"
-dependencies = [
- "ptr_meta_derive",
-]
-
-[[package]]
-name = "ptr_meta_derive"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7347867d0a7e1208d93b46767be83e2b8f978c3dad35f775ac8d8847551d6fe1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "pulldown-cmark"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4598,15 +4604,6 @@ name = "radium"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
-
-[[package]]
-name = "rancor"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daff8b7b3ccf5f7ba270b3e7a0a4d4c701c5797e38dec27c7e2c3dbb830fed1c"
-dependencies = [
- "ptr_meta",
-]
 
 [[package]]
 name = "rand"
@@ -4889,15 +4886,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
-name = "rend"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "663ba70707f96e871406fe10d68128412e619b06d1d47cb91c3a4c6501176240"
-dependencies = [
- "bytecheck",
-]
-
-[[package]]
 name = "reqwest"
 version = "0.12.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4999,36 +4987,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rkyv"
-version = "0.8.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "815cc8a37159a463064825246cadb07961e25cd9885908606f6d08a98d8f8874"
-dependencies = [
- "bytecheck",
- "bytes",
- "hashbrown 0.17.1",
- "indexmap 2.14.0",
- "munge",
- "ptr_meta",
- "rancor",
- "rend",
- "rkyv_derive",
- "tinyvec",
- "uuid",
-]
-
-[[package]]
-name = "rkyv_derive"
-version = "0.8.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0ed1a78a1b19d184b0daa629dd9a024573173ec7d485b287cb369fb3607cc1c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -6090,6 +6048,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f72a05e828585856dacd553fba484c242c46e391fb0e58917c942ee9202915c"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6389,6 +6359,22 @@ checksum = "9fe58ebd5edd976e0fe0f8a14d2a04b7c81ef153ea9a54eebc42e67c2c23b4e5"
 dependencies = [
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c01152af293afb9c7c2a57e4b559c5620b421f6d133261c60dd2d0cdb38e6b8"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.9.4",
+ "sha1",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -7059,6 +7045,15 @@ dependencies = [
  "wasmtime-wasi-io",
  "wiggle",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "wasmtime-wasi-config"
+version = "46.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7304e98b110835eedacd5e5565d6e4457489f8cf1e2571674887320fab2815ea"
+dependencies = [
+ "wasmtime",
 ]
 
 [[package]]

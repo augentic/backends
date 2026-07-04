@@ -50,56 +50,14 @@ impl McpGuard {
     /// Merge each `name -> url` server into `<workspace>/.cursor/mcp.json`,
     /// refcounting per server so concurrent completions granting overlapping or
     /// disjoint sets merge correctly and unwind cleanly.
-    #[allow(clippy::significant_drop_tightening)]
     pub fn install(workspace: &Path, servers: &BTreeMap<String, String>) -> Result<Self> {
         let workspace = workspace.to_path_buf();
         let path = workspace.join(".cursor").join("mcp.json");
+        let names: Vec<String> = servers.keys().cloned().collect();
 
         let mut registry = REGISTRY.lock().unwrap_or_else(PoisonError::into_inner);
-
-        let names: Vec<String> = servers.keys().cloned().collect();
-        let install_error = {
-            let entry = match registry.entry(workspace.clone()) {
-                hash_map::Entry::Occupied(occupied) => occupied.into_mut(),
-                hash_map::Entry::Vacant(vacant) => {
-                    let original = match fs::read(&path) {
-                        Ok(bytes) => Some(bytes),
-                        Err(error) if error.kind() == ErrorKind::NotFound => None,
-                        Err(error) => {
-                            return Err(error)
-                                .with_context(|| format!("reading {}", path.display()));
-                        }
-                    };
-                    vacant.insert(Workspace {
-                        original,
-                        servers: HashMap::new(),
-                    })
-                }
-            };
-
-            for (name, url) in servers {
-                entry
-                    .servers
-                    .entry(name.clone())
-                    .or_insert_with(|| ServerState {
-                        refcount: 0,
-                        url: url.clone(),
-                    })
-                    .refcount += 1;
-            }
-
-            if let Err(error) = write_mcp_json(&path, entry) {
-                decrement_servers(&mut entry.servers, &names);
-                Some((error, entry.servers.is_empty()))
-            } else {
-                None
-            }
-        };
-
-        if let Some((error, remove_workspace)) = install_error {
-            if remove_workspace {
-                registry.remove(&workspace);
-            }
+        if let Err(error) = install_into(&mut registry, &workspace, &path, servers) {
+            unwind(&mut registry, &workspace, &names);
             return Err(error);
         }
 
@@ -108,6 +66,57 @@ impl McpGuard {
             path,
             names,
         })
+    }
+}
+
+// Record `servers` in the workspace's registry entry and rewrite mcp.json.
+// Refcounts are incremented only on the write path, so `unwind` after any
+// failure decrements exactly what was counted.
+fn install_into(
+    registry: &mut HashMap<PathBuf, Workspace>, workspace: &Path, path: &Path,
+    servers: &BTreeMap<String, String>,
+) -> Result<()> {
+    let state = match registry.entry(workspace.to_path_buf()) {
+        hash_map::Entry::Occupied(occupied) => occupied.into_mut(),
+        hash_map::Entry::Vacant(vacant) => {
+            let original = match fs::read(path) {
+                Ok(bytes) => Some(bytes),
+                Err(error) if error.kind() == ErrorKind::NotFound => None,
+                Err(error) => {
+                    return Err(error).with_context(|| format!("reading {}", path.display()));
+                }
+            };
+            vacant.insert(Workspace {
+                original,
+                servers: HashMap::new(),
+            })
+        }
+    };
+
+    for (name, url) in servers {
+        let server = state.servers.entry(name.clone()).or_insert_with(|| ServerState {
+            refcount: 0,
+            url: url.clone(),
+        });
+        debug_assert_eq!(
+            server.url, *url,
+            "MCP server URLs are deployment-stable; a same-name grant with a \
+             different URL would be silently ignored"
+        );
+        server.refcount += 1;
+    }
+
+    write_mcp_json(path, state)
+}
+
+// Decrement `names` in the workspace's entry, dropping the entry when empty.
+fn unwind(registry: &mut HashMap<PathBuf, Workspace>, workspace: &Path, names: &[String]) {
+    let Some(state) = registry.get_mut(workspace) else {
+        return;
+    };
+    decrement_servers(&mut state.servers, names);
+    if state.servers.is_empty() {
+        registry.remove(workspace);
     }
 }
 
@@ -121,42 +130,52 @@ fn write_mcp_json(path: &Path, workspace: &Workspace) -> Result<()> {
 
 fn decrement_servers(servers: &mut HashMap<String, ServerState>, names: &[String]) {
     for name in names {
-        if let hash_map::Entry::Occupied(mut server) = servers.entry(name.clone()) {
-            server.get_mut().refcount -= 1;
-            if server.get().refcount == 0 {
-                server.remove();
-            }
+        let Some(state) = servers.get_mut(name) else {
+            continue;
+        };
+        state.refcount -= 1;
+        if state.refcount == 0 {
+            servers.remove(name);
         }
     }
 }
 
 impl Drop for McpGuard {
+    // The registry lock is deliberately held across the mcp.json write so that
+    // concurrent guards' rewrites of the shared file serialize.
     #[allow(clippy::significant_drop_tightening)]
     fn drop(&mut self) {
         let mut registry = REGISTRY.lock().unwrap_or_else(PoisonError::into_inner);
-
-        let hash_map::Entry::Occupied(mut occupied) = registry.entry(self.workspace.clone()) else {
+        let Some(state) = registry.get_mut(&self.workspace) else {
             return;
         };
+        decrement_servers(&mut state.servers, &self.names);
 
-        decrement_servers(&mut occupied.get_mut().servers, &self.names);
-
-        let restore = if occupied.get().servers.is_empty() {
-            let workspace = occupied.remove();
-            match workspace.original {
-                Some(bytes) => fs::write(&self.path, bytes),
-                None => match fs::remove_file(&self.path) {
-                    Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-                    other => other,
-                },
-            }
+        // A re-merge is computed while `state` is borrowed; `None` means the
+        // last guard dropped and the entry is removed below.
+        let merged = if state.servers.is_empty() {
+            None
         } else {
-            match merge(occupied.get().original.as_deref(), &occupied.get().servers) {
-                Ok(bytes) => fs::write(&self.path, bytes),
-                Err(error) => {
-                    tracing::warn!(path = %self.path.display(), %error, "failed to re-merge mcp.json");
+            Some(merge(state.original.as_deref(), &state.servers))
+        };
+
+        let restore = match merged {
+            None => {
+                let Some(state) = registry.remove(&self.workspace) else {
                     return;
+                };
+                match state.original {
+                    Some(bytes) => fs::write(&self.path, bytes),
+                    None => match fs::remove_file(&self.path) {
+                        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+                        other => other,
+                    },
                 }
+            }
+            Some(Ok(bytes)) => fs::write(&self.path, bytes),
+            Some(Err(error)) => {
+                tracing::warn!(path = %self.path.display(), %error, "failed to re-merge mcp.json");
+                return;
             }
         };
         if let Err(error) = restore {

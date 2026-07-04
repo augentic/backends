@@ -18,8 +18,8 @@ use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_genai::Client;
 use omnia_wasi_model::{
-    Answer, DirEntry, Format, FutureResult, Grants, PreparedRequest, Reference, Request, Sections,
-    ToolHost, VerifyReport, WasiModelCtx,
+    Answer, DirEntry, Format, FutureResult, Grants, Message, Reference, Request, Role, ToolHost,
+    VerifyReport, WasiModelCtx,
 };
 use serde_json::Value;
 
@@ -64,16 +64,11 @@ fn resolve_request() -> Request {
              verbatim; do not invent it."
                 .to_owned(),
         ),
-        messages: vec![],
-        sections: Some(Sections {
-            role: None,
-            task: "Resolve the reference named \"alpha\" and report what it resolved to."
+        messages: vec![Message {
+            role: Role::User,
+            content: "Resolve the reference named \"alpha\" and report what it resolved to."
                 .to_owned(),
-            context: None,
-            constraints: vec![],
-            examples: vec![],
-            variables: vec![],
-        }),
+        }],
         generation: None,
         format: Format::Json,
         tools: vec![],
@@ -89,10 +84,10 @@ fn resolve_request() -> Request {
 #[ignore = "live: needs a provider key (e.g. OPENAI_API_KEY); run with --run-ignored"]
 async fn live_genai_resolves() -> Result<()> {
     let client = Client::connect().await?;
-    let prepared = PreparedRequest::try_from(resolve_request()).expect("assemble resolve request");
-    let answer: Answer = client.complete(prepared, Arc::new(LiveShelf)).await.map_err(|e| {
-        anyhow::anyhow!("live genai completion failed (is the API key valid?): {e}")
-    })?;
+    let answer: Answer =
+        client.complete(resolve_request(), Arc::new(LiveShelf)).await.map_err(|e| {
+            anyhow::anyhow!("live genai completion failed (is the API key valid?): {e}")
+        })?;
 
     let transcript = answer.transcript.as_ref().expect("genai always records a transcript");
     let resolve_turn = transcript
