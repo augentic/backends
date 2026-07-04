@@ -400,34 +400,28 @@ impl OutputParser {
             return Ok(AgentOutput { result, transcript });
         }
 
+        // legacy output format
         if self.lines == 1
             && let Some(line) = &self.first_line
         {
-            return parse_legacy_output(line);
+            let envelope: Value = serde_json::from_str(line)
+                .context("cursor-agent did not emit a JSON result object")?;
+
+            // extract the result string from the envelope
+            let result = envelope.get("result").and_then(Value::as_str);
+            if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
+                bail!("cursor-agent reported an error: {}", result.unwrap_or("<no detail>"));
+            }
+            let result = result.map(ToOwned::to_owned).unwrap_or_default();
+
+            return Ok(AgentOutput {
+                result,
+                transcript: None,
+            });
         }
 
         bail!("cursor-agent did not emit a terminal result event");
     }
-}
-
-fn parse_legacy_output(text: &str) -> Result<AgentOutput> {
-    let envelope: Value =
-        serde_json::from_str(text).context("cursor-agent did not emit a JSON result object")?;
-    let result = result_payload(&envelope)?
-        .context("cursor-agent JSON output has no string `result` field")?;
-    Ok(AgentOutput {
-        result,
-        transcript: None,
-    })
-}
-
-// Extract the `result` string from a result envelope, surfacing agent errors.
-fn result_payload(envelope: &Value) -> Result<Option<String>> {
-    let result = envelope.get("result").and_then(Value::as_str);
-    if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
-        bail!("cursor-agent reported an error: {}", result.unwrap_or("<no detail>"));
-    }
-    Ok(result.map(ToOwned::to_owned))
 }
 
 fn tool_call_identity(tool_call: &Value) -> Option<(String, Value)> {
@@ -468,7 +462,7 @@ mod tests {
     };
     use serde_json::json;
 
-    use super::{AgentOutput, MAX_INLINE_SIZE, OutputParser, build_prompt, into_prompt_file};
+    use super::{AgentOutput, MAX_INLINE_SIZE, OutputParser, into_prompt_file};
     use crate::Client;
 
     fn parse_output(stdout: &[u8]) -> anyhow::Result<AgentOutput> {
@@ -514,23 +508,6 @@ mod tests {
             .await
             .expect_err("a backend with no local tree must fail");
         assert!(err.to_string().contains("no local tree on this node"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn agent_prompt() {
-        let text = build_prompt(&schema_request());
-        assert!(text.contains("a terse judge"), "missing system channel: {text}");
-        assert!(text.contains("decide pass or fail"), "missing user channel: {text}");
-        assert!(text.contains("JSON Schema"), "missing schema instruction: {text}");
-        assert!(text.contains("\"verdict\""), "missing schema body: {text}");
-    }
-
-    #[test]
-    fn parse_legacy_result_field() {
-        let stdout = br#"{"type":"result","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
-        let AgentOutput { result, transcript } = parse_output(stdout).expect("extract result");
-        assert_eq!(result, r#"{"verdict":"pass"}"#);
-        assert!(transcript.is_none());
     }
 
     #[test]

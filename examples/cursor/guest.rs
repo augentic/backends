@@ -16,14 +16,13 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use std::sync::Arc;
-
 use omnia_guest::mcp::{
     self, CallToolResult, Implementation, McpError, McpServer, Resource, ResourceContents,
     Tool as McpTool,
 };
 use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Tool};
 use omnia_wasi_model::prompt::Sections;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use tracing::Level;
 use wasip3::filesystem::preopens;
@@ -93,9 +92,13 @@ impl wasip3::exports::http::handler::Guest for HttpGuest {
     #[omnia_wasi_otel::instrument(name = "http_mcp_handle", level = Level::DEBUG)]
     async fn handle(request: http::Request) -> Result<http::Response, http::ErrorCode> {
         tracing::debug!("cursor example mcp request");
-        let mcp_router = mcp::router(Arc::new(References));
-        omnia_wasi_http::serve(mcp_router, request).await
+        mcp::serve(References, request).await
     }
+}
+
+#[derive(Deserialize)]
+struct ReadDocArgs {
+    name: String,
 }
 
 struct References;
@@ -141,15 +144,13 @@ impl McpServer for References {
                 Ok(CallToolResult::text(listing))
             }
             "read_doc" => {
-                let Some(name) = arguments.get("name").and_then(Value::as_str) else {
-                    return Err(McpError::invalid_params("missing `name`"));
-                };
+                let ReadDocArgs { name } = mcp::arguments(arguments)?;
                 REFERENCES.iter().find(|(ref_name, ..)| *ref_name == name).map_or_else(
                     || Ok(CallToolResult::error(format!("no reference named `{name}`"))),
                     |(.., body)| Ok(CallToolResult::text(*body)),
                 )
             }
-            other => Err(McpError::method_not_found(format!("unknown tool `{other}`"))),
+            other => Err(McpError::unknown_tool(other)),
         }
     }
 
@@ -171,7 +172,7 @@ impl McpServer for References {
         tracing::debug!(uri, "mcp resource read");
         let name = uri.strip_prefix("doc://").unwrap_or(uri);
         REFERENCES.iter().find(|(ref_name, ..)| *ref_name == name).map_or_else(
-            || Err(McpError::invalid_params(format!("unknown resource `{uri}`"))),
+            || Err(McpError::resource_not_found(uri)),
             |(.., body)| Ok(ResourceContents::text(uri, "text/markdown", *body)),
         )
     }
