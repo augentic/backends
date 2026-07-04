@@ -1,5 +1,6 @@
 //! Live blob round-trip for the MongoDB backend, driven through the
-//! `omnia:blobstore` host boundary (`WasiBlobstoreCtx`, backed by `GridFS`).
+//! `omnia:blobstore` host boundary (`WasiBlobstoreCtx`; containers map to
+//! MongoDB collections).
 //!
 //! `#[ignore]`d so it never touches the network in CI. Run against a reachable
 //! MongoDB (`MONGODB_URL`, including a default database):

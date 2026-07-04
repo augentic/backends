@@ -7,13 +7,13 @@ Azure Identity backend for the Omnia WASI runtime, implementing the `wasi-identi
 
 Acquires Azure AD access tokens via Managed Identity credentials using the official `azure_identity` SDK.
 
-MSRV: Rust 1.93
+MSRV: Rust 1.95
 
 ## Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `CREDENTIAL_TYPE` | no | `ManagedIdentity` | Credential type to use |
+| `CREDENTIAL_TYPE` | no | `ManagedIdentity` | Credential type to use (only `ManagedIdentity` is implemented today) |
 
 ## Usage
 
@@ -29,13 +29,11 @@ let client = Client::connect_with(options).await?;
 
 [`tests/live.rs`](tests/live.rs) exercises the `wasi-identity` boundary against
 real Azure AD. It is `#[ignore]`d so it never runs in CI; run it explicitly in an
-environment with an ambient credential (managed identity, or a service
-principal):
+environment with an ambient managed-identity credential (e.g. an Azure VM,
+App Service, or AKS workload identity):
 
 ```bash
-CREDENTIAL_TYPE=ClientSecret \
-AZURE_TENANT_ID=... AZURE_CLIENT_ID=... AZURE_CLIENT_SECRET=... \
-  cargo nextest run -p omnia-azure-id --run-ignored all
+cargo nextest run -p omnia-azure-id --run-ignored all
 ```
 
 ## License

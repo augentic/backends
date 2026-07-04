@@ -7,7 +7,7 @@ Azure Blob Storage blobstore backend for the Omnia WASI runtime, implementing th
 
 Maps blobstore containers to Azure Blob containers and blobs to block blobs using the official `azure_storage_blob` SDK.
 
-MSRV: Rust 1.93
+MSRV: Rust 1.95
 
 ## Configuration
 

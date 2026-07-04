@@ -7,7 +7,7 @@ MongoDB blobstore backend for the Omnia WASI runtime, implementing the `wasi-blo
 
 Maps blobstore containers to MongoDB collections using the official `mongodb` driver.
 
-MSRV: Rust 1.93
+MSRV: Rust 1.95
 
 ## Configuration
 
@@ -28,8 +28,8 @@ let client = Client::connect_with(options).await?;
 ## Live tests
 
 [`tests/live.rs`](tests/live.rs) exercises the `wasi-blobstore` boundary against a
-real MongoDB (`GridFS`). It is `#[ignore]`d so it never runs in CI; run it
-explicitly:
+real MongoDB (containers map to collections). It is `#[ignore]`d so it never runs
+in CI; run it explicitly:
 
 ```bash
 MONGODB_URL=mongodb://localhost:27017/omnia \
