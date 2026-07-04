@@ -92,7 +92,7 @@ impl wasip3::exports::http::handler::Guest for HttpGuest {
     #[omnia_wasi_otel::instrument(name = "http_mcp_handle", level = Level::DEBUG)]
     async fn handle(request: http::Request) -> Result<http::Response, http::ErrorCode> {
         tracing::debug!("cursor example mcp request");
-        mcp::serve(References, request).await
+        omnia_wasi_http::serve(mcp::router(References), request).await
     }
 }
 
@@ -102,6 +102,20 @@ struct ReadDocArgs {
 }
 
 struct References;
+
+impl References {
+    fn find_doc(name: &str) -> Option<&'static (&'static str, &'static str, &'static str)> {
+        REFERENCES.iter().find(|(doc_name, ..)| *doc_name == name)
+    }
+
+    // fn list_docs() -> String {
+    //     REFERENCES
+    //         .iter()
+    //         .map(|(doc_name, title, _)| format!("- {doc_name}: {title}"))
+    //         .collect::<Vec<_>>()
+    //         .join("\n")
+    // }
+}
 
 impl McpServer for References {
     fn info(&self) -> Implementation {
@@ -145,7 +159,7 @@ impl McpServer for References {
             }
             "read_doc" => {
                 let ReadDocArgs { name } = mcp::arguments(arguments)?;
-                REFERENCES.iter().find(|(ref_name, ..)| *ref_name == name).map_or_else(
+                self.find_doc(&name).map_or_else(
                     || Ok(CallToolResult::error(format!("no reference named `{name}`"))),
                     |(.., body)| Ok(CallToolResult::text(*body)),
                 )
@@ -171,7 +185,7 @@ impl McpServer for References {
     fn read_resource(&self, uri: &str) -> Result<ResourceContents, McpError> {
         tracing::debug!(uri, "mcp resource read");
         let name = uri.strip_prefix("doc://").unwrap_or(uri);
-        REFERENCES.iter().find(|(ref_name, ..)| *ref_name == name).map_or_else(
+        self.find_doc(name).map_or_else(
             || Err(McpError::resource_not_found(uri)),
             |(.., body)| Ok(ResourceContents::text(uri, "text/markdown", *body)),
         )
