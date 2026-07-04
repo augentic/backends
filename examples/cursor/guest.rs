@@ -104,17 +104,16 @@ struct ReadDocArgs {
 struct References;
 
 impl References {
-    fn find_doc(name: &str) -> Option<&'static (&'static str, &'static str, &'static str)> {
+    pub fn find_doc(name: &str) -> Option<&'static (&'static str, &'static str, &'static str)> {
         REFERENCES.iter().find(|(doc_name, ..)| *doc_name == name)
     }
 
-    // fn list_docs() -> String {
-    //     REFERENCES
-    //         .iter()
-    //         .map(|(doc_name, title, _)| format!("- {doc_name}: {title}"))
-    //         .collect::<Vec<_>>()
-    //         .join("\n")
-    // }
+    pub fn map_docs<T, F>(f: F) -> Vec<T>
+    where
+        F: Fn(&'static str, &'static str, &'static str) -> T,
+    {
+        REFERENCES.iter().copied().map(|(name, title, body)| f(name, title, body)).collect()
+    }
 }
 
 impl McpServer for References {
@@ -148,18 +147,16 @@ impl McpServer for References {
 
     fn call_tool(&self, name: &str, arguments: &Value) -> Result<CallToolResult, McpError> {
         tracing::debug!(tool = name, "mcp tool call");
+
         match name {
             "list_docs" => {
-                let listing = REFERENCES
-                    .iter()
-                    .map(|(doc_name, title, _)| format!("- {doc_name}: {title}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let listing =
+                    References::map_docs(|name, title, _| format!("- {name}: {title}")).join("\n");
                 Ok(CallToolResult::text(listing))
             }
             "read_doc" => {
                 let ReadDocArgs { name } = mcp::arguments(arguments)?;
-                self.find_doc(&name).map_or_else(
+                References::find_doc(&name).map_or_else(
                     || Ok(CallToolResult::error(format!("no reference named `{name}`"))),
                     |(.., body)| Ok(CallToolResult::text(*body)),
                 )
@@ -169,30 +166,26 @@ impl McpServer for References {
     }
 
     fn resources(&self) -> Vec<Resource> {
-        REFERENCES
-            .iter()
-            .map(|(name, title, _)| {
-                Resource::new(
-                    format!("doc://{name}"),
-                    *title,
-                    format!("The {title} document."),
-                    "text/markdown",
-                )
-            })
-            .collect()
+        References::map_docs(|name, title, _| {
+            Resource::new(
+                format!("doc://{name}"),
+                title,
+                format!("The {title} document."),
+                "text/markdown",
+            )
+        })
     }
 
     fn read_resource(&self, uri: &str) -> Result<ResourceContents, McpError> {
         tracing::debug!(uri, "mcp resource read");
         let name = uri.strip_prefix("doc://").unwrap_or(uri);
-        self.find_doc(name).map_or_else(
+        References::find_doc(name).map_or_else(
             || Err(McpError::resource_not_found(uri)),
             |(.., body)| Ok(ResourceContents::text(uri, "text/markdown", *body)),
         )
     }
 }
 
-/// The compiled-in prose corpus as `(name, title, body)` triples.
 const REFERENCES: &[(&str, &str, &str)] = &[
     (
         "overview",
