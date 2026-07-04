@@ -4,9 +4,6 @@
 mod mcp;
 mod model;
 
-#[cfg(test)]
-pub(crate) mod test_support;
-
 use std::fmt::Debug;
 use std::time::Duration;
 

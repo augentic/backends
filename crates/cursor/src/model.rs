@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use omnia_wasi_model::{
-    Answer, Format, FutureResult, PreparedRequest, Request, Role, Tool, ToolHost, ToolTurn,
-    Transcript, WasiModelCtx,
+    Answer, FutureResult, Request, Role, Tool, ToolHost, ToolTurn, Transcript, WasiModelCtx,
+    check_answer, parse_answer, repair_instruction,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -45,14 +45,12 @@ struct AgentOutput {
 static PROMPT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 impl WasiModelCtx for Client {
-    fn complete(
-        &self, request: PreparedRequest, tool_host: Arc<dyn ToolHost>,
-    ) -> FutureResult<Answer> {
+    fn complete(&self, request: Request, tool_host: Arc<dyn ToolHost>) -> FutureResult<Answer> {
         let workspace = tool_host.local_path().map(Path::to_path_buf);
         let timeout = self.timeout;
 
         Box::pin(async move {
-            let format = &request.request.format;
+            let format = &request.format;
             let mut prompt = build_prompt(&request);
 
             let Some(workspace) = workspace else {
@@ -66,7 +64,7 @@ impl WasiModelCtx for Client {
 
             // Per-prompt MCP grants carry their own endpoint URL.
             // No grant means no MCP wiring (MCP is opt-in per completion).
-            let selected = select_mcp_servers(&request.request)?;
+            let selected = select_mcp_servers(&request);
             let _mcp_guard = if selected.is_empty() {
                 None
             } else {
@@ -77,7 +75,7 @@ impl WasiModelCtx for Client {
             };
 
             let spawn = SpawnOptions {
-                model: request.request.model.as_deref(),
+                model: request.model.as_deref(),
                 workspace: &workspace,
                 timeout,
                 approve_mcps: !selected.is_empty(),
@@ -92,7 +90,7 @@ impl WasiModelCtx for Client {
                 let AgentOutput { result, transcript } = spawn_agent(&prompt, &spawn).await?;
                 tracing::debug!(attempt, result = result.len(), "cursor-agent answer");
 
-                match parse_result(&result, format) {
+                match parse_answer(&result, format) {
                     Ok(value) => match check_answer(&value, format) {
                         // the wrong shape is better than no answer on the last attempt
                         Ok(()) => {
@@ -129,7 +127,7 @@ impl WasiModelCtx for Client {
     }
 }
 
-fn build_prompt(request: &PreparedRequest) -> String {
+fn build_prompt(request: &Request) -> String {
     let mut parts: Vec<Cow<'_, str>> = Vec::new();
     if let Some(system) = &request.system {
         parts.push(Cow::Borrowed(system.as_str()));
@@ -141,29 +139,22 @@ fn build_prompt(request: &PreparedRequest) -> String {
             Role::Assistant => Cow::Owned(format!("[assistant]\n{}", message.content)),
         });
     }
-    parts.push(Cow::Owned(answer_instruction(&request.request.format)));
+    parts.push(Cow::Owned(request.format.instruction()));
     parts.join("\n\n")
 }
 
-// Collect the prompt's MCP grants, each carrying its own endpoint URL. A grant
-// without a URL is an error: the backend has nowhere to point the spawned agent.
-fn select_mcp_servers(request: &Request) -> Result<Vec<McpServer>> {
+// Collect the prompt's MCP grants, each carrying its own endpoint URL.
+fn select_mcp_servers(request: &Request) -> Vec<McpServer> {
     request
         .tools
         .iter()
         .filter_map(|tool| match tool {
-            Tool::Mcp(grant) => Some(grant),
-            Tool::Function(_) => None,
-        })
-        .map(|grant| {
-            let url = grant.url.clone().ok_or_else(|| {
-                anyhow!("MCP grant `{}` has no url; the guest must supply one", grant.name)
-            })?;
-            Ok(McpServer {
+            Tool::Mcp(grant) => Some(McpServer {
                 name: grant.name.clone(),
-                url,
+                url: grant.url.clone(),
                 tools: grant.tools.clone(),
-            })
+            }),
+            Tool::Function(_) => None,
         })
         .collect()
 }
@@ -301,60 +292,8 @@ fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, PromptFil
     Ok((arg, PromptFile { path }))
 }
 
-fn answer_instruction(format: &Format) -> String {
-    match format {
-        Format::Schema(spec) => format!(
-            "When you are done, reply with only your final answer as a single JSON value \
-             conforming to this JSON Schema, and nothing else:\n{}",
-            spec.schema
-        ),
-        Format::Json => "When you are done, reply with only your final answer as \
-             a single JSON object and nothing else."
-            .to_owned(),
-        Format::Text => {
-            "When you are done, reply with only your final answer as plain text and nothing else."
-                .to_owned()
-        }
-    }
-}
-
 fn append_repair(prompt: &str, answer: &str, reason: &str) -> String {
-    format!(
-        "{prompt}\n\nYour previous answer did not satisfy the required response format ({reason}). \
-         Your previous answer was:\n{answer}\n\nReply again with only the corrected answer and \
-         nothing else."
-    )
-}
-
-fn check_answer(value: &Value, format: &Format) -> Result<(), String> {
-    match format {
-        Format::Text if !value.is_string() => Err("answer is not a JSON string".to_owned()),
-        Format::Json if !value.is_object() => Err("answer is not a JSON object".to_owned()),
-        Format::Schema(spec) => check_schema(value, &spec.schema),
-        Format::Text | Format::Json => Ok(()),
-    }
-}
-
-// A schema that fails to compile disables validation rather than failing the
-// completion: the repair loop can only act on defects in the answer itself.
-fn check_schema(value: &Value, schema: &str) -> Result<(), String> {
-    let schema: Value = match serde_json::from_str(schema) {
-        Ok(schema) => schema,
-        Err(error) => {
-            tracing::warn!(%error, "request schema is not valid JSON; skipping validation");
-            return Ok(());
-        }
-    };
-    let validator = match jsonschema::validator_for(&schema) {
-        Ok(validator) => validator,
-        Err(error) => {
-            tracing::warn!(%error, "request schema does not compile; skipping validation");
-            return Ok(());
-        }
-    };
-    validator
-        .validate(value)
-        .map_err(|error| format!("answer does not conform to the required schema: {error}"))
+    format!("{prompt}\n\nYour previous answer was:\n{answer}\n\n{}", repair_instruction(reason))
 }
 
 /// The subset of `cursor-agent` stream events the backend consumes; everything
@@ -518,41 +457,19 @@ fn tool_call_result(tool_call: &Value) -> Option<Value> {
     None
 }
 
-fn parse_result(result: &str, format: &Format) -> Result<Value, String> {
-    match format {
-        Format::Text => Ok(Value::String(result.to_owned())),
-        Format::Json | Format::Schema(_) => {
-            let json = strip_code_fence(result);
-            serde_json::from_str::<Value>(json)
-                .map_err(|error| format!("cursor-agent answer was not valid JSON: {error}"))
-        }
-    }
-}
-
-// Strip a wrapping Markdown code fence (```json ... ```), if present.
-fn strip_code_fence(text: &str) -> &str {
-    let trimmed = text.trim();
-    let Some(rest) = trimmed.strip_prefix("```") else {
-        return trimmed;
-    };
-    let body = rest.split_once('\n').map_or(rest, |(_, body)| body).trim();
-    body.strip_suffix("```").unwrap_or(body).trim()
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::Duration;
 
     use omnia_wasi_model::{
-        Format, Grants, PreparedRequest, Request, Schema, Sections, WasiModelCtx,
+        DirEntry, Format, FutureResult, Grants, Message, Reference, Request, Role, Schema,
+        ToolHost, VerifyReport, WasiModelCtx as _,
     };
     use serde_json::json;
 
-    use super::{
-        AgentOutput, MAX_INLINE_SIZE, OutputParser, build_prompt, check_answer, into_prompt_file,
-        parse_result,
-    };
-    use crate::test_support::{NoopToolHost, client};
+    use super::{AgentOutput, MAX_INLINE_SIZE, OutputParser, build_prompt, into_prompt_file};
+    use crate::Client;
 
     fn parse_output(stdout: &[u8]) -> anyhow::Result<AgentOutput> {
         let text = std::str::from_utf8(stdout).expect("test payloads are UTF-8");
@@ -566,16 +483,11 @@ mod tests {
     fn schema_request() -> Request {
         Request {
             model: None,
-            system: None,
-            messages: vec![],
-            sections: Some(Sections {
-                role: Some("a terse judge".to_owned()),
-                task: "decide pass or fail".to_owned(),
-                context: None,
-                constraints: vec![],
-                examples: vec![],
-                variables: vec![],
-            }),
+            system: Some("a terse judge".to_owned()),
+            messages: vec![Message {
+                role: Role::User,
+                content: "decide pass or fail".to_owned(),
+            }],
             generation: None,
             format: Format::Schema(Schema {
                 name: "verdict".to_owned(),
@@ -598,10 +510,7 @@ mod tests {
     #[tokio::test]
     async fn no_local_tree() {
         let err = client()
-            .complete(
-                PreparedRequest::try_from(schema_request()).expect("try_from"),
-                Arc::new(NoopToolHost),
-            )
+            .complete(schema_request(), Arc::new(NoopToolHost))
             .await
             .expect_err("a backend with no local tree must fail");
         assert!(err.to_string().contains("no local tree on this node"), "unexpected error: {err}");
@@ -609,40 +518,11 @@ mod tests {
 
     #[test]
     fn agent_prompt() {
-        let request = PreparedRequest::try_from(schema_request()).expect("try_from");
-        let text = build_prompt(&request);
+        let text = build_prompt(&schema_request());
         assert!(text.contains("a terse judge"), "missing system channel: {text}");
         assert!(text.contains("decide pass or fail"), "missing user channel: {text}");
         assert!(text.contains("JSON Schema"), "missing schema instruction: {text}");
         assert!(text.contains("\"verdict\""), "missing schema body: {text}");
-    }
-
-    fn verdict_schema() -> Format {
-        Format::Schema(Schema {
-            name: "verdict".to_owned(),
-            schema: "{\"type\":\"object\"}".to_owned(),
-        })
-    }
-
-    #[test]
-    fn parse_json() {
-        assert_eq!(parse_result("hello", &Format::Text).unwrap(), json!("hello"));
-        assert_eq!(
-            parse_result(r#"{"verdict":"pass"}"#, &Format::Json).unwrap(),
-            json!({ "verdict": "pass" })
-        );
-    }
-
-    #[test]
-    fn parse_code_fence() {
-        let fenced = "```json\n{\"verdict\":\"pass\"}\n```";
-        assert_eq!(parse_result(fenced, &verdict_schema()).unwrap(), json!({ "verdict": "pass" }));
-    }
-
-    #[test]
-    fn parse_non_json() {
-        let err = parse_result("not json", &Format::Json).unwrap_err();
-        assert!(err.contains("not valid JSON"), "unexpected: {err}");
     }
 
     #[test]
@@ -682,25 +562,6 @@ mod tests {
     }
 
     #[test]
-    fn schema_mismatch_repairable() {
-        let format = verdict_schema();
-        check_answer(&json!({ "verdict": "pass" }), &format).expect("a conforming answer passes");
-
-        let strict = Format::Schema(Schema {
-            name: "verdict".to_owned(),
-            schema: json!({
-                "type": "object",
-                "properties": { "verdict": { "type": "string" } },
-                "required": ["verdict"],
-                "additionalProperties": false,
-            })
-            .to_string(),
-        });
-        let reason = check_answer(&json!({ "other": 1 }), &strict).unwrap_err();
-        assert!(reason.contains("does not conform"), "unexpected reason: {reason}");
-    }
-
-    #[test]
     fn spill_large_prompt() {
         let workspace =
             std::env::temp_dir().join(format!("omnia-cursor-prompt-{}", std::process::id()));
@@ -715,5 +576,37 @@ mod tests {
         drop(spill);
         assert!(!path.exists(), "the prompt file is removed on drop");
         let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[derive(Debug)]
+    pub struct NoopToolHost;
+
+    impl ToolHost for NoopToolHost {
+        fn resolve(&self, _reference: Reference) -> FutureResult<Vec<u8>> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+
+        fn read(&self, _path: String) -> FutureResult<Vec<u8>> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+
+        fn list(&self, _path: String) -> FutureResult<Vec<DirEntry>> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+
+        fn write(&self, _path: String, _bytes: Vec<u8>) -> FutureResult<()> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+
+        fn verify(&self, _check: String) -> FutureResult<VerifyReport> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor ignores the tool host")) })
+        }
+    }
+
+    /// Build a [`Client`] directly, bypassing `connect_with` (and its `PATH` check).
+    pub fn client() -> Client {
+        Client {
+            timeout: Duration::from_secs(1),
+        }
     }
 }

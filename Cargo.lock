@@ -3549,7 +3549,6 @@ name = "omnia-cursor"
 version = "0.28.0"
 dependencies = [
  "anyhow",
- "jsonschema 0.46.9",
  "omnia",
  "omnia-wasi-model",
  "serde",
@@ -3862,6 +3861,7 @@ dependencies = [
  "cap-primitives",
  "cap-std",
  "futures",
+ "jsonschema 0.46.9",
  "omnia",
  "serde",
  "serde_json",

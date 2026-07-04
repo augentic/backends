@@ -22,7 +22,8 @@ use omnia_guest::mcp::{
     self, CallToolResult, Implementation, McpError, McpServer, Resource, ResourceContents,
     Tool as McpTool,
 };
-use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Sections, Tool};
+use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Tool};
+use omnia_wasi_model::prompt::Sections;
 use serde_json::{Value, json};
 use tracing::Level;
 use wasip3::filesystem::preopens;
@@ -34,37 +35,33 @@ wasip3::cli::command::export!(CliGuest);
 impl wasip3::exports::cli::run::Guest for CliGuest {
     #[omnia_wasi_otel::instrument(name = "cursor_example_run", level = Level::DEBUG)]
     async fn run() -> Result<(), ()> {
-        // Read the preopen table the host populated from `[[mount]]` and lend the
-        // tree named `.` as the working tree. `directories` must outlive the
-        // `create` call — the lent `workspace` borrows one of its descriptors.
+        // Read the preopen table the host populated from `[[mount]]`.
         let directories = preopens::get_directories();
         let workspace = directories.iter().find_map(|(dir, name)| (name == ".").then_some(dir));
 
         tracing::info!(workspace = workspace.is_some(), mcp = "docs", "cursor example completion");
 
+        let (system, messages) = Sections {
+            role: Some("a terse technical writer".to_string()),
+            task: "Using the docs MCP server, state the lifecycle stages a widget moves through, \
+                   in order."
+                .to_string(),
+            ..Sections::default()
+        }
+        .channels(Some(
+            "You answer strictly from the read-only `docs` MCP documentation tools. Do not guess.",
+        ));
+
         let request = completion::Request {
             model: None,
-            system: Some(
-                "You answer strictly from the read-only `docs` MCP documentation tools. Do not guess."
-                    .to_string(),
-            ),
-            messages: vec![],
-            sections: Some(Sections {
-                role: Some("a terse technical writer".to_string()),
-                task: "Using the docs MCP server, state the lifecycle stages a widget moves \
-                    through, in order."
-                    .to_string(),
-                context: None,
-                constraints: vec![],
-                examples: vec![],
-                variables: vec![],
-            }),
+            system,
+            messages,
             generation: None,
             format: Format::Text,
             tools: vec![Tool::Mcp(Mcp {
                 name: "docs".to_string(),
                 tools: vec![],
-                url: Some("http://localhost:8080/mcp".to_string()),
+                url: "http://localhost:8080/mcp".to_string(),
             })],
             grants: Grants {
                 references: None,
