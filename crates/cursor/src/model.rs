@@ -17,7 +17,7 @@ use tracing::instrument;
 
 use crate::{CURSOR_AGENT_BIN, Client, mcp};
 
-const MAX_ATTEMPTS: usize = 3;
+const MAX_ATTEMPTS: usize = 2;
 const MAX_INLINE_SIZE: usize = 128_000;
 
 // A prompt-granted MCP server and the endpoint URL the guest supplied for it.
@@ -57,12 +57,12 @@ impl WasiModelCtx for Client {
                 bail!("no local tree on this node");
             };
             std::fs::create_dir_all(&workspace)?;
-            let workspace = workspace
+            let workspace =& workspace
                 .canonicalize()
-                .with_context(|| format!("workspace {}", workspace.display()))?;
+                .context("issue canonicalizing workspace")?;
 
-            // Per-prompt MCP grants carry their own endpoint URL; no grant means
-            // no MCP wiring (MCP is opt-in per completion).
+            // Per-prompt MCP grants carry their own endpoint URL.
+            // No grant means no MCP wiring (MCP is opt-in per completion).
             let selected = select_mcp_servers(&request.request)?;
             let _mcp_guard = if selected.is_empty() {
                 None
@@ -70,12 +70,12 @@ impl WasiModelCtx for Client {
                 prompt = format!("{}\n\n{prompt}", mcp_hint(&selected));
                 let map: BTreeMap<String, String> =
                     selected.iter().map(|s| (s.name.clone(), s.url.clone())).collect();
-                Some(mcp::McpGuard::install(&workspace, &map)?)
+                Some(mcp::McpGuard::install(workspace, &map)?)
             };
 
             let spawn = SpawnOptions {
                 model: request.request.model.as_deref(),
-                workspace: &workspace,
+                workspace,
                 timeout,
                 approve_mcps: !selected.is_empty(),
             };
@@ -90,8 +90,7 @@ impl WasiModelCtx for Client {
 
                 match parse_result(&result, &format) {
                     Ok(value) => match check_answer(&value, &format) {
-                        // a value of the wrong shape is better than no answer
-                        // on the last attempt
+                        // the wrong shape is better than no answer on the last attempt
                         Ok(()) => return Ok(Answer { value, usage: None, transcript }),
                         Err(_) if last => return Ok(Answer { value, usage: None, transcript }),
                         Err(reason) => {

@@ -318,6 +318,7 @@ dependencies = [
  "axum-core",
  "axum-macros",
  "bytes",
+ "form_urlencoded",
  "futures-util",
  "http",
  "http-body",
@@ -331,6 +332,7 @@ dependencies = [
  "serde_core",
  "serde_json",
  "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
  "tower",
  "tower-layer",
@@ -1760,6 +1762,7 @@ dependencies = [
  "omnia-azure-blob",
  "omnia-azure-table",
  "omnia-cursor",
+ "omnia-guest",
  "omnia-wasi-blobstore",
  "omnia-wasi-docstore",
  "omnia-wasi-http",
@@ -3570,6 +3573,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-guest"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "chrono",
+ "http",
+ "http-body",
+ "omnia-guest-macros",
+ "omnia-wasi-blobstore",
+ "omnia-wasi-config",
+ "omnia-wasi-docstore",
+ "omnia-wasi-http",
+ "omnia-wasi-identity",
+ "omnia-wasi-keyvalue",
+ "omnia-wasi-messaging",
+ "omnia-wasi-otel",
+ "omnia-wasi-sql",
+ "omnia-wasi-websocket",
+ "sea-query",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+ "wasip3",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
 name = "omnia-guest-macros"
 version = "0.35.0"
 source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
@@ -3708,6 +3742,19 @@ dependencies = [
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "omnia-wasi-config"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+dependencies = [
+ "anyhow",
+ "omnia",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi-config",
  "wit-bindgen 0.58.0",
 ]
 
@@ -3892,6 +3939,28 @@ dependencies = [
  "omnia",
  "parking_lot",
  "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wit-bindgen 0.58.0",
+]
+
+[[package]]
+name = "omnia-wasi-websocket"
+version = "0.35.0"
+source = "git+https://github.com/augentic/omnia.git#f46a4e99efdddb48d7db9d451903d4339a15510c"
+dependencies = [
+ "anyhow",
+ "dashmap 6.2.1",
+ "fromenv",
+ "futures",
+ "futures-channel",
+ "futures-util",
+ "omnia",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tracing",
+ "tungstenite",
  "wasmtime",
  "wasmtime-wasi",
  "wit-bindgen 0.58.0",
@@ -6090,6 +6159,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f72a05e828585856dacd553fba484c242c46e391fb0e58917c942ee9202915c"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6389,6 +6470,22 @@ checksum = "9fe58ebd5edd976e0fe0f8a14d2a04b7c81ef153ea9a54eebc42e67c2c23b4e5"
 dependencies = [
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c01152af293afb9c7c2a57e4b559c5620b421f6d133261c60dd2d0cdb38e6b8"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.9.4",
+ "sha1",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -7059,6 +7156,15 @@ dependencies = [
  "wasmtime-wasi-io",
  "wiggle",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "wasmtime-wasi-config"
+version = "46.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7304e98b110835eedacd5e5565d6e4457489f8cf1e2571674887320fab2815ea"
+dependencies = [
+ "wasmtime",
 ]
 
 [[package]]

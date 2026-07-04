@@ -11,5 +11,5 @@ path = "workspace"
 writable = true
 
 # [[route.http]]
-# prefix = "/"
+# prefix = "/mcp"
 # guest = "cursor"
