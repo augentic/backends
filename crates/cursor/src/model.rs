@@ -83,33 +83,24 @@ impl WasiModelCtx for Client {
 
             tracing::info!(model = spawn.model, ?format, "cursor completion");
 
-            let mut attempt = 0;
-            loop {
-                attempt += 1;
+            for attempt in 1..=MAX_ATTEMPTS {
                 let last = attempt == MAX_ATTEMPTS;
                 let AgentOutput { result, transcript } = spawn_agent(&prompt, &spawn).await?;
                 tracing::debug!(attempt, result = result.len(), "cursor-agent answer");
 
                 match parse_answer(&result, format) {
                     Ok(value) => match check_answer(&value, format) {
-                        // the wrong shape is better than no answer on the last attempt
-                        Ok(()) => {
-                            return Ok(Answer {
-                                value,
-                                usage: None,
-                                transcript,
-                            });
-                        }
-                        Err(_) if last => {
-                            return Ok(Answer {
-                                value,
-                                usage: None,
-                                transcript,
-                            });
-                        }
-                        Err(reason) => {
+                        Err(reason) if !last => {
                             tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
                             prompt = append_repair(&prompt, &result, &reason);
+                        }
+                        _ => {
+                            // the wrong shape is better than no answer on the last attempt
+                            return Ok(Answer {
+                                value,
+                                usage: None,
+                                transcript,
+                            });
                         }
                     },
                     Err(reason) if last => {
@@ -123,6 +114,8 @@ impl WasiModelCtx for Client {
                     }
                 }
             }
+
+            unreachable!("cursor-agent did not return an answer after {MAX_ATTEMPTS} attempts");
         })
     }
 }
@@ -385,7 +378,14 @@ impl OutputParser {
                         tool_call_identity(&tool_call)
                             .unwrap_or_else(|| ("unknown".to_owned(), Value::Null))
                     });
-                    let result = tool_call_result(&tool_call).unwrap_or(Value::Null);
+
+                    let result = tool_call.as_object().map_or_else(
+                        || Value::Null,
+                        |map| {
+                            map.values().find_map(|v| v.get("result").cloned()).unwrap_or_default()
+                        },
+                    );
+
                     self.turns.push(ToolTurn { tool, args, result });
                 }
             }
@@ -404,18 +404,18 @@ impl OutputParser {
         if self.lines == 1
             && let Some(line) = &self.first_line
         {
+            // extract the result
             let envelope: Value = serde_json::from_str(line)
                 .context("cursor-agent did not emit a JSON result object")?;
+            let result = envelope.get("result").and_then(Value::as_str).unwrap_or("<no detail>");
 
-            // extract the result string from the envelope
-            let result = envelope.get("result").and_then(Value::as_str);
+            // check if the agent reported an error
             if envelope.get("is_error").and_then(Value::as_bool) == Some(true) {
-                bail!("cursor-agent reported an error: {}", result.unwrap_or("<no detail>"));
+                bail!("cursor-agent reported an error: {result}");
             }
-            let result = result.map(ToOwned::to_owned).unwrap_or_default();
 
             return Ok(AgentOutput {
-                result,
+                result: result.to_string(),
                 transcript: None,
             });
         }
@@ -424,6 +424,7 @@ impl OutputParser {
     }
 }
 
+// Extract the tool name and arguments from a tool call.
 fn tool_call_identity(tool_call: &Value) -> Option<(String, Value)> {
     let object = tool_call.as_object()?;
     for (key, value) in object {
@@ -436,16 +437,6 @@ fn tool_call_identity(tool_call: &Value) -> Option<(String, Value)> {
             let name = value.get("name").and_then(Value::as_str).unwrap_or("function").to_owned();
             let args = value.get("arguments").cloned().unwrap_or_else(|| value.clone());
             return Some((name, args));
-        }
-    }
-    None
-}
-
-fn tool_call_result(tool_call: &Value) -> Option<Value> {
-    let object = tool_call.as_object()?;
-    for value in object.values() {
-        if let Some(result) = value.get("result") {
-            return Some(result.clone());
         }
     }
     None
