@@ -1,4 +1,4 @@
-//! Key-gated live integration test for the genai backend — RFC wasi-model
+//! Key-gated live integration test for the genai backend — wasi-model
 //! "run 2" (the `resolve` acceptance gate).
 //!
 //! This is the cross-repo companion to omnia's deterministic

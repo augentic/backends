@@ -28,7 +28,7 @@ use crate::Client;
 
 /// Hard cap on model round-trips for one completion: tool-call rounds plus
 /// answer-repair attempts share this budget. It bounds cost and guarantees the
-/// loop terminates (the per-call budget invariant of the RFC).
+/// loop terminates.
 const MAX_TURNS: usize = 8;
 
 /// Provider model id used when the request leaves `model` unset. genai routes to

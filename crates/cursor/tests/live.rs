@@ -1,4 +1,4 @@
-//! Key/PATH-gated live integration test for the cursor backend — RFC wasi-model
+//! Key/PATH-gated live integration test for the cursor backend — wasi-model
 //! "run 3" (the spawned-agent acceptance gate).
 //!
 //! Mirrors the genai backend's `live.rs`: it spawns a real `cursor-agent`
