@@ -1,8 +1,8 @@
 # Cursor Example
 
-Live model completion via [`omnia-cursor`](../../crates/cursor): the guest calls `create` once (command mode) with a `docs` MCP grant. The same guest also exports `wasi:http` serving a small read-only MCP documentation server, so the spawned `cursor-agent` answers the prompt by calling back into the guest's own MCP tools.
+Live model completion via `[omnia-cursor](../../crates/cursor)`: the guest calls `create` once (command mode) with a `docs` MCP grant. The same guest also exports `wasi:http` serving a small read-only MCP documentation server, so the spawned `cursor-agent` answers the prompt by calling back into the guest's own MCP tools.
 
-Requires a sibling [`omnia`](https://github.com/augentic/omnia) checkout (this workspace patches the `omnia` crates to `../omnia/crates/*`) and [`cursor-agent`](https://cursor.com/docs/cli) on `PATH`, authenticated via `CURSOR_API_KEY` or a prior `cursor-agent login`.
+Requires a sibling `[omnia](https://github.com/augentic/omnia)` checkout (this workspace patches the `omnia` crates to `../omnia/crates/*`) and `[cursor-agent](https://cursor.com/docs/cli)` on `PATH`, authenticated via `CURSOR_API_KEY` or a prior `cursor-agent login`.
 
 ## Build and run
 
@@ -14,8 +14,9 @@ cargo build -p examples --example cursor-wasm --target wasm32-wasip2
 mkdir -p examples/cursor/workspace
 
 # set Cursor API key
+export OTEL_GRPC_URL=noop
 export CURSOR_API_KEY=<cursor API key>
-export RUST_LOG=info,omnia_cursor=debug,cursor_wasm=debug
+export RUST_LOG=info,omnia_cursor=debug,cursor_wasm=debug,opentelemetry_sdk=off
 
 # run the host (no config)
 cargo run --example cursor -- run ./target/wasm32-wasip2/debug/examples/cursor_wasm.wasm --mount path=examples/cursor/workspace,name=.,writable
