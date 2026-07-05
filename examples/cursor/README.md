@@ -14,7 +14,6 @@ cargo build -p examples --example cursor-wasm --target wasm32-wasip2
 mkdir -p examples/cursor/workspace
 
 # set Cursor API key
-export OTEL_GRPC_URL=noop
 export CURSOR_API_KEY=<cursor API key>
 export RUST_LOG=info,omnia_cursor=debug,cursor_wasm=debug,opentelemetry_sdk=off
 
