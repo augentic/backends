@@ -183,7 +183,7 @@ version = "0.14.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
-version = "1.2.65"
+version = "1.2.66"
 criteria = "safe-to-deploy"
 
 [[exemptions.chacha20]]
@@ -655,11 +655,11 @@ version = "0.44.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
-version = "0.46.9"
+version = "0.46.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-regex]]
-version = "0.46.9"
+version = "0.46.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.lazycell]]
@@ -767,7 +767,7 @@ version = "0.3.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.mongocrypt-sys]]
-version = "0.1.5+1.15.1"
+version = "0.1.6+1.18.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.mongodb]]
@@ -795,7 +795,7 @@ version = "0.4.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.num-bigint]]
-version = "0.4.7"
+version = "0.4.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.num-cmp]]
@@ -1007,7 +1007,11 @@ version = "0.11.11"
 criteria = "safe-to-deploy"
 
 [[exemptions.quinn-proto]]
-version = "0.11.15"
+version = "0.11.16"
+criteria = "safe-to-deploy"
+
+[[exemptions.quinn-udp]]
+version = "0.5.15"
 criteria = "safe-to-deploy"
 
 [[exemptions.r-efi]]
@@ -1028,6 +1032,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand_core]]
 version = "0.10.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand_pcg]]
+version = "0.10.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.rayon]]
@@ -1055,7 +1063,7 @@ version = "0.44.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.referencing]]
-version = "0.46.9"
+version = "0.46.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.regex-lite]]
