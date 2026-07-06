@@ -24,7 +24,6 @@ use omnia_wasi_model::completion::{self, Format, Grants, Mcp, Tool};
 use omnia_wasi_model::prompt::Sections;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tracing::Level;
 use wasip3::filesystem::preopens;
 use wasip3::http::types as http;
 
@@ -32,7 +31,7 @@ struct CliGuest;
 wasip3::cli::command::export!(CliGuest);
 
 impl wasip3::exports::cli::run::Guest for CliGuest {
-    #[omnia_wasi_otel::instrument(name = "cursor_example_run", level = Level::DEBUG)]
+    #[omnia_wasi_otel::instrument(name = "cursor_example_run")]
     async fn run() -> Result<(), ()> {
         // Read the preopen table the host populated from `[[mount]]`.
         let directories = preopens::get_directories();
@@ -89,7 +88,7 @@ struct HttpGuest;
 wasip3::http::service::export!(HttpGuest);
 
 impl wasip3::exports::http::handler::Guest for HttpGuest {
-    #[omnia_wasi_otel::instrument(name = "http_mcp_handle", level = Level::DEBUG)]
+    #[omnia_wasi_otel::instrument(name = "http_mcp_handle")]
     async fn handle(request: http::Request) -> Result<http::Response, http::ErrorCode> {
         tracing::debug!("cursor example mcp request");
         omnia_wasi_http::serve(mcp::router(References), request).await
