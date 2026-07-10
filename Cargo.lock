@@ -3405,7 +3405,6 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3534,10 +3533,10 @@ dependencies = [
 [[package]]
 name = "omnia-guest"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "axum",
+ "bon",
  "bytes",
  "chrono",
  "http",
@@ -3557,6 +3556,7 @@ dependencies = [
  "sea-query",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "thiserror 2.0.18",
  "tracing",
  "wasip3",
@@ -3566,7 +3566,6 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3576,7 +3575,6 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3692,7 +3690,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3708,7 +3705,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-config"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "omnia",
@@ -3721,17 +3717,13 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "chrono",
- "fromenv",
  "futures",
  "omnia",
- "parking_lot",
  "polodb_core",
  "regex",
- "serde",
  "serde_json",
  "tracing",
  "wasmtime",
@@ -3742,7 +3734,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "axum",
@@ -3772,7 +3763,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -3789,7 +3779,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3807,7 +3796,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "futures",
@@ -3826,7 +3814,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "cap-primitives",
@@ -3847,7 +3834,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -3871,7 +3857,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -3892,7 +3877,6 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "futures",
@@ -3907,11 +3891,9 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-websocket"
 version = "0.35.0"
-source = "git+https://github.com/augentic/omnia.git#c31f4856b73a60f8961ee6e108218917e4fbd513"
 dependencies = [
  "anyhow",
  "dashmap 6.2.1",
- "fromenv",
  "futures",
  "futures-channel",
  "futures-util",
