@@ -27,16 +27,15 @@ fn from_nats(msg: async_nats::Message) -> Message {
         Metadata { inner: md }
     });
 
-    Message {
-        topic: msg.subject.to_string(),
-        payload: msg.payload.to_vec(),
-        metadata,
-        description: msg.description,
-        reply: msg.reply.map(|r| Reply {
-            client_name: String::new(),
-            topic: r.to_string(),
-        }),
-    }
+    let mut message = Message::new(msg.payload.to_vec());
+    message.topic = msg.subject.to_string();
+    message.metadata = metadata;
+    message.description = msg.description;
+    message.reply = msg.reply.map(|r| Reply {
+        client_name: String::new(),
+        topic: r.to_string(),
+    });
+    message
 }
 
 fn nats_headers(metadata: &Metadata) -> async_nats::HeaderMap {

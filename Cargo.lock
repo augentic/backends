@@ -3868,6 +3868,7 @@ dependencies = [
  "rusqlite",
  "sea-query",
  "serde_json",
+ "tokio",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
