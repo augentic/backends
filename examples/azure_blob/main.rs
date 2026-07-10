@@ -54,13 +54,13 @@ pub async fn main() {
     // --- write blobs ---
     tracing::info!("writing greeting.txt");
     container
-        .write_data("greeting.txt".to_string(), b"hello world".to_vec())
+        .write_data("greeting.txt".to_string(), b"hello world".to_vec().into())
         .await
         .expect("Failed to write greeting.txt");
 
     tracing::info!("writing data.json");
     container
-        .write_data("data.json".to_string(), br#"{"name":"Alice","age":30}"#.to_vec())
+        .write_data("data.json".to_string(), br#"{"name":"Alice","age":30}"#.to_vec().into())
         .await
         .expect("Failed to write data.json");
 
@@ -106,7 +106,7 @@ pub async fn main() {
 
     let test_data: Vec<u8> = (0..CHUNK_TEST_SIZE).map(|i| (i % 256) as u8).collect();
     container
-        .write_data(CHUNK_TEST_BLOB.to_string(), test_data.clone())
+        .write_data(CHUNK_TEST_BLOB.to_string(), test_data.clone().into())
         .await
         .expect("Failed to write chunk-test blob");
 

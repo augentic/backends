@@ -11,7 +11,7 @@ use azure_storage_blob::models::{
 };
 use futures::{FutureExt, TryStreamExt};
 use omnia_wasi_blobstore::{
-    Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
+    Bytes, Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
 };
 
 use crate::Client;
@@ -111,7 +111,7 @@ impl Container for AzureBlobContainer {
         })
     }
 
-    fn get_data(&self, name: String, start: u64, end: u64) -> FutureResult<Option<Vec<u8>>> {
+    fn get_data(&self, name: String, start: u64, end: u64) -> FutureResult<Option<Bytes>> {
         tracing::trace!("getting object data: {name}");
         let blob_client = self.service.blob_client(&self.name, &name);
 
@@ -120,19 +120,19 @@ impl Container for AzureBlobContainer {
                 .download(range_options(start, end)?)
                 .await
                 .context("downloading blob")?;
-            let data: Vec<u8> =
-                response.body.collect().await.context("reading blob body")?.to_vec();
+            let data = response.body.collect().await.context("reading blob body")?;
             Ok(Some(data))
         }
         .boxed()
     }
 
-    fn write_data(&self, name: String, data: Vec<u8>) -> FutureResult<()> {
+    fn write_data(&self, name: String, data: Bytes) -> FutureResult<()> {
         tracing::trace!("writing object data: {name}");
         let blob_client = self.service.blob_client(&self.name, &name);
 
         async move {
-            let content = RequestContent::from(data);
+            // The SDK's RequestContent only converts from Vec<u8>.
+            let content = RequestContent::from(data.to_vec());
             blob_client.upload(content, None).await.context("uploading blob")?;
             Ok(())
         }

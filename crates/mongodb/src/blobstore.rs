@@ -7,7 +7,7 @@ use futures::{FutureExt, StreamExt};
 use mongodb::Collection;
 use mongodb::bson::{self, Bson, Document};
 use omnia_wasi_blobstore::{
-    Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
+    Bytes, Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
 };
 use serde::{Deserialize, Serialize};
 
@@ -87,7 +87,7 @@ impl Container for MongoDbContainer {
     }
 
     /// Get the value associated with the key.
-    fn get_data(&self, name: String, _start: u64, _end: u64) -> FutureResult<Option<Vec<u8>>> {
+    fn get_data(&self, name: String, _start: u64, _end: u64) -> FutureResult<Option<Bytes>> {
         tracing::trace!("getting object data: {name}");
         let collection = self.collection.clone();
 
@@ -103,13 +103,13 @@ impl Container for MongoDbContainer {
                 }
                 _ => serde_json::to_vec(&blob.data).context("deserializing Document")?,
             };
-            Ok(Some(data))
+            Ok(Some(data.into()))
         }
         .boxed()
     }
 
     /// Set the value associated with the key.
-    fn write_data(&self, name: String, data: Vec<u8>) -> FutureResult<()> {
+    fn write_data(&self, name: String, data: Bytes) -> FutureResult<()> {
         tracing::trace!("writing object data: {name}");
         let collection = self.collection.clone();
 
