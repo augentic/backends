@@ -20,7 +20,7 @@ async fn write_read_delete() -> Result<()> {
     let store: std::sync::Arc<dyn Container> = client.create_container(container.clone()).await?;
 
     let object = "greeting".to_owned();
-    store.write_data(object.clone(), b"payload".to_vec()).await?;
+    store.write_data(object.clone(), b"payload".to_vec().into()).await?;
 
     assert_eq!(store.get_data(object.clone(), 0, 0).await?.as_deref(), Some(b"payload".as_slice()));
     assert!(store.has_object(object.clone()).await?, "object exists after write");

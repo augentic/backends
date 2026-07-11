@@ -7,7 +7,7 @@ use async_nats::jetstream::object_store::{Config, ObjectStore};
 use chrono::Utc;
 use futures::{FutureExt, StreamExt};
 use omnia_wasi_blobstore::{
-    Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
+    Bytes, Container, ContainerMetadata, FutureResult, ObjectMetadata, WasiBlobstoreCtx,
 };
 use tokio::io::AsyncReadExt;
 
@@ -105,7 +105,7 @@ impl Container for NatsContainer {
         Ok(self.metadata.clone())
     }
 
-    fn get_data(&self, name: String, _start: u64, _end: u64) -> FutureResult<Option<Vec<u8>>> {
+    fn get_data(&self, name: String, _start: u64, _end: u64) -> FutureResult<Option<Bytes>> {
         tracing::trace!("getting object data: {name}");
         let store = self.store.clone();
 
@@ -113,17 +113,17 @@ impl Container for NatsContainer {
             let mut object = store.get(name).await.context("getting object")?;
             let mut bytes = vec![];
             object.read_to_end(&mut bytes).await?;
-            Ok(Some(bytes))
+            Ok(Some(bytes.into()))
         }
         .boxed()
     }
 
-    fn write_data(&self, name: String, data: Vec<u8>) -> FutureResult<()> {
+    fn write_data(&self, name: String, data: Bytes) -> FutureResult<()> {
         tracing::trace!("writing object data: {name}");
         let store = self.store.clone();
 
         async move {
-            store.put(name.as_str(), &mut data.as_slice()).await.context("writing object")?;
+            store.put(name.as_str(), &mut data.as_ref()).await.context("writing object")?;
             Ok(())
         }
         .boxed()
