@@ -8,8 +8,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use omnia_wasi_model::{
-    Answer, FutureResult, Request, Role, Tool, ToolHost, ToolTurn, Transcript, WasiModelCtx,
-    check_answer, parse_answer, repair_instruction,
+    Answer, Format, FutureResult, Request, Role, Tool, ToolHost, ToolTurn, Transcript, WasiModelCtx,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -88,11 +87,11 @@ impl WasiModelCtx for Client {
                 let AgentOutput { result, transcript } = spawn_agent(&prompt, &spawn).await?;
                 tracing::debug!(attempt, result = result.len(), "cursor-agent answer");
 
-                match parse_answer(&result, format) {
-                    Ok(value) => match check_answer(&value, format) {
+                match format.parse(&result) {
+                    Ok(value) => match format.check(&value) {
                         Err(reason) if !last => {
                             tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
-                            prompt = append_repair(&prompt, &result, &reason);
+                            prompt = append_repair(&prompt, &result, &reason, format);
                         }
                         _ => {
                             // the wrong shape is better than no answer on the last attempt
@@ -110,7 +109,7 @@ impl WasiModelCtx for Client {
                     }
                     Err(reason) => {
                         tracing::debug!(attempt, %reason, "repairing cursor-agent answer");
-                        prompt = append_repair(&prompt, &result, &reason);
+                        prompt = append_repair(&prompt, &result, &reason, format);
                     }
                 }
             }
@@ -285,8 +284,8 @@ fn into_prompt_file(prompt: &str, workspace: &Path) -> Result<(String, PromptFil
     Ok((arg, PromptFile { path }))
 }
 
-fn append_repair(prompt: &str, answer: &str, reason: &str) -> String {
-    format!("{prompt}\n\nYour previous answer was:\n{answer}\n\n{}", repair_instruction(reason))
+fn append_repair(prompt: &str, answer: &str, reason: &str, format: &Format) -> String {
+    format!("{prompt}\n\nYour previous answer was:\n{answer}\n\n{}", format.repair(reason))
 }
 
 /// The subset of `cursor-agent` stream events the backend consumes; everything
