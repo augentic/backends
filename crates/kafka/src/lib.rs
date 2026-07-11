@@ -145,7 +145,7 @@ impl From<&ConnectOptions> for ClientConfig {
     fn from(kafka: &ConnectOptions) -> Self {
         let mut config = Self::new();
 
-        config.set("client.id", format!("{}-{}", &kafka.client_id, random_range(1000..9999)));
+        config.set("client.id", format!("{}-{}", kafka.client_id, random_range(1000..9999)));
         config.set("bootstrap.servers", &kafka.brokers);
 
         // SASL authentication
