@@ -20,7 +20,7 @@ use genai::chat::{
 };
 use omnia_wasi_model::{
     Answer, Effort, Format, FutureResult, Reference, Request, Role, Tool as ModelTool, ToolHost,
-    ToolTurn, Transcript, Usage, WasiModelCtx, check_answer, parse_answer, repair_instruction,
+    ToolTurn, Transcript, Usage, WasiModelCtx,
 };
 use serde_json::{Value, json};
 
@@ -84,8 +84,8 @@ impl WasiModelCtx for Client {
                 };
                 let last_turn = turn == MAX_TURNS;
 
-                match parse_answer(&text, &format) {
-                    Ok(value) => match check_answer(&value, &format) {
+                match format.parse(&text) {
+                    Ok(value) => match format.check(&value) {
                         Ok(()) => {
                             return Ok(Answer {
                                 value,
@@ -103,7 +103,7 @@ impl WasiModelCtx for Client {
                             });
                         }
                         Err(reason) => {
-                            chat = append_repair(chat, text, &reason);
+                            chat = append_repair(chat, text, &reason, &format);
                         }
                     },
                     Err(reason) if last_turn => {
@@ -113,7 +113,7 @@ impl WasiModelCtx for Client {
                         );
                     }
                     Err(reason) => {
-                        chat = append_repair(chat, text, &reason);
+                        chat = append_repair(chat, text, &reason, &format);
                     }
                 }
             }
@@ -311,8 +311,10 @@ async fn dispatch_tool(
 
 /// Append the rejected answer and a correction instruction so the next round
 /// can repair it (bounded by [`MAX_TURNS`]).
-fn append_repair(request: ChatRequest, answer: String, reason: &str) -> ChatRequest {
+fn append_repair(
+    request: ChatRequest, answer: String, reason: &str, format: &Format,
+) -> ChatRequest {
     request
         .append_message(ChatMessage::assistant(answer))
-        .append_message(ChatMessage::user(repair_instruction(reason)))
+        .append_message(ChatMessage::user(format.repair(reason)))
 }

@@ -54,7 +54,7 @@ unused_result_ok = "warn"
 [workspace.dependencies]
 anyhow = "1.0.103"
 axum = { version = "0.8.9", default-features = false, features = ["json"] }
-azure_core = "1.0.0"
+azure_core = "1.1.0"
 azure_identity = "1.0.0"
 azure_storage_blob = "1.0.0"
 base64ct = { version = "1.8.3", features = ["std"] }
@@ -62,7 +62,7 @@ chrono = "0.4.45"
 fromenv = "0.1.0"
 futures = "0.3.32"
 http = "1.4.2"
-jsonschema = { version = "0.46.10", default-features = false }
+jsonschema = { version = "0.47.0", default-features = false }
 rustls = { version = "0.23.41", default-features = false, features = ["logging", "ring", "std"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
@@ -71,18 +71,18 @@ tracing = "0.1.44"
 urlencoding = "2.1.3"
 
 # omnia registry — Phase 2a: entire workspace on 0.35.0 via git patch until published.
-omnia = "0.35.0"
+omnia = "0.34.0"
 # omnia-guest = "0.35.0"
-omnia-wasi-blobstore = "0.35.0"
+omnia-wasi-blobstore = "0.34.0"
 omnia-wasi-docstore = "0.35.0"
-omnia-wasi-http = "0.35.0"
-omnia-wasi-identity = "0.35.0"
-omnia-wasi-keyvalue = "0.35.0"
-omnia-wasi-messaging = "0.35.0"
+omnia-wasi-http = "0.34.0"
+omnia-wasi-identity = "0.34.0"
+omnia-wasi-keyvalue = "0.34.0"
+omnia-wasi-messaging = "0.34.0"
 omnia-wasi-model = "0.35.0"
-omnia-wasi-otel = "0.35.0"
-omnia-wasi-sql = "0.35.0"
-omnia-wasi-vault = "0.35.0"
+omnia-wasi-otel = "0.34.0"
+omnia-wasi-sql = "0.34.0"
+omnia-wasi-vault = "0.34.0"
 
 # `wrpc-wasmtime` 0.1.0 is unpublished (the crate was renamed from
 # `wrpc-runtime-wasmtime` upstream); it is supplied by [patch.crates-io] below
