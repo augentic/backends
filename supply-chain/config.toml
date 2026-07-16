@@ -123,7 +123,7 @@ version = "0.4.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.bitflags]]
-version = "2.13.0"
+version = "2.13.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bitvec]]
@@ -542,6 +542,10 @@ criteria = "safe-to-deploy"
 version = "0.13.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.http-body]]
+version = "1.1.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.hybrid-array]]
 version = "0.4.13"
 criteria = "safe-to-deploy"
@@ -780,10 +784,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.num-complex]]
 version = "0.4.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.num-conv]]
-version = "0.2.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.num-iter]]
@@ -1031,7 +1031,7 @@ version = "4.10.0+2.12.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.redis]]
-version = "1.3.0"
+version = "1.4.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_syscall]]
@@ -1075,7 +1075,7 @@ version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls]]
-version = "0.23.41"
+version = "0.23.42"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-native-certs]]
@@ -1171,11 +1171,11 @@ version = "0.27.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.simd-adler32]]
-version = "0.3.9"
+version = "0.3.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.simd_cesu8]]
-version = "1.1.1"
+version = "1.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.simdutf8]]
@@ -1242,10 +1242,6 @@ criteria = "safe-to-deploy"
 version = "0.3.53"
 criteria = "safe-to-deploy"
 
-[[exemptions.time-core]]
-version = "0.1.9"
-criteria = "safe-to-deploy"
-
 [[exemptions.time-macros]]
 version = "0.2.31"
 criteria = "safe-to-deploy"
@@ -1303,11 +1299,11 @@ version = "0.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.toml]]
-version = "1.1.2+spec-1.1.0"
+version = "1.1.3+spec-1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.toml_writer]]
-version = "1.1.1+spec-1.1.0"
+version = "1.1.2+spec-1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.tonic]]
@@ -1411,7 +1407,7 @@ version = "0.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid]]
-version = "1.23.4"
+version = "1.24.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid-simd]]
@@ -1507,7 +1503,7 @@ version = "0.2.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.xxhash-rust]]
-version = "0.8.16"
+version = "0.8.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.yoke]]
@@ -1555,5 +1551,5 @@ version = "0.11.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.zmij]]
-version = "1.0.21"
+version = "1.0.23"
 criteria = "safe-to-deploy"
