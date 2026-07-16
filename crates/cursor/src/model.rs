@@ -288,8 +288,9 @@ fn append_repair(prompt: &str, answer: &str, reason: &str, format: &Format) -> S
     format!("{prompt}\n\nYour previous answer was:\n{answer}\n\n{}", format.repair(reason))
 }
 
-/// The subset of `cursor-agent` stream events the backend consumes; everything
-/// else (assistant deltas, thinking, …) parses to `Other` without building a
+/// The subset of `cursor-agent` stream events the backend consumes. `result`
+/// and `tool_call` drive the answer; `assistant` and `thinking` are parsed
+/// only to be logged. Everything else parses to `Other` without building a
 /// JSON tree.
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -303,8 +304,36 @@ enum Event {
         call_id: Option<String>,
         tool_call: Option<Value>,
     },
+    Assistant {
+        message: Option<AssistantMessage>,
+    },
+    Thinking {
+        subtype: Option<String>,
+        text: Option<String>,
+    },
     #[serde(other)]
     Other,
+}
+
+/// The `message` body of a stream-json `assistant` event.
+#[derive(Deserialize)]
+struct AssistantMessage {
+    #[serde(default)]
+    content: Vec<ContentPart>,
+}
+
+/// One `message.content[]` entry; only `text` parts carry prose.
+#[derive(Deserialize)]
+struct ContentPart {
+    #[serde(default)]
+    text: Option<String>,
+}
+
+impl AssistantMessage {
+    /// Concatenated text across the message's content parts.
+    fn text(&self) -> String {
+        self.content.iter().filter_map(|part| part.text.as_deref()).collect()
+    }
 }
 
 // Incremental parser for `stream-json` NDJSON (with a fallback for a legacy
@@ -347,6 +376,10 @@ impl OutputParser {
                     );
                 }
                 if result.is_some() {
+                    tracing::debug!(
+                        result_len = result.as_deref().map_or(0, str::len),
+                        "cursor-agent result"
+                    );
                     self.result = result;
                 }
             }
@@ -357,7 +390,21 @@ impl OutputParser {
             } => {
                 self.tool_call(&subtype, call_id, tool_call);
             }
-            Event::Other => {}
+            Event::Assistant { message } => {
+                let text = message.as_ref().map(AssistantMessage::text).unwrap_or_default();
+                tracing::debug!(text_len = text.len(), "cursor-agent assistant message");
+                tracing::trace!(%text, "cursor-agent assistant text");
+            }
+            Event::Thinking { subtype, text } => {
+                tracing::trace!(
+                    ?subtype,
+                    text = text.as_deref().unwrap_or_default(),
+                    "cursor-agent thinking"
+                );
+            }
+            Event::Other => {
+                tracing::trace!(line, "cursor-agent other event");
+            }
         }
         Ok(())
     }
@@ -368,6 +415,7 @@ impl OutputParser {
                 if let (Some(call_id), Some(identity)) =
                     (call_id, tool_call.as_ref().and_then(tool_call_identity))
                 {
+                    tracing::debug!(subtype, %call_id, tool = %identity.0, "cursor-agent tool call");
                     self.pending_tools.insert(call_id, identity);
                 }
             }
@@ -377,6 +425,7 @@ impl OutputParser {
                         tool_call_identity(&tool_call)
                             .unwrap_or_else(|| ("unknown".to_owned(), Value::Null))
                     });
+                    tracing::debug!(subtype, %call_id, %tool, "cursor-agent tool call");
 
                     let result = tool_call.as_object().map_or_else(
                         || Value::Null,
@@ -511,8 +560,11 @@ mod tests {
 
     #[test]
     fn parse_stream_json() {
-        let stdout = br#"{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}
+        let stdout = br#"{"type":"thinking","subtype":"extended","text":"weighing the verdict"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll read the README"}]}}
+{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}
 {"type":"tool_call","subtype":"completed","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"},"result":{"success":{"content":"hi"}}}}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Deciding now"}]}}
 {"type":"result","subtype":"success","is_error":false,"result":"{\"verdict\":\"pass\"}"}"#;
         let AgentOutput { result, transcript } = parse_output(stdout).expect("parse stream");
         assert_eq!(result, r#"{"verdict":"pass"}"#);
@@ -520,6 +572,15 @@ mod tests {
         assert_eq!(transcript.turns.len(), 1);
         assert_eq!(transcript.turns[0].tool, "read");
         assert_eq!(transcript.turns[0].args, json!({ "path": "README.md" }));
+    }
+
+    #[test]
+    fn assistant_prefix_reaches_result() {
+        let stdout = br#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"working on it"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"ok"}"#;
+        let AgentOutput { result, transcript } = parse_output(stdout).expect("parse stream");
+        assert_eq!(result, "ok");
+        assert!(transcript.is_none(), "no tool turns means no transcript");
     }
 
     #[test]
