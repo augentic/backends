@@ -17,7 +17,7 @@ pub(crate) const CURSOR_AGENT_BIN: &str = "cursor-agent";
 /// Wall-clock bound on one `cursor-agent` spawn; orphaned processes are killed on timeout.
 pub(crate) const DEFAULT_TIMEOUT_SECS: u64 = 120;
 
-/// Environment variable read by [`ConnectOptions::from_env`]: seconds for the
+/// Environment variable read by [`omnia::FromEnv::from_env`]: seconds for the
 /// per-spawn wall-clock bound (unset → [`DEFAULT_TIMEOUT_SECS`]).
 const TIMEOUT_SECS_ENV: &str = "CURSOR_TIMEOUT_SECS";
 
@@ -86,6 +86,9 @@ impl omnia::FromEnv for ConnectOptions {
                 let secs = raw.trim().parse::<u64>().with_context(|| {
                     format!("{TIMEOUT_SECS_ENV} must be an unsigned integer (seconds), got {raw:?}")
                 })?;
+                if secs == 0 {
+                    bail!("{TIMEOUT_SECS_ENV} must be greater than 0");
+                }
                 Duration::from_secs(secs)
             }
             _ => Duration::from_secs(DEFAULT_TIMEOUT_SECS),

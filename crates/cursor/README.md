@@ -46,8 +46,8 @@ use std::time::Duration;
 use omnia::Backend;
 use omnia_cursor::{Client, ConnectOptions};
 
-// Default 120s (or CURSOR_TIMEOUT_SECS when using Client::connect()).
-let client = Client::connect_with(ConnectOptions::default()).await?;
+// CURSOR_TIMEOUT_SECS when set, otherwise 120s.
+let client = Client::connect().await?;
 
 // Explicit ceiling for long-running judgment legs.
 let client = Client::connect_with(ConnectOptions {
