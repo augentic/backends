@@ -51,7 +51,7 @@ version = "3.4.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.async-nats]]
-version = "0.49.1"
+version = "0.50.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.async-recursion]]
@@ -235,7 +235,7 @@ version = "0.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.cpp_demangle]]
-version = "0.4.5"
+version = "0.3.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.cpufeatures]]
@@ -651,11 +651,15 @@ version = "0.44.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
-version = "0.47.0"
+version = "0.48.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-regex]]
-version = "0.47.0"
+version = "0.48.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.jsonschema-value]]
+version = "0.48.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.leb128]]
@@ -1047,7 +1051,7 @@ version = "0.44.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.referencing]]
-version = "0.47.0"
+version = "0.48.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.regex-lite]]
