@@ -23,26 +23,37 @@ captured, logged, or recorded into fixtures.
 
 ## Configuration
 
-The backend takes no environment configuration. The working tree is lent per
-completion through the guest's `grants.workspace`: the runtime preopens the
-configured `[[mount]]`, the guest lends that descriptor, and the host resolves
-it to a node-local path exposed on the tool host (`ToolHost::local_path`). A
-completion with no lent workspace yields
+The working tree is lent per completion through the guest's `grants.workspace`:
+the runtime preopens the configured `[[mount]]`, the guest lends that
+descriptor, and the host resolves it to a node-local path exposed on the tool
+host (`ToolHost::local_path`). A completion with no lent workspace yields
 `error::backend("no local tree on this node")`, preserving the capability
 signal.
 
 The model id is taken from each request (`request.model`); an unset value lets
-`cursor-agent` choose. Each spawn is bounded at 120s. MCP servers are supplied
-per-request: a prompt's `mcp` grant carries the endpoint `url` directly (merged
-into `<workspace>/.cursor/mcp.json` for the spawn).
+`cursor-agent` choose. Each spawn is bounded by `ConnectOptions.timeout`
+(default 120s). `Client::connect()` / `FromEnv` reads optional
+`CURSOR_TIMEOUT_SECS`; callers that need a different ceiling pass
+`ConnectOptions { timeout: Duration::from_secs(n) }` to `connect_with`. MCP
+servers are supplied per-request: a prompt's `mcp` grant carries the endpoint
+`url` directly (merged into `<workspace>/.cursor/mcp.json` for the spawn).
 
 ## Usage
 
 ```rust,ignore
-use omnia::Backend;
-use omnia_cursor::Client;
+use std::time::Duration;
 
-let client = Client::connect().await?;
+use omnia::Backend;
+use omnia_cursor::{Client, ConnectOptions};
+
+// Default 120s (or CURSOR_TIMEOUT_SECS when using Client::connect()).
+let client = Client::connect_with(ConnectOptions::default()).await?;
+
+// Explicit ceiling for long-running judgment legs.
+let client = Client::connect_with(ConnectOptions {
+    timeout: Duration::from_secs(300),
+})
+.await?;
 ```
 
 ## End-to-end example
