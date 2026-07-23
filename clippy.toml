@@ -51,6 +51,7 @@ allowed-duplicate-crates = [
   "security-framework",
   "sha2",
   "socket2",
+  "syn",
   "thiserror",
   "thiserror-impl",
   "wasi",

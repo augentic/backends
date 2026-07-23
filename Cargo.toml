@@ -116,8 +116,9 @@ omnia-wasi-vault = { git = "https://github.com/augentic/omnia.git" }
 # omnia-wasi-sql = { path = "../omnia/crates/wasi-sql" }
 # omnia-wasi-vault = { path = "../omnia/crates/wasi-vault" }
 
-wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc" }
-wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc" }
+# Last wrpc rev on wasmtime 46 (omnia is still on 46.0.1).
+wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc", rev = "5a92c5c29e47d918ff15fb76455427fbcbddd423" }
+wrpc-wasmtime = { git = "https://github.com/bytecodealliance/wrpc", rev = "5a92c5c29e47d918ff15fb76455427fbcbddd423" }
 
 [profile.release]
 lto = true
