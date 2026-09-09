@@ -3,7 +3,7 @@
 //!
 //! Mirrors the genai backend's `live.rs`: each test spawns a real
 //! `cursor-sdk-bridge`, drives a completion through the
-//! `omnia:model/completion` boundary, and parses the validated answer back.
+//! `omnia:model/completion` boundary, and parses the answer back.
 //!
 //! All tests are `#[ignore]`d so they never run or spawn a process in CI; run
 //! them with `cargo nextest run --run-ignored all` (or `cargo test --
@@ -15,11 +15,23 @@ use anyhow::Result;
 use omnia::Backend as _;
 use omnia_cursor::{Client, ConnectOptions};
 use omnia_wasi_model::{
-    Answer, Format, Function, Grants, Mcp, Message, Request, Role, Schema, Tool, WasiModelCtx,
+    Answer, Error, Format, Function, Grants, Mcp, Message, Request, Role, Schema, Tool,
+    WasiModelCtx,
 };
-use serde_json::json;
-use support::{SENTINEL, TOOL_SENTINEL, local_path_tool_host, no_tool_host, serve};
+use serde_json::{Value, json};
+use support::{
+    CHECK_WORD, SENTINEL, TOOL_SENTINEL, checking_tool_host, local_path_tool_host, no_tool_host,
+    serve,
+};
 use tokio::net::TcpListener;
+
+/// The answer text as the JSON object the prompts ask for.
+fn object(answer: &Answer) -> Value {
+    let value: Value = serde_json::from_str(&answer.answer)
+        .unwrap_or_else(|e| panic!("the answer must be JSON ({e}): {}", answer.answer));
+    assert!(value.is_object(), "the answer must be a JSON object: {value}");
+    value
+}
 
 async fn connect() -> Result<Client> {
     Client::connect_with(ConnectOptions {
@@ -76,6 +88,7 @@ fn verdict_request() -> Request {
         }),
         tools: vec![],
         grants: Grants { workspace: None },
+        check: false,
     }
 }
 
@@ -90,11 +103,10 @@ async fn live_cursor_completes() -> Result<()> {
             anyhow::anyhow!("live cursor completion failed (is cursor-sdk-bridge installed?): {e}")
         })?;
 
-    assert!(answer.value.is_object(), "run-3 answer must be a JSON object: {:?}", answer.value);
+    let value = object(&answer);
     assert!(
-        answer.value.get("verdict").and_then(serde_json::Value::as_str).is_some(),
-        "run-3 answer must carry a string verdict: {:?}",
-        answer.value
+        value.get("verdict").and_then(Value::as_str).is_some(),
+        "run-3 answer must carry a string verdict: {value}"
     );
 
     Ok(())
@@ -129,6 +141,7 @@ fn tool_request() -> Request {
             parameters: json!({ "type": "object", "properties": {} }).to_string(),
         })],
         grants: Grants { workspace: None },
+        check: false,
     }
 }
 
@@ -141,10 +154,10 @@ async fn live_cursor_function_tool_round_trip() -> Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("live cursor function-tool completion failed: {e}"))?;
 
+    let value = object(&answer);
     assert!(
-        answer.value.to_string().contains(TOOL_SENTINEL),
-        "the agent must return the session-provided secret; got: {:?}",
-        answer.value
+        value.to_string().contains(TOOL_SENTINEL),
+        "the agent must return the session-provided secret; got: {value}"
     );
     Ok(())
 }
@@ -160,10 +173,10 @@ async fn no_workspace() -> Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("live cursor no-workspace completion failed: {e}"))?;
 
+    let value = object(&answer);
     assert!(
-        answer.value.to_string().contains(TOOL_SENTINEL),
-        "the agent must return the session-provided secret; got: {:?}",
-        answer.value
+        value.to_string().contains(TOOL_SENTINEL),
+        "the agent must return the session-provided secret; got: {value}"
     );
     Ok(())
 }
@@ -197,6 +210,7 @@ fn secret_request(url: String) -> Request {
             url,
         })],
         grants: Grants { workspace: None },
+        check: false,
     }
 }
 
@@ -213,11 +227,78 @@ async fn uses_mcp() -> Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("live cursor MCP completion failed: {e}"))?;
 
+    let value = object(&answer);
     assert!(
-        answer.value.to_string().contains(SENTINEL),
-        "the agent must return the MCP-provided secret; got: {:?}",
-        answer.value
+        value.to_string().contains(SENTINEL),
+        "the agent must return the MCP-provided secret; got: {value}"
     );
 
+    Ok(())
+}
+
+/// A prompt whose first answer cannot contain the check's word — the agent
+/// only learns it from the correction sent on its session.
+fn check_request() -> Request {
+    Request {
+        model: None,
+        system: Some(
+            "Reply with a JSON object {\"word\": <a single English word>}. Follow any \
+             correction you receive exactly."
+                .to_owned(),
+        ),
+        messages: vec![Message {
+            role: Role::User,
+            content: "Name a colour.".to_owned(),
+        }],
+        generation: None,
+        format: Format::Json,
+        tools: vec![],
+        grants: Grants { workspace: None },
+        check: true,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "live: needs cursor-sdk-bridge and CURSOR_API_KEY; run with --run-ignored"]
+async fn check_corrects_then_accepts() -> Result<()> {
+    let client = connect().await?;
+    let (tool_host, candidates) = checking_tool_host(1);
+    let answer: Answer = client
+        .complete(check_request(), tool_host)
+        .await
+        .map_err(|e| anyhow::anyhow!("live cursor check completion failed: {e}"))?;
+
+    let candidates = candidates.lock().expect("candidates lock").clone();
+    assert_eq!(candidates.len(), 2, "one rejection, one acceptance: {candidates:?}");
+    assert_eq!(answer.answer, candidates[1], "the accepted candidate is the answer");
+    let value = object(&answer);
+    assert_eq!(
+        value.get("word").and_then(Value::as_str),
+        Some(CHECK_WORD),
+        "the correction reached the agent's session: {value}"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "live: needs cursor-sdk-bridge and CURSOR_API_KEY; run with --run-ignored"]
+async fn check_exhausts() -> Result<()> {
+    let client = connect().await?;
+    let (tool_host, candidates) = checking_tool_host(usize::MAX);
+    let error = client
+        .complete(check_request(), tool_host)
+        .await
+        .expect_err("every candidate is rejected, so the round budget ends the completion");
+
+    let correction = match error.downcast_ref::<Error>() {
+        Some(Error::BudgetExhausted(correction)) => correction,
+        other => panic!("expected the typed budget-exhausted carrying the correction: {other:?}"),
+    };
+    let candidates = candidates.lock().expect("candidates lock").clone();
+    assert_eq!(candidates.len(), 2, "the opening prompt and one correction: {candidates:?}");
+    assert!(
+        correction.contains(&candidates[1]),
+        "the detail names the last rejected candidate: {correction}"
+    );
     Ok(())
 }

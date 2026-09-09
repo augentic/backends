@@ -2,6 +2,8 @@
 //!
 //! [`Turn`] maps a validated request into provider messages, tools, and chat
 //! options. A lent workspace adds the host-provided `read` and `list` tools.
+//! The request's `format` becomes the provider `response_format` — steering
+//! only; acceptance is the guest's `check` when the request asks for one.
 
 use std::path::Path;
 
@@ -20,6 +22,7 @@ pub struct Turn {
     pub chat: ChatRequest,
     pub options: ChatOptions,
     pub format: Format,
+    pub check: bool,
     pub prompt_bytes: u64,
     pub tools: usize,
 }
@@ -35,6 +38,7 @@ impl Turn {
             chat,
             options,
             format: request.format.clone(),
+            check: request.check,
             prompt_bytes: prompt_bytes(request),
             tools: request.tools.len(),
         })
@@ -80,8 +84,8 @@ fn build_request(request: &Request, workspace: bool) -> Result<ChatRequest> {
     Ok(chat)
 }
 
-// The host gate reserves these names (`read`, `list`, plus the unadvertised
-// `write`), so no guest tool can shadow them.
+// The host reserves these names (`read`, `list`, plus the unadvertised
+// `write` and the guest's `check`), so no guest tool can shadow them.
 fn workspace_tools() -> [Tool; 2] {
     [
         Tool::new("read")
@@ -96,7 +100,7 @@ fn workspace_tools() -> [Tool; 2] {
     ]
 }
 
-// The host gate already guarantees `parameters` parses as JSON.
+// The host already guarantees `parameters` parses as JSON.
 fn function_tool(function: &Function) -> Result<Tool> {
     let schema: Value = serde_json::from_str(&function.parameters).with_context(|| {
         format!("function tool `{}` parameters is not valid JSON", function.name)
@@ -176,6 +180,7 @@ mod tests {
             format: Format::Text,
             tools,
             grants: Grants { workspace: None },
+            check: false,
         }
     }
 

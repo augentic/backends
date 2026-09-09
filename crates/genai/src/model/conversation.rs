@@ -1,14 +1,14 @@
 //! Provider conversation loop.
 //!
-//! Tool calls and format repairs may add further provider rounds. All rounds
-//! share one budget, bounding cost and guaranteeing termination.
+//! Tool calls and rejected checks may add further provider rounds. All
+//! rounds share one budget, bounding cost and guaranteeing termination.
 
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail};
 use genai::chat::{ChatMessage, ChatOptions, ChatRequest, ToolCall, ToolResponse};
 use omnia_wasi_model::{
-    Answer, Candidate, Format, ToolHost, ToolTurn, Transcript, Usage, WasiModelCtx as _,
+    Answer, Error, Format, ToolHost, ToolTurn, Transcript, Usage, WasiModelCtx as _,
 };
 use serde_json::Value;
 
@@ -25,11 +25,11 @@ pub struct Conversation {
     chat: ChatRequest,
     options: ChatOptions,
     format: Format,
+    check: bool,
     tool_host: Arc<dyn ToolHost>,
     max_result_bytes: usize,
     transcript: Transcript,
     completion: Option<Completion>,
-    unchecked: bool,
 }
 
 impl Conversation {
@@ -42,11 +42,11 @@ impl Conversation {
             chat: turn.chat,
             options: turn.options,
             format: turn.format,
+            check: turn.check,
             tool_host,
             max_result_bytes: client.limits().max_result_bytes,
             transcript: Transcript::default(),
             completion: Some(completion),
-            unchecked: false,
         }
     }
 
@@ -54,8 +54,7 @@ impl Conversation {
         let result = self.run().await;
         let attempts = self.completion.as_ref().map_or(0, Completion::attempts);
         let outcome = match &result {
-            Ok(_) if self.unchecked => "unchecked",
-            Ok(_) if attempts > 1 => "repair",
+            Ok(_) if attempts > 1 => "corrected",
             Ok(_) => "ok",
             Err(error) => observe::outcome_of(error),
         };
@@ -91,13 +90,25 @@ impl Conversation {
                 completion.record(text.len(), self.transcript.turns.len(), usage.as_ref());
             }
 
-            let reason = match self.verdict(&text, usage, round == MAX_ROUNDS)? {
-                Verdict::Done(answer) => return Ok(answer),
-                Verdict::Repair(reason) => reason,
-            };
+            let candidate = self.format.candidate(&text);
+            if !self.check {
+                return Ok(self.answer(candidate, usage));
+            }
 
-            tracing::debug!(%reason, "repairing answer");
-            self.repair(text, &reason);
+            match self.tool_host.check(candidate.clone()).await? {
+                Ok(()) => return Ok(self.answer(candidate, usage)),
+                // The guest's correction is the model's next turn, verbatim;
+                // on the last round it is the typed failure the guest sees.
+                Err(correction) if round == MAX_ROUNDS => {
+                    bail!(Error::BudgetExhausted(correction));
+                }
+                Err(correction) => {
+                    tracing::debug!(%correction, "check rejected the candidate");
+                    self.chat = std::mem::take(&mut self.chat)
+                        .append_message(ChatMessage::assistant(candidate))
+                        .append_message(ChatMessage::user(correction));
+                }
+            }
         }
 
         Err(Failure::Exhausted { rounds: MAX_ROUNDS }.into())
@@ -119,40 +130,13 @@ impl Conversation {
         Ok(())
     }
 
-    fn verdict(&mut self, text: &str, usage: Option<Usage>, last_round: bool) -> Result<Verdict> {
-        match self.format.parse(text) {
-            Ok(Candidate::Valid(value)) => Ok(Verdict::Done(self.answer(value, usage))),
-            Ok(Candidate::Invalid { value, .. }) if last_round => {
-                self.unchecked = true;
-                Ok(Verdict::Done(self.answer(value, usage)))
-            }
-            Err(reason) if last_round => Err(Failure::Invalid {
-                rounds: MAX_ROUNDS,
-                reason,
-            }
-            .into()),
-            Ok(Candidate::Invalid { reason, .. }) | Err(reason) => Ok(Verdict::Repair(reason)),
-        }
-    }
-
-    fn answer(&mut self, value: Value, usage: Option<Usage>) -> Answer {
+    fn answer(&mut self, answer: String, usage: Option<Usage>) -> Answer {
         Answer {
-            value,
+            answer,
             usage,
             transcript: Some(std::mem::take(&mut self.transcript)),
         }
     }
-
-    fn repair(&mut self, answer: String, reason: &str) {
-        self.chat = std::mem::take(&mut self.chat)
-            .append_message(ChatMessage::assistant(answer))
-            .append_message(ChatMessage::user(self.format.repair(reason)));
-    }
-}
-
-enum Verdict {
-    Done(Answer),
-    Repair(String),
 }
 
 // `None` when the provider did not surface any counts.

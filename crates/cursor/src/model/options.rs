@@ -1,7 +1,8 @@
-//! Translate one gate-validated request into a [`Turn`]: guest function
+//! Translate one host-validated request into a [`Turn`]: guest function
 //! tools become SDK custom tools, MCP grants ride inline as `mcp_servers`,
-//! the workspace becomes the agent's `cwd`, and the prompt gains a hint
-//! naming the granted MCP servers.
+//! the workspace becomes the agent's `cwd`, and the prompt gains the
+//! format's final-answer instruction and a hint naming the granted MCP
+//! servers.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -17,13 +18,14 @@ use crate::bridge::{
 };
 
 /// Everything one completion derives from the request: the `CreateAgent`
-/// options, the workspace they point into, the opening prompt, and the
-/// format gate.
+/// options, the workspace they point into, the opening prompt, the format
+/// steering candidate extraction, and whether the guest checks answers.
 pub struct Turn {
     pub options: AgentOptions,
     pub workspace: Workspace,
     pub prompt: String,
     pub format: Format,
+    pub check: bool,
 }
 
 impl Turn {
@@ -46,6 +48,7 @@ impl Turn {
             workspace,
             prompt,
             format: request.format.clone(),
+            check: request.check,
         })
     }
 }
@@ -251,6 +254,7 @@ mod tests {
             format: Format::Text,
             tools: vec![],
             grants: Grants { workspace: None },
+            check: false,
         }
     }
 

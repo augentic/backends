@@ -569,6 +569,10 @@ mod tests {
         fn write(&self, _path: String, _bytes: Vec<u8>) -> FutureResult<()> {
             Box::pin(async { Err(anyhow::anyhow!("unused")) })
         }
+
+        fn check(&self, _candidate: String) -> FutureResult<Result<(), String>> {
+            Box::pin(async { Err(anyhow::anyhow!("unused")) })
+        }
     }
 
     struct Harness {

@@ -61,7 +61,7 @@ anyhow = "1.0.104"
 axum = { version = "0.8.9", default-features = false, features = ["json"] }
 azure_core = "1.1.0"
 azure_identity = "1.0.0"
-azure_storage_blob = "1.0.0"
+azure_storage_blob = "1.1.0"
 base64ct = { version = "1.8.3", features = ["std"] }
 bytes = "1.12.1"
 chrono = "0.4.45"
@@ -70,12 +70,12 @@ futures = "0.3.34"
 getrandom = "0.4.3"
 http = "1.5.0"
 http-body-util = "0.1.5"
-hyper = { version = "1.11.0", default-features = false }
+hyper = { version = "1.11.1", default-features = false }
 hyper-util = { version = "0.1.20", default-features = false }
-jsonschema = { version = "0.52.0", default-features = false }
+jsonschema = { version = "0.55.1", default-features = false }
 prost = "0.14.4"
 prost-types = "0.14.4"
-rustls = { version = "0.23.43", default-features = false, features = ["logging", "ring", "std"] }
+rustls = { version = "0.23.44", default-features = false, features = ["logging", "ring", "std"] }
 schemars = "1.2.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
@@ -118,7 +118,6 @@ omnia-wasi-model = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-sql = { git = "https://github.com/augentic/omnia.git" }
 omnia-wasi-vault = { git = "https://github.com/augentic/omnia.git" }
-
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-core = { path = "../omnia/crates/omnia-core" }
 # omnia-plugin = { path = "../omnia/crates/omnia-plugin" }
