@@ -241,41 +241,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn range_options_full_read_zero_zero() {
+    fn range_full_zero_zero() {
         assert!(range_options(0, 0).unwrap().is_none());
     }
 
     #[test]
-    fn range_options_full_read_zero_max() {
+    fn range_full_zero_max() {
         assert!(range_options(0, u64::MAX).unwrap().is_none());
     }
 
     #[test]
-    fn range_options_offset_with_unbounded_end() {
+    fn range_offset_unbounded() {
         let opts = range_options(100, u64::MAX).unwrap().expect("should produce options");
         assert_eq!(opts.range, Some(HttpRange::from_offset(100)));
     }
 
     #[test]
-    fn range_options_offset_with_zero_end() {
+    fn range_offset_zero() {
         let opts = range_options(100, 0).unwrap().expect("should produce options");
         assert_eq!(opts.range, Some(HttpRange::from_offset(100)));
     }
 
     #[test]
-    fn range_options_bounded_range() {
+    fn range_bounded() {
         let opts = range_options(10, 99).unwrap().expect("should produce options");
         assert_eq!(opts.range, Some(HttpRange::new(10, 90)));
     }
 
     #[test]
-    fn range_options_single_byte() {
+    fn range_single_byte() {
         let opts = range_options(5, 5).unwrap().expect("should produce options");
         assert_eq!(opts.range, Some(HttpRange::new(5, 1)));
     }
 
     #[test]
-    fn range_options_end_before_start() {
+    fn range_end_before_start() {
         let err = range_options(10, 5).unwrap_err();
         assert!(err.to_string().contains("end (5) < start (10)"));
     }

@@ -324,7 +324,7 @@ mod tests {
     use super::{connect_error, decode_frame, end_stream_error, envelope};
 
     #[test]
-    fn envelope_prefixes_flag_and_length() {
+    fn envelope_prefix() {
         let body = envelope(br#"{"agentId":"a"}"#);
         assert_eq!(body[0], 0, "a request message frame carries no flags");
         assert_eq!(u32::from_be_bytes([body[1], body[2], body[3], body[4]]), 15);
@@ -352,7 +352,7 @@ mod tests {
     }
 
     #[test]
-    fn compressed_frame_is_rejected() {
+    fn compressed_frame() {
         let mut body = envelope(b"x");
         body[0] = 0x01;
         let mut buffer = BytesMut::from(body.as_slice());
@@ -361,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn end_stream_flag_is_detected() {
+    fn end_stream_flag() {
         let mut buffer = BytesMut::from(envelope(b"{}").as_slice());
         let mut frame = decode_frame(&mut buffer).expect("decodes").expect("one frame");
         assert!(!frame.is_end_stream());
@@ -370,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn end_stream_error_surfaces_code_and_message() {
+    fn end_stream_error_body() {
         end_stream_error("SdkAgentService/Send", b"{}").expect("no error field, clean end");
         end_stream_error("SdkAgentService/Send", b"not json")
             .expect("an unparsable end frame is not an error");
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn connect_error_prefers_the_structured_body() {
+    fn connect_error_body() {
         let error = connect_error(
             "SdkAgentService/CreateAgent",
             http::StatusCode::NOT_FOUND,

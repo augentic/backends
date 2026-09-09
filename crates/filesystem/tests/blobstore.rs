@@ -40,7 +40,7 @@ async fn container_lifecycle() {
 }
 
 #[tokio::test]
-async fn write_read_round_trip() {
+async fn write_read() {
     let root = TempDir::new().expect("tempdir");
     let client = client(&root);
     let container = snapshots(&client).await;

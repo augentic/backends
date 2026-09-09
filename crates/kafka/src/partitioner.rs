@@ -141,7 +141,7 @@ fn js_xor(a: f64, b: f64) -> f64 {
 
 // Deliberate unit tests: pure KafkaJS-compat vectors (CI floor). A real broker
 // landing keyed sends on these partitions is proven by
-// `tests/live.rs::keyed_sends_land_on_partitioner_partitions`.
+// `tests/live.rs::keyed_sends`.
 #[cfg(test)]
 mod tests {
 

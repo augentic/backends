@@ -53,7 +53,7 @@ async fn round_trip() {
 }
 
 #[tokio::test]
-async fn same_named_bucket_and_container_disjoint() {
+async fn same_named_disjoint() {
     let root = TempDir::new().expect("tempdir");
     let store = client(&root);
     let bucket = state(&store).await;

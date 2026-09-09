@@ -71,7 +71,7 @@ async fn insert_get_delete() -> Result<()> {
 // JSON-string serialization. A second `put` proves upsert semantics.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs Azure Table Storage (AZURE_STORAGE_ACCOUNT/KEY); run with --run-ignored"]
-async fn edm_type_round_trip() -> Result<()> {
+async fn edm_type() -> Result<()> {
     let client = client().await?;
 
     let id = encode_id(&unique_partition("edm"), "row");
@@ -212,7 +212,7 @@ async fn filtered_query_and_continuation() -> Result<()> {
 // data is pulled — never silently evaluated client-side.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs Azure Table Storage (AZURE_STORAGE_ACCOUNT/KEY); run with --run-ignored"]
-async fn unsupported_query_shapes_rejected() -> Result<()> {
+async fn unsupported_query_shapes() -> Result<()> {
     let client = client().await?;
 
     let filter = FilterTree::Contains {
