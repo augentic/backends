@@ -31,7 +31,11 @@ tracing.workspace = true
 
 # Integration tests are separate crates and do not inherit the library's normal
 # dependencies, so the ones the live tests (`tests/live.rs`) drive are
-# repeated here.
+# repeated here. The hyper server stack stands up the scripted provider the
+# conversation loop's unit tests talk to.
 [dev-dependencies]
 futures.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["http1", "server"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }

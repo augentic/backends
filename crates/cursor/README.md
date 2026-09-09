@@ -119,7 +119,13 @@ let client = Client::connect_with(ConnectOptions {
 
 The full guest + runtime demo lives in [`examples/cursor`](../../examples/cursor). The guest declares a function tool and answers each session `tool-call` with a `ToolResult`.
 
-## Live tests
+## Tests
+
+The agent loop's unit tests (in `src/model/agent.rs`) run the guest `check`
+loop against a scripted loopback `sdk.v1` bridge — accept, correct-then-accept
+(the correction alone is the next `Send` on the same agent), and exhaust (the
+typed `budget-exhausted` carrying the last correction) — so the loop is covered
+on every `make test` without a bridge process.
 
 [`tests/live.rs`](tests/live.rs) drives real completions through the
 `wasi-model` boundary: the plain acceptance run, a function-tool round-trip

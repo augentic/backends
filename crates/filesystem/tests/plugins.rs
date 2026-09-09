@@ -12,7 +12,7 @@ fn client(root: &TempDir) -> Client {
 }
 
 #[tokio::test]
-async fn content_round_trip() {
+async fn content() {
     let root = TempDir::new().expect("tempdir");
     let store = client(&root);
 
@@ -41,7 +41,7 @@ async fn mismatched_content_refused() {
 }
 
 #[tokio::test]
-async fn release_round_trip() {
+async fn release() {
     let root = TempDir::new().expect("tempdir");
     let store = client(&root);
 
@@ -89,7 +89,7 @@ async fn releases_scoped_per_registry() {
 }
 
 #[tokio::test]
-async fn plugins_tree_disjoint_from_guest_storage() {
+async fn plugins_tree_disjoint() {
     let root = TempDir::new().expect("tempdir");
     let store = client(&root);
 

@@ -286,17 +286,279 @@ impl Deadlines {
     }
 }
 
+// The deadline arithmetic, and the check loop over a scripted `sdk.v1`
+// bridge (CI floor): accept, correct-then-accept, exhaust. `tests/live.rs`
+// proves the same loop against a real bridge.
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    use http_body_util::{BodyExt as _, Full};
+    use hyper::body::{Bytes, Incoming};
+    use hyper::header::CONTENT_TYPE;
+    use hyper::server::conn::http1;
+    use hyper::service::service_fn;
+    use hyper_util::rt::TokioIo;
+    use omnia_wasi_model::{
+        DirEntry, Error, Format, FutureResult, Grants, Message, Request, Role, ToolHost,
+        WasiModelCtx as _,
+    };
+    use serde_json::{Value, json};
+    use tokio::net::TcpListener;
     use tokio::sync::watch;
     use tokio::time::{Duration, Instant, sleep};
 
-    use super::Deadlines;
+    use super::{Deadlines, MAX_ROUNDS};
+    use crate::Client;
+    use crate::bridge::Bridge;
+    use crate::model::options::with_dummy_key;
 
     const DEADLINES: Deadlines = Deadlines {
         inactivity: Duration::from_mins(2),
         cap: Duration::from_mins(10),
     };
+
+    /// Every `Send` text a scripted bridge received, in order.
+    type Sends = Arc<Mutex<Vec<String>>>;
+
+    /// A client over a loopback `sdk.v1` bridge whose agent answers `Send`
+    /// number `n` with `replies[n]` (the last reply repeats) and records
+    /// each text sent.
+    async fn scripted(replies: &[&str]) -> (Client, Sends) {
+        with_dummy_key();
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.expect("bind loopback");
+        let addr = listener.local_addr().expect("local address");
+        let replies: Arc<Vec<String>> = Arc::new(replies.iter().map(|r| (*r).to_owned()).collect());
+        let sends = Sends::default();
+        tokio::spawn(serve(listener, replies, Arc::clone(&sends)));
+
+        let bridge = Bridge::connect(format!("http://{addr}"), "test-token")
+            .await
+            .expect("the scripted bridge answers the handshake");
+        let client = Client {
+            deadlines: DEADLINES,
+            model: "auto".to_owned(),
+            bridge: Arc::new(bridge),
+        };
+        (client, sends)
+    }
+
+    async fn serve(listener: TcpListener, replies: Arc<Vec<String>>, sends: Sends) {
+        while let Ok((stream, _)) = listener.accept().await {
+            let replies = Arc::clone(&replies);
+            let sends = Arc::clone(&sends);
+            tokio::spawn(async move {
+                let service = service_fn(move |request: hyper::Request<Incoming>| {
+                    let replies = Arc::clone(&replies);
+                    let sends = Arc::clone(&sends);
+                    async move {
+                        let path = request.uri().path().to_owned();
+                        let body = request.into_body().collect().await?.to_bytes();
+                        Ok::<_, hyper::Error>(procedure(&path, &body, &replies, &sends))
+                    }
+                });
+                let _ = http1::Builder::new().serve_connection(TokioIo::new(stream), service).await;
+            });
+        }
+    }
+
+    /// One `sdk.v1` procedure: the handshake and lifecycle calls answer
+    /// minimally; `Send` records the text and streams the scripted result.
+    fn procedure(
+        path: &str, body: &[u8], replies: &[String], sends: &Sends,
+    ) -> hyper::Response<Full<Bytes>> {
+        let (content_type, body) = match path {
+            "/sdk.v1.SdkBridgeControlService/GetVersion" => (
+                "application/json",
+                json!({ "protocolVersion": "sdk.v1" }).to_string().into_bytes(),
+            ),
+            "/sdk.v1.SdkAgentService/CreateAgent" => {
+                ("application/json", json!({ "agentId": "agent-1" }).to_string().into_bytes())
+            }
+            "/sdk.v1.SdkAgentService/Send" => {
+                // The request rides as one Connect envelope: a 5-byte prefix,
+                // then the JSON `SendRequest`.
+                let request: Value =
+                    serde_json::from_slice(&body[5..]).expect("an enveloped SendRequest");
+                let text = request["message"]["text"].as_str().unwrap_or_default().to_owned();
+                let round = {
+                    let mut seen = sends.lock().expect("sends lock");
+                    seen.push(text);
+                    seen.len() - 1
+                };
+                let result = replies.get(round).or_else(|| replies.last());
+                ("application/connect+json", run_stream(round, result.map_or("", String::as_str)))
+            }
+            // Ping, Shutdown, CancelRun, DeleteAgent
+            _ => ("application/json", b"{}".to_vec()),
+        };
+        hyper::Response::builder()
+            .header(CONTENT_TYPE, content_type)
+            .body(Full::new(Bytes::from(body)))
+            .expect("a well-formed response")
+    }
+
+    /// A finished run's stream: the result-and-done frame, then the end
+    /// frame.
+    fn run_stream(round: usize, result: &str) -> Vec<u8> {
+        let run_id = format!("run-{round}");
+        let message = json!({
+            "result": {
+                "runId": run_id,
+                "status": "RUN_LIFECYCLE_STATUS_FINISHED",
+                "result": {
+                    "runId": run_id,
+                    "result": result,
+                    "usage": { "inputTokens": "3", "outputTokens": "1" },
+                },
+            },
+            "done": {},
+        });
+        let mut body = envelope(0, message.to_string().as_bytes());
+        body.extend(envelope(0x02, b"{}"));
+        body
+    }
+
+    fn envelope(flags: u8, payload: &[u8]) -> Vec<u8> {
+        let mut frame = vec![flags];
+        frame.extend_from_slice(&u32::try_from(payload.len()).expect("frame fits").to_be_bytes());
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    /// The guest's stand-in: rejects the first `rejections` candidates with a
+    /// correction naming them, accepts the rest, and records every candidate.
+    #[derive(Debug)]
+    struct Check {
+        rejections: usize,
+        seen: AtomicUsize,
+        candidates: Mutex<Vec<String>>,
+    }
+
+    impl Check {
+        fn rejecting(rejections: usize) -> Arc<Self> {
+            Arc::new(Self {
+                rejections,
+                seen: AtomicUsize::new(0),
+                candidates: Mutex::new(Vec::new()),
+            })
+        }
+
+        fn host(self: &Arc<Self>) -> Arc<dyn ToolHost> {
+            let host: Arc<Self> = Arc::clone(self);
+            host
+        }
+
+        fn candidates(&self) -> Vec<String> {
+            self.candidates.lock().expect("candidates lock").clone()
+        }
+    }
+
+    impl ToolHost for Check {
+        fn call_tool(
+            &self, name: String, _arguments: String,
+        ) -> FutureResult<Result<String, String>> {
+            Box::pin(
+                async move { Err(anyhow::anyhow!("no function tools are declared: `{name}`")) },
+            )
+        }
+
+        fn read(&self, _path: String) -> FutureResult<Vec<u8>> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor never routes `read` through the host")) })
+        }
+
+        fn list(&self, _path: String) -> FutureResult<Vec<DirEntry>> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor never routes `list` through the host")) })
+        }
+
+        fn write(&self, _path: String, _bytes: Vec<u8>) -> FutureResult<()> {
+            Box::pin(async { Err(anyhow::anyhow!("cursor never routes `write` through the host")) })
+        }
+
+        fn check(&self, candidate: String) -> FutureResult<Result<(), String>> {
+            let seen = self.seen.fetch_add(1, Ordering::SeqCst);
+            self.candidates.lock().expect("candidates lock").push(candidate.clone());
+            let verdict = if seen < self.rejections {
+                Err(format!(
+                    "## Previous answer (rejected)\n\n{candidate}\n\n## Findings\n\nnot it"
+                ))
+            } else {
+                Ok(())
+            };
+            Box::pin(async move { Ok(verdict) })
+        }
+    }
+
+    fn request(check: bool) -> Request {
+        Request {
+            model: None,
+            system: Some("answer with one word".to_owned()),
+            messages: vec![Message {
+                role: Role::User,
+                content: "hi".to_owned(),
+            }],
+            generation: None,
+            format: Format::Text,
+            tools: vec![],
+            grants: Grants { workspace: None },
+            check,
+        }
+    }
+
+    #[tokio::test]
+    async fn unchecked() {
+        let (client, sends) = scripted(&["alpha"]).await;
+        let check = Check::rejecting(usize::MAX);
+        let answer = client.complete(request(false), check.host()).await.expect("completes");
+        assert_eq!(answer.answer, "alpha");
+        assert_eq!(answer.usage.map(|u| (u.input_tokens, u.output_tokens)), Some((3, 1)));
+        assert!(check.candidates().is_empty(), "no check was asked for");
+        let sends = sends.lock().expect("sends lock").clone();
+        assert_eq!(sends.len(), 1);
+        assert!(sends[0].contains("hi"), "the opening prompt carries the request: {}", sends[0]);
+    }
+
+    #[tokio::test]
+    async fn check_accepts() {
+        let (client, sends) = scripted(&["alpha"]).await;
+        let check = Check::rejecting(0);
+        let answer = client.complete(request(true), check.host()).await.expect("completes");
+        assert_eq!(answer.answer, "alpha");
+        assert_eq!(check.candidates(), ["alpha"]);
+        assert_eq!(sends.lock().expect("sends lock").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn check_corrects() {
+        let (client, sends) = scripted(&["alpha", "beta"]).await;
+        let check = Check::rejecting(1);
+        let answer = client.complete(request(true), check.host()).await.expect("completes");
+        assert_eq!(answer.answer, "beta", "the accepted candidate is the answer");
+        assert_eq!(check.candidates(), ["alpha", "beta"]);
+
+        // The agent keeps its session, so the second send is the correction
+        // alone, verbatim.
+        let sends = sends.lock().expect("sends lock").clone();
+        assert_eq!(sends.len(), 2);
+        assert_eq!(sends[1], "## Previous answer (rejected)\n\nalpha\n\n## Findings\n\nnot it");
+    }
+
+    #[tokio::test]
+    async fn check_exhausts() {
+        let (client, sends) = scripted(&["alpha"]).await;
+        let check = Check::rejecting(usize::MAX);
+        let error = client
+            .complete(request(true), check.host())
+            .await
+            .expect_err("every candidate is rejected");
+        let Some(Error::BudgetExhausted(correction)) = error.downcast_ref::<Error>() else {
+            panic!("expected the typed budget-exhausted: {error:?}");
+        };
+        assert!(correction.contains("## Findings\n\nnot it"), "the last correction: {correction}");
+        assert_eq!(check.candidates().len(), MAX_ROUNDS, "every round offered a candidate");
+        assert_eq!(sends.lock().expect("sends lock").len(), MAX_ROUNDS);
+    }
 
     #[tokio::test(start_paused = true)]
     async fn hit_deadline() {

@@ -80,7 +80,7 @@ mod tests {
     use super::{struct_to_value, value_to_struct};
 
     #[test]
-    fn struct_round_trip_preserves_nested_shapes() {
+    fn nested_struct() {
         let original = json!({
             "text": "hello",
             "count": 3.5,
@@ -94,7 +94,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_object_round_trips() {
+    fn empty_object() {
         let Value::Object(object) = json!({}) else { unreachable!() };
         assert_eq!(struct_to_value(&value_to_struct(&object)), json!({}));
     }

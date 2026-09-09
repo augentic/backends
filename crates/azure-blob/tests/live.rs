@@ -22,7 +22,7 @@ async fn write_read_delete() -> Result<()> {
     let object = "greeting".to_owned();
     store.write_data(object.clone(), b"payload".to_vec().into()).await?;
 
-    // (0, 0) is a full read (see `range_options_full_read_zero_zero`).
+    // (0, 0) is a full read (see `range_full_zero_zero`).
     assert_eq!(store.get_data(object.clone(), 0, 0).await?.as_deref(), Some(b"payload".as_slice()));
     assert!(store.has_object(object.clone()).await?, "object exists after write");
 
@@ -88,7 +88,7 @@ async fn ranged_reads() -> Result<()> {
 /// guest container named `plugins`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs an Azure Blob endpoint (AZURE_BLOB_ENDPOINT); run with --run-ignored"]
-async fn plugin_store_round_trip() -> Result<()> {
+async fn plugin_store() -> Result<()> {
     use omnia_core::sha256_digest;
     use omnia_plugin::{ContentStore, ReleaseStore};
 

@@ -94,7 +94,7 @@ fn keyed_message(payload: &str, metadata: &[(&str, &str)]) -> Message {
 /// proves `send` routes through the custom partitioner, not librdkafka's.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs a reachable Kafka broker (KAFKA_BROKERS); run with --run-ignored"]
-async fn keyed_sends_land_on_partitioner_partitions() -> Result<()> {
+async fn keyed_sends() -> Result<()> {
     let topic = unique("omnia.live.partitions");
     create_topic(&topic, 12).await?;
 
@@ -148,7 +148,7 @@ async fn keyed_sends_land_on_partitioner_partitions() -> Result<()> {
 /// and that the boundary subscriber hands back the decoded payload.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs Kafka + Schema Registry (KAFKA_BROKERS, KAFKA_REGISTRY_URL); run with --run-ignored"]
-async fn registry_wire_format_round_trip() -> Result<()> {
+async fn registry_wire_format() -> Result<()> {
     use schema_registry_client::rest::client_config::ClientConfig as RegistryClientConfig;
     use schema_registry_client::rest::models::Schema;
     use schema_registry_client::rest::schema_registry_client::{Client as _, SchemaRegistryClient};

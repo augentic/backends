@@ -77,7 +77,14 @@ let client = Client::connect_with(ConnectOptions {
 }).await?;
 ```
 
-## Live tests
+## Tests
+
+The conversation loop's unit tests (in `src/model/conversation.rs`) run the
+guest `check` loop against a scripted loopback chat-completions endpoint —
+accept, correct-then-accept (the rejected candidate and the correction become
+the next round's turns), and exhaust (the typed `budget-exhausted` carrying the
+last correction) — so the loop is covered on every `make test` without a
+provider.
 
 [`tests/live.rs`](tests/live.rs) drives real completions through the `wasi-model`
 boundary: the in-process tool loop with function-tool dispatch, the

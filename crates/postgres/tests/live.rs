@@ -34,7 +34,7 @@ fn assert_field(row: &omnia_wasi_sql::Row, name: &str, expected: &DataType) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs a reachable Postgres (POSTGRES_URL); run with --run-ignored"]
-async fn scalar_type_round_trips() -> Result<()> {
+async fn scalar_types() -> Result<()> {
     let conn = connect().await?;
 
     let rows = conn
@@ -74,7 +74,7 @@ async fn scalar_type_round_trips() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs a reachable Postgres (POSTGRES_URL); run with --run-ignored"]
-async fn temporal_and_json_round_trips() -> Result<()> {
+async fn temporal_and_json() -> Result<()> {
     let conn = connect().await?;
 
     let json = r#"{"a":[1,2,null],"b":{"nested":true}}"#;
@@ -119,7 +119,7 @@ async fn temporal_and_json_round_trips() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs a reachable Postgres (POSTGRES_URL); run with --run-ignored"]
-async fn null_round_trips() -> Result<()> {
+async fn nulls() -> Result<()> {
     let conn = connect().await?;
 
     let rows = conn
@@ -149,7 +149,7 @@ async fn null_round_trips() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs a reachable Postgres (POSTGRES_URL); run with --run-ignored"]
-async fn uint64_overflow_rejected_at_boundary() -> Result<()> {
+async fn uint64_overflow() -> Result<()> {
     let conn = connect().await?;
 
     let err = conn

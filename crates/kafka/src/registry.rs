@@ -222,7 +222,7 @@ impl Payload<'_> {
 }
 
 // Deliberate unit tests: pure wire-format codec (CI floor). A real registry
-// accepting this layout is proven by `tests/live.rs::registry_wire_format_round_trip`.
+// accepting this layout is proven by `tests/live.rs::registry_wire_format`.
 #[cfg(test)]
 mod tests {
     use super::*; // brings Payload, BIG_ENDIAN, MessagingError into scope

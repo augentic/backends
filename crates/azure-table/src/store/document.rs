@@ -188,7 +188,7 @@ fn insert_typed_property(
 
 // Unit tests cover the pure codec and rejection paths only. The happy-path
 // flatten/annotation mappings (Edm.Int64/Double, nulls, nested-as-string) are
-// proven against the real service by `tests/live.rs::edm_type_round_trip`.
+// proven against the real service by `tests/live.rs::edm_type`.
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -241,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn flatten_u64_overflow_rejected() {
+    fn flatten_u64_overflow() {
         let doc = Document {
             id: encode_id("pk1", "r1"),
             data: serde_json::to_vec(&json!({ "bigU": u64::MAX })).unwrap(),

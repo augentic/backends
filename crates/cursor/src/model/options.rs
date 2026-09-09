@@ -181,13 +181,26 @@ fn with_mcp_hint(servers: &[&Mcp], prompt: String) -> String {
     )
 }
 
+/// Give `AgentOptions::from_request` the `CURSOR_API_KEY` it reads, when the
+/// environment has none.
+#[cfg(test)]
+pub(super) fn with_dummy_key() {
+    static SET: std::sync::Once = std::sync::Once::new();
+    SET.call_once(|| {
+        if env::var_os("CURSOR_API_KEY").is_none() {
+            // SAFETY: dummy value set once and never unset; tests only read it.
+            unsafe { env::set_var("CURSOR_API_KEY", "test-key") }
+        }
+    });
+}
+
 // The lent/private workspace wire distinction (CI floor). Tool/MCP/model
 // mapping is accepted by `tests/live.rs`.
 #[cfg(test)]
 mod tests {
     use omnia_wasi_model::{Format, Grants, Mcp, Message, Request, Role, Tool};
 
-    use super::{Workspace, with_mcp_hint};
+    use super::{Workspace, with_dummy_key, with_mcp_hint};
     use crate::bridge::AgentOptions;
 
     #[test]
@@ -264,15 +277,5 @@ mod tests {
 
     fn private() -> Workspace {
         Workspace::Private(tempfile::tempdir().expect("temp cwd"))
-    }
-
-    fn with_dummy_key() {
-        static SET: std::sync::Once = std::sync::Once::new();
-        SET.call_once(|| {
-            if std::env::var_os("CURSOR_API_KEY").is_none() {
-                // SAFETY: dummy value set once and never unset; tests only read it.
-                unsafe { std::env::set_var("CURSOR_API_KEY", "test-key") }
-            }
-        });
     }
 }

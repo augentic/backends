@@ -329,7 +329,7 @@ async fn live_genai_workspace_tools() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs a provider key (e.g. OPENAI_API_KEY); run with --run-ignored"]
-async fn live_genai_check_corrects_then_accepts() -> Result<()> {
+async fn live_genai_check_corrects() -> Result<()> {
     let client = Client::connect().await?;
     let (check, candidates) = LiveCheck::rejecting(1);
     let answer: Answer = client.complete(check_request(), check).await.map_err(|e| {

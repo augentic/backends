@@ -106,6 +106,18 @@ impl Bridge {
         })
     }
 
+    /// A bridge over an `sdk.v1` endpoint already listening at `base`: a
+    /// scripted stand-in for the spawned process.
+    #[cfg(test)]
+    pub async fn connect(base: String, token: &str) -> Result<Self> {
+        let (tx, _rx) = oneshot::channel();
+        Ok(Self {
+            rpc: Rpc::connect(base, token).await?,
+            _shutdown: tx,
+            endpoint: Endpoint::bind().await?,
+        })
+    }
+
     pub const fn rpc(&self) -> &Rpc {
         &self.rpc
     }

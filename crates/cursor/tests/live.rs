@@ -147,7 +147,7 @@ fn tool_request() -> Request {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs cursor-sdk-bridge and CURSOR_API_KEY; run with --run-ignored"]
-async fn live_cursor_function_tool_round_trip() -> Result<()> {
+async fn live_cursor_function_tool() -> Result<()> {
     let client = connect().await?;
     let answer: Answer = client
         .complete(tool_request(), local_path_tool_host(temp_workspace("tool")?))
@@ -260,7 +260,7 @@ fn check_request() -> Request {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live: needs cursor-sdk-bridge and CURSOR_API_KEY; run with --run-ignored"]
-async fn check_corrects_then_accepts() -> Result<()> {
+async fn check_corrects() -> Result<()> {
     let client = connect().await?;
     let (tool_host, candidates) = checking_tool_host(1);
     let answer: Answer = client
