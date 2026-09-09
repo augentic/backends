@@ -1,9 +1,10 @@
 //! A bridge-managed agent: `send` drives a turn's run stream to its
 //! terminal result, bounded by an inactivity deadline that stream progress
 //! rearms, an absolute wall-clock cap, and the callback's abort signal.
-//! An abandoned run is cancelled best-effort, and the agent (with its
-//! session state) is deleted on drop.
+//! An abandoned run is cancelled best-effort. After the turn, the agent is
+//! closed and deleted against the create-time cwd; `Drop` is only a fallback.
 
+use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,6 +26,7 @@ const MAX_ROUNDS: usize = 2;
 pub struct Agent {
     rpc: Rpc,
     id: String,
+    cwd: String,
     deadlines: Deadlines,
     prompt: String,
     format: Format,
@@ -34,13 +36,14 @@ pub struct Agent {
     abort_rx: mpsc::UnboundedReceiver<String>,
     completion: Option<Completion>,
     _attached: Attached,
-    _workspace: Workspace,
+    workspace: Option<Workspace>,
 }
 
 impl Agent {
     pub async fn create(client: &Client, turn: Turn, tool_host: Arc<dyn ToolHost>) -> Result<Self> {
         let completion = Completion::start(&turn);
         let rpc = client.bridge.rpc().clone();
+        let cwd = turn.options.local.cwd.first().cloned().unwrap_or_default();
 
         let created = match rpc.create_agent(turn.options).await {
             Ok(created) => created,
@@ -57,6 +60,7 @@ impl Agent {
         Ok(Self {
             rpc,
             id: created.agent_id,
+            cwd,
             deadlines: client.deadlines,
             prompt: turn.prompt,
             format: turn.format,
@@ -66,7 +70,7 @@ impl Agent {
             abort_rx,
             completion: Some(completion),
             _attached: attached,
-            _workspace: turn.workspace,
+            workspace: Some(turn.workspace),
         })
     }
 
@@ -81,6 +85,7 @@ impl Agent {
         if let Some(completion) = self.completion.take() {
             completion.finish(outcome);
         }
+        self.dispose().await;
         result
     }
 
@@ -202,25 +207,63 @@ impl Agent {
             });
         }
     }
+
+    async fn dispose(&mut self) {
+        if let Some(release) = self.take_release() {
+            release.run().await;
+        }
+    }
+
+    fn take_release(&mut self) -> Option<Release> {
+        let id = std::mem::take(&mut self.id);
+        if id.is_empty() {
+            return None;
+        }
+        Some(Release {
+            rpc: self.rpc.clone(),
+            id,
+            cwd: std::mem::take(&mut self.cwd),
+            run_id: self.live_run.take(),
+            workspace: self.workspace.take(),
+        })
+    }
+}
+
+/// Close then delete, holding the create-time cwd until both RPCs finish so
+/// a private workspace is still visible to the local store.
+struct Release {
+    rpc: Rpc,
+    id: String,
+    cwd: String,
+    run_id: Option<String>,
+    workspace: Option<Workspace>,
+}
+
+impl Release {
+    async fn run(self) {
+        if let Some(run_id) = self.run_id
+            && let Err(error) = self.rpc.cancel_run(run_id, self.id.clone()).await
+        {
+            tracing::debug!(%error, "cancel after abandon failed");
+        }
+        if let Err(error) = self.rpc.close_agent(self.id.clone()).await {
+            tracing::debug!(%error, "agent close failed");
+        }
+        let api_key = env::var("CURSOR_API_KEY").unwrap_or_default();
+        if let Err(error) = self.rpc.delete_agent(self.id, self.cwd, api_key).await {
+            tracing::debug!(%error, "agent delete failed");
+        }
+        drop(self.workspace);
+    }
 }
 
 impl Drop for Agent {
     fn drop(&mut self) {
-        let rpc = self.rpc.clone();
-        let agent_id = std::mem::take(&mut self.id);
-        let run_id = self.live_run.take();
-
+        let Some(release) = self.take_release() else {
+            return;
+        };
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                if let Some(run_id) = run_id
-                    && let Err(error) = rpc.cancel_run(run_id, agent_id.clone()).await
-                {
-                    tracing::debug!(%error, "cancel after abandon failed");
-                }
-                if let Err(error) = rpc.delete_agent(agent_id).await {
-                    tracing::debug!(%error, "agent delete failed");
-                }
-            });
+            handle.spawn(release.run());
         }
     }
 }
@@ -321,17 +364,20 @@ mod tests {
 
     /// Every `Send` text a scripted bridge received, in order.
     type Sends = Arc<Mutex<Vec<String>>>;
+    /// Every `DeleteAgent` body, so cleanup can assert the create-time cwd.
+    type Deletes = Arc<Mutex<Vec<Value>>>;
 
     /// A client over a loopback `sdk.v1` bridge whose agent answers `Send`
     /// number `n` with `replies[n]` (the last reply repeats) and records
     /// each text sent.
-    async fn scripted(replies: &[&str]) -> (Client, Sends) {
+    async fn scripted(replies: &[&str]) -> (Client, Sends, Deletes) {
         with_dummy_key();
         let listener = TcpListener::bind(("127.0.0.1", 0)).await.expect("bind loopback");
         let addr = listener.local_addr().expect("local address");
         let replies: Arc<Vec<String>> = Arc::new(replies.iter().map(|r| (*r).to_owned()).collect());
         let sends = Sends::default();
-        tokio::spawn(serve(listener, replies, Arc::clone(&sends)));
+        let deletes = Deletes::default();
+        tokio::spawn(serve(listener, replies, Arc::clone(&sends), Arc::clone(&deletes)));
 
         let bridge = Bridge::connect(format!("http://{addr}"), "test-token")
             .await
@@ -341,21 +387,25 @@ mod tests {
             model: "auto".to_owned(),
             bridge: Arc::new(bridge),
         };
-        (client, sends)
+        (client, sends, deletes)
     }
 
-    async fn serve(listener: TcpListener, replies: Arc<Vec<String>>, sends: Sends) {
+    async fn serve(
+        listener: TcpListener, replies: Arc<Vec<String>>, sends: Sends, deletes: Deletes,
+    ) {
         while let Ok((stream, _)) = listener.accept().await {
             let replies = Arc::clone(&replies);
             let sends = Arc::clone(&sends);
+            let deletes = Arc::clone(&deletes);
             tokio::spawn(async move {
                 let service = service_fn(move |request: hyper::Request<Incoming>| {
                     let replies = Arc::clone(&replies);
                     let sends = Arc::clone(&sends);
+                    let deletes = Arc::clone(&deletes);
                     async move {
                         let path = request.uri().path().to_owned();
                         let body = request.into_body().collect().await?.to_bytes();
-                        Ok::<_, hyper::Error>(procedure(&path, &body, &replies, &sends))
+                        Ok::<_, hyper::Error>(procedure(&path, &body, &replies, &sends, &deletes))
                     }
                 });
                 let _ = http1::Builder::new().serve_connection(TokioIo::new(stream), service).await;
@@ -366,7 +416,7 @@ mod tests {
     /// One `sdk.v1` procedure: the handshake and lifecycle calls answer
     /// minimally; `Send` records the text and streams the scripted result.
     fn procedure(
-        path: &str, body: &[u8], replies: &[String], sends: &Sends,
+        path: &str, body: &[u8], replies: &[String], sends: &Sends, deletes: &Deletes,
     ) -> hyper::Response<Full<Bytes>> {
         let (content_type, body) = match path {
             "/sdk.v1.SdkBridgeControlService/GetVersion" => (
@@ -390,7 +440,13 @@ mod tests {
                 let result = replies.get(round).or_else(|| replies.last());
                 ("application/connect+json", run_stream(round, result.map_or("", String::as_str)))
             }
-            // Ping, Shutdown, CancelRun, DeleteAgent
+            "/sdk.v1.SdkAgentService/DeleteAgent" => {
+                let request: Value =
+                    serde_json::from_slice(body).expect("a JSON DeleteAgentRequest");
+                deletes.lock().expect("deletes lock").push(request);
+                ("application/json", b"{}".to_vec())
+            }
+            // Ping, Shutdown, CancelRun, CloseAgent
             _ => ("application/json", b"{}".to_vec()),
         };
         hyper::Response::builder()
@@ -490,6 +546,18 @@ mod tests {
         }
     }
 
+    fn assert_scoped_delete(deletes: &Deletes) {
+        let (cwd, key, body) = {
+            let deletes = deletes.lock().expect("deletes lock");
+            assert_eq!(deletes.len(), 1, "complete awaits one DeleteAgent: {deletes:?}");
+            let cwd = deletes[0]["options"]["cwd"].as_str().unwrap_or_default().to_owned();
+            let key = deletes[0]["options"]["apiKey"].as_str().unwrap_or_default().to_owned();
+            (cwd, key, deletes[0].clone())
+        };
+        assert!(!cwd.is_empty(), "delete repeats the create-time cwd: {body}");
+        assert!(!key.is_empty(), "delete repeats the create-time key: {body}");
+    }
+
     fn request(check: bool) -> Request {
         Request {
             model: None,
@@ -508,7 +576,7 @@ mod tests {
 
     #[tokio::test]
     async fn unchecked() {
-        let (client, sends) = scripted(&["alpha"]).await;
+        let (client, sends, deletes) = scripted(&["alpha"]).await;
         let check = Check::rejecting(usize::MAX);
         let answer = client.complete(request(false), check.host()).await.expect("completes");
         assert_eq!(answer.answer, "alpha");
@@ -517,21 +585,23 @@ mod tests {
         let sends = sends.lock().expect("sends lock").clone();
         assert_eq!(sends.len(), 1);
         assert!(sends[0].contains("hi"), "the opening prompt carries the request: {}", sends[0]);
+        assert_scoped_delete(&deletes);
     }
 
     #[tokio::test]
     async fn check_accepts() {
-        let (client, sends) = scripted(&["alpha"]).await;
+        let (client, sends, deletes) = scripted(&["alpha"]).await;
         let check = Check::rejecting(0);
         let answer = client.complete(request(true), check.host()).await.expect("completes");
         assert_eq!(answer.answer, "alpha");
         assert_eq!(check.candidates(), ["alpha"]);
         assert_eq!(sends.lock().expect("sends lock").len(), 1);
+        assert_scoped_delete(&deletes);
     }
 
     #[tokio::test]
     async fn check_corrects() {
-        let (client, sends) = scripted(&["alpha", "beta"]).await;
+        let (client, sends, deletes) = scripted(&["alpha", "beta"]).await;
         let check = Check::rejecting(1);
         let answer = client.complete(request(true), check.host()).await.expect("completes");
         assert_eq!(answer.answer, "beta", "the accepted candidate is the answer");
@@ -542,11 +612,12 @@ mod tests {
         let sends = sends.lock().expect("sends lock").clone();
         assert_eq!(sends.len(), 2);
         assert_eq!(sends[1], "## Previous answer (rejected)\n\nalpha\n\n## Findings\n\nnot it");
+        assert_scoped_delete(&deletes);
     }
 
     #[tokio::test]
     async fn check_exhausts() {
-        let (client, sends) = scripted(&["alpha"]).await;
+        let (client, sends, deletes) = scripted(&["alpha"]).await;
         let check = Check::rejecting(usize::MAX);
         let error = client
             .complete(request(true), check.host())
@@ -558,6 +629,7 @@ mod tests {
         assert!(correction.contains("## Findings\n\nnot it"), "the last correction: {correction}");
         assert_eq!(check.candidates().len(), MAX_ROUNDS, "every round offered a candidate");
         assert_eq!(sends.lock().expect("sends lock").len(), MAX_ROUNDS);
+        assert_scoped_delete(&deletes);
     }
 
     #[tokio::test(start_paused = true)]
