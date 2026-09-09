@@ -22,8 +22,9 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use super::messages::{
-    AgentOptions, CancelRunRequest, CreateAgentRequest, CreateAgentResponse, DeleteAgentRequest,
-    Empty, GetVersionResponse, RunStreamMessage, SendRequest, ShutdownRequest, UserMessage,
+    AgentOperationOptions, AgentOptions, CancelRunRequest, CloseAgentRequest, CreateAgentRequest,
+    CreateAgentResponse, DeleteAgentRequest, Empty, GetVersionResponse, RunStreamMessage,
+    SendRequest, ShutdownRequest, UserMessage,
 };
 
 /// Envelope flag bit marking the end-of-stream frame.
@@ -94,11 +95,29 @@ impl Rpc {
         self.unary::<_, Empty>("SdkAgentService/CancelRun", &request).await.map(drop)
     }
 
-    /// `DeleteAgent`: discard the agent and its session state.
-    pub async fn delete_agent(&self, agent_id: String) -> Result<()> {
-        self.unary::<_, Empty>("SdkAgentService/DeleteAgent", &DeleteAgentRequest { agent_id })
+    /// `CloseAgent`: release the live handle. Durable rows stay until delete.
+    pub async fn close_agent(&self, agent_id: String) -> Result<()> {
+        gone_ok(
+            self.unary::<_, Empty>("SdkAgentService/CloseAgent", &CloseAgentRequest { agent_id })
+                .await
+                .map(drop),
+        )
+    }
+
+    /// `DeleteAgent`: discard durable session state. Local lookup is
+    /// cwd-scoped, so `cwd` must be the create-time workspace.
+    pub async fn delete_agent(&self, agent_id: String, cwd: String, api_key: String) -> Result<()> {
+        gone_ok(
+            self.unary::<_, Empty>(
+                "SdkAgentService/DeleteAgent",
+                &DeleteAgentRequest {
+                    agent_id,
+                    options: AgentOperationOptions { cwd, api_key },
+                },
+            )
             .await
-            .map(drop)
+            .map(drop),
+        )
     }
 
     /// `Send`: one agent turn; the stream yields the run's messages.
@@ -184,6 +203,34 @@ fn envelope(payload: &[u8]) -> Vec<u8> {
     body.extend_from_slice(&length.to_be_bytes());
     body.extend_from_slice(payload);
     body
+}
+
+/// Close/delete of a missing agent is the desired end state. Cursor still
+/// mis-tags some of those as 500 `internal` with "Agent … not found".
+fn gone_ok(result: Result<()>) -> Result<()> {
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if already_gone(&error) => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn already_gone(error: &anyhow::Error) -> bool {
+    let text = error.to_string();
+    // `bridge RPC \`…\` failed ({status}, {code}): {message}` — do not
+    // match the method name or the HTTP reason phrase (`404 Not Found`).
+    let Some((_, rest)) = text.split_once("failed (") else {
+        return false;
+    };
+    let Some((status_and_code, message)) = rest.split_once("): ") else {
+        return false;
+    };
+    let code = status_and_code.rsplit_once(", ").map_or("", |(_, code)| code);
+    if code == "not_found" {
+        return true;
+    }
+    let message = message.to_ascii_lowercase();
+    message.contains("agent") && message.contains("not found")
 }
 
 /// Map a non-200 Connect response — `{"code", "message", ...}` — onto an error.
@@ -321,7 +368,7 @@ fn end_stream_error(method: &str, payload: &[u8]) -> Result<()> {
 mod tests {
     use bytes::BytesMut;
 
-    use super::{connect_error, decode_frame, end_stream_error, envelope};
+    use super::{already_gone, connect_error, decode_frame, end_stream_error, envelope};
 
     #[test]
     fn envelope_prefix() {
@@ -399,5 +446,36 @@ mod tests {
             b"plain text",
         );
         assert!(error.to_string().contains("plain text"), "{error}");
+    }
+
+    #[test]
+    fn already_gone_codes() {
+        let typed = connect_error(
+            "SdkAgentService/DeleteAgent",
+            http::StatusCode::NOT_FOUND,
+            br#"{"code":"not_found","message":"unknown agent"}"#,
+        );
+        assert!(already_gone(&typed), "{typed}");
+
+        let mistagged = connect_error(
+            "SdkAgentService/DeleteAgent",
+            http::StatusCode::INTERNAL_SERVER_ERROR,
+            br#"{"code":"internal","message":"Agent 4448a33a-8b47-41fe-b051-90484e4d00fb not found"}"#,
+        );
+        assert!(already_gone(&mistagged), "{mistagged}");
+
+        let unimplemented = connect_error(
+            "SdkAgentService/CloseAgent",
+            http::StatusCode::NOT_FOUND,
+            br#"{"code":"unimplemented","message":"Method not found"}"#,
+        );
+        assert!(!already_gone(&unimplemented), "{unimplemented}");
+
+        let other = connect_error(
+            "SdkAgentService/DeleteAgent",
+            http::StatusCode::INTERNAL_SERVER_ERROR,
+            br#"{"code":"internal","message":"store locked"}"#,
+        );
+        assert!(!already_gone(&other), "{other}");
     }
 }

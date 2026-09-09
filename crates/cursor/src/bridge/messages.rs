@@ -110,8 +110,24 @@ pub struct CreateAgentResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CloseAgentRequest {
+    pub agent_id: String,
+}
+
+/// Local delete/get/archive are cwd-scoped; the key is the same pin
+/// `CreateAgent` sent so a later call does not depend on bridge env fallback.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentOperationOptions {
+    pub cwd: String,
+    pub api_key: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteAgentRequest {
     pub agent_id: String,
+    pub options: AgentOperationOptions,
 }
 
 #[derive(Serialize)]

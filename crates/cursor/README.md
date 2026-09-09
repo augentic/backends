@@ -30,7 +30,9 @@ session already carries the prompt and the rejected answer, so the
 provider's prompt cache stays warm. Two rounds are allowed; a rejection of
 the second fails the completion with the typed `budget-exhausted` carrying
 that correction. Agent scope is strictly one `complete` call: agents are
-never reused across completions, and each is deleted afterwards.
+never reused across completions. Each is closed and then deleted against
+the create-time workspace (a missing agent is already gone); `Drop` only
+retries that cleanup if `complete` never ran.
 
 MSRV: Rust 1.97
 
