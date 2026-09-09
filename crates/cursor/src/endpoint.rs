@@ -33,6 +33,7 @@ use tokio::sync::mpsc;
 
 const PATH: &str = "/sdk.v1.SdkCustomToolCallbackService/CallCustomTool";
 const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 
 type Reply = http::Response<Full<Bytes>>;
 
@@ -196,18 +197,26 @@ impl Handler {
     }
 
     async fn handle(&self, request: http::Request<Incoming>) -> Reply {
-        if request.method() != Method::POST {
-            return connect_error(StatusCode::METHOD_NOT_ALLOWED, "unimplemented", "POST required");
-        }
-        if request.uri().path() != PATH {
-            return connect_error(StatusCode::NOT_FOUND, "not_found", "unknown callback path");
-        }
-        // Authenticate on headers alone, before buffering any body bytes.
-        if !self.authorized(request.headers()) {
-            return connect_error(StatusCode::UNAUTHORIZED, "unauthenticated", "bad bearer token");
+        let (parts, body) = request.into_parts();
+
+        // Reject on the head alone — no body byte of an unauthenticated
+        // request is ever buffered — but discard the body before answering:
+        // closing with unread bytes turns the reply into a TCP reset.
+        let rejection = if parts.method != Method::POST {
+            Some(connect_error(StatusCode::METHOD_NOT_ALLOWED, "unimplemented", "POST required"))
+        } else if parts.uri.path() != PATH {
+            Some(connect_error(StatusCode::NOT_FOUND, "not_found", "unknown callback path"))
+        } else if !self.authorized(&parts.headers) {
+            Some(connect_error(StatusCode::UNAUTHORIZED, "unauthenticated", "bad bearer token"))
+        } else {
+            None
+        };
+
+        if let Some(reply) = rejection {
+            let _ = tokio::time::timeout(DRAIN_TIMEOUT, drain(body, MAX_BODY_BYTES)).await;
+            return reply;
         }
 
-        let (parts, body) = request.into_parts();
         let body = match Limited::new(body, MAX_BODY_BYTES).collect().await {
             Ok(collected) => collected.to_bytes(),
             Err(error) if error.is::<LengthLimitError>() => {
@@ -280,6 +289,20 @@ impl Handler {
                 let message = format!("tool `{}` failed: {error:#}", call.tool_name);
                 let _ = session.abort.send(message.clone());
                 connect_error(StatusCode::CONFLICT, "aborted", &message)
+            }
+        }
+    }
+}
+
+// Read and discard up to `limit` body bytes; an oversize or failing body is
+// abandoned where it stands.
+async fn drain(mut body: Incoming, limit: usize) {
+    let mut seen = 0;
+    while let Some(Ok(frame)) = body.frame().await {
+        if let Ok(data) = frame.into_data() {
+            seen += data.len();
+            if seen > limit {
+                break;
             }
         }
     }
@@ -516,6 +539,26 @@ mod tests {
     async fn bad_bearer() {
         let harness = serve_agent("agent-1").await;
         let body = json!({ "toolName": "lookup", "args": {}, "agentId": "agent-1" }).to_string();
+        let headers = format!(
+            "Authorization: Bearer wrong\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
+            body.len()
+        );
+        let (status, _, payload) =
+            exchange(harness.endpoint.url(), &headers, body.as_bytes()).await;
+        assert_eq!(status, 401);
+        let response: Value = serde_json::from_slice(&payload).expect("connect error json");
+        assert_eq!(response["code"], "unauthenticated");
+    }
+
+    #[tokio::test]
+    async fn bad_bearer_large() {
+        // A body still in flight when the head is rejected. The server must
+        // take it before closing: a close with unread bytes is a TCP reset
+        // that discards the 401 along with them.
+        let harness = serve_agent("agent-1").await;
+        let pad = "x".repeat(1 << 20);
+        let body = json!({ "toolName": "lookup", "args": { "pad": pad }, "agentId": "agent-1" })
+            .to_string();
         let headers = format!(
             "Authorization: Bearer wrong\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
             body.len()
