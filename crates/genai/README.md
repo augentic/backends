@@ -7,7 +7,7 @@ Multi-provider generative-AI model backend for the Omnia WASI runtime,
 implementing the `omnia:model/completion` boundary (`wasi-model`).
 
 Wraps the [`genai`](https://crates.io/crates/genai) SDK (`OpenAI`, Anthropic,
-Gemini, Groq, Ollama, …). The backend maps the gate-validated `Request`
+Gemini, Groq, Ollama, …). The backend maps the host-validated `Request`
 (`system` / `messages` channels) to a provider chat request, advertising the
 request's declared function tools — plus the host-injected `read`/`list`
 workspace tools when the guest lent a workspace through `grants.workspace`.
@@ -16,9 +16,16 @@ host-side through the lent `ToolHost` workspace capability (bounded by the
 host; results must be UTF-8 text under the per-result byte cap, and failures
 such as a missing file are fed back to the model as repairable text), while
 every other model tool call is forwarded through `ToolHost::call_tool` to the
-guest's session handler. Workspace reads share the completion's bounded turn
-budget with tool calls and answer repair. The guest only ever sees the
-validated answer string.
+guest's session handler. The request's `format` rides as the provider
+`response_format` — steering only; nothing here validates the answer. When
+the request sets `check`, each final text the model produces is offered to
+the guest through `ToolHost::check`: `Ok` ends the completion with that
+candidate, `Err(correction)` appends the candidate and the guest's correction
+to the conversation verbatim and the loop goes round. Workspace reads, tool
+calls, and check rounds share one bounded round budget (eight provider
+round-trips); a rejection on the last round fails the completion with the
+typed `budget-exhausted` carrying that correction. Without a `check` the
+guest sees the model's final text as-is.
 
 MSRV: Rust 1.97
 
@@ -73,10 +80,13 @@ let client = Client::connect_with(ConnectOptions {
 ## Live tests
 
 [`tests/live.rs`](tests/live.rs) drives real completions through the `wasi-model`
-boundary: the in-process tool loop with function-tool dispatch, and the
+boundary: the in-process tool loop with function-tool dispatch, the
 host-injected `read`/`list` workspace tools (the model discovers and reads a
-file the prompt never names). They are `#[ignore]`d so they never touch the
-network in CI; run them with a provider key:
+file the prompt never names), and the guest `check` loop (a stand-in check
+rejects the first candidate with a correction the model must follow, and one
+that rejects every candidate proves the typed `budget-exhausted`). They are
+`#[ignore]`d so they never touch the network in CI; run them with a provider
+key:
 
 ```bash
 OPENAI_API_KEY=... \

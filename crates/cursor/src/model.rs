@@ -1,14 +1,15 @@
 //! `wasi-model` implementation driving one bridge-managed Cursor agent per
 //! completion.
 //!
-//! The gate-validated [`Request`] maps onto `CreateAgent` options: guest
+//! The host-validated [`Request`] maps onto `CreateAgent` options: guest
 //! function tools become SDK custom tools (executed back through the
 //! session via the loopback callback and [`ToolHost::call_tool`]), MCP
 //! grants ride inline as `mcp_servers`, and the lent workspace — or a
 //! private empty directory when none is lent — becomes the agent's `cwd`.
-//! One `Send` stream produces the answer; a failed format gate sends the
-//! repair instruction on the same agent, whose session already carries the
-//! prompt and the failed answer.
+//! One `Send` stream produces the answer; when the request asks for a
+//! `check`, the answer is offered to the guest through [`ToolHost::check`]
+//! and a rejection sends the guest's correction on the same agent, whose
+//! session already carries the prompt and the rejected answer.
 
 mod agent;
 mod observe;

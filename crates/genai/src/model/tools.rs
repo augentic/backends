@@ -205,6 +205,10 @@ mod tests {
             let error = anyhow::anyhow!("write to `{path}` is not exercised");
             Box::pin(async move { Err(error) })
         }
+
+        fn check(&self, _candidate: String) -> FutureResult<Result<(), String>> {
+            Box::pin(async { Err(anyhow::anyhow!("check is not exercised")) })
+        }
     }
 
     fn workspace_stub() -> Arc<dyn ToolHost> {

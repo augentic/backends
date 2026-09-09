@@ -6,7 +6,7 @@
 //! machinery and the real workspace `ToolHost` with no network; these prove
 //! the genai backend itself — `Request`→`ChatRequest` mapping with declared
 //! and host-injected tools, the in-process tool loop forwarding through
-//! [`ToolHost`], and answer validation — against a real provider.
+//! [`ToolHost`], and the guest `check` loop — against a real provider.
 //!
 //! `#[ignore]`d so they never run or touch the network in CI; run them with
 //! `cargo nextest run -p omnia-genai --run-ignored all` alongside a provider
@@ -14,13 +14,14 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::Result;
 use futures::FutureExt as _;
 use omnia::Backend as _;
 use omnia_genai::Client;
 use omnia_wasi_model::{
-    Answer, DirEntry, Format, Function, FutureResult, Grants, Message, Request, Role, Tool,
+    Answer, DirEntry, Error, Format, Function, FutureResult, Grants, Message, Request, Role, Tool,
     ToolHost, WasiModelCtx,
 };
 use serde_json::Value;
@@ -58,6 +59,10 @@ impl ToolHost for LiveTools {
     fn write(&self, _path: String, _bytes: Vec<u8>) -> FutureResult<()> {
         async { Err(anyhow::anyhow!("write is unused in this test")) }.boxed()
     }
+
+    fn check(&self, _candidate: String) -> FutureResult<Result<(), String>> {
+        async { Err(anyhow::anyhow!("no check was requested")) }.boxed()
+    }
 }
 
 /// A prompt that forces a `lookup` tool call and a JSON-object answer
@@ -91,6 +96,7 @@ fn lookup_request() -> Request {
             .to_owned(),
         })],
         grants: Grants { workspace: None },
+        check: false,
     }
 }
 
@@ -135,8 +141,93 @@ impl ToolHost for LiveWorkspace {
         async move { Err(anyhow::anyhow!("write to `{path}` is not granted")) }.boxed()
     }
 
+    fn check(&self, _candidate: String) -> FutureResult<Result<(), String>> {
+        async { Err(anyhow::anyhow!("no check was requested")) }.boxed()
+    }
+
     fn local_path(&self) -> Option<&Path> {
         Some(Path::new("/unused/live-workspace"))
+    }
+}
+
+/// Stand-in for the guest's `check`: rejects the first `rejections`
+/// candidates with a correction demanding the sentinel word, accepts after.
+/// The real guest round trip is proved by omnia's e2e scenarios; here we
+/// need the genai backend to feed the correction back and go round.
+#[derive(Debug)]
+struct LiveCheck {
+    rejections: usize,
+    candidates: Arc<std::sync::Mutex<Vec<String>>>,
+    seen: AtomicUsize,
+}
+
+const CHECK_WORD: &str = "quokka";
+
+impl LiveCheck {
+    fn rejecting(rejections: usize) -> (Arc<Self>, Arc<std::sync::Mutex<Vec<String>>>) {
+        let candidates = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let check = Arc::new(Self {
+            rejections,
+            candidates: Arc::clone(&candidates),
+            seen: AtomicUsize::new(0),
+        });
+        (check, candidates)
+    }
+}
+
+impl ToolHost for LiveCheck {
+    fn call_tool(&self, name: String, _arguments: String) -> FutureResult<Result<String, String>> {
+        async move { Err(anyhow::anyhow!("no function tools are declared, model called `{name}`")) }
+            .boxed()
+    }
+
+    fn read(&self, _path: String) -> FutureResult<Vec<u8>> {
+        async { Err(anyhow::anyhow!("read is unused in this test")) }.boxed()
+    }
+
+    fn list(&self, _path: String) -> FutureResult<Vec<DirEntry>> {
+        async { Err(anyhow::anyhow!("list is unused in this test")) }.boxed()
+    }
+
+    fn write(&self, _path: String, _bytes: Vec<u8>) -> FutureResult<()> {
+        async { Err(anyhow::anyhow!("write is unused in this test")) }.boxed()
+    }
+
+    fn check(&self, candidate: String) -> FutureResult<Result<(), String>> {
+        let seen = self.seen.fetch_add(1, Ordering::SeqCst);
+        self.candidates.lock().expect("candidates lock").push(candidate.clone());
+        let verdict = if seen < self.rejections {
+            Err(format!(
+                "## Previous answer (rejected)\n\n{candidate}\n\n## Findings\n\nThe `word` \
+                 property must be exactly \"{CHECK_WORD}\".\n\nProduce a corrected, complete \
+                 answer that resolves every finding."
+            ))
+        } else {
+            Ok(())
+        };
+        async move { Ok(verdict) }.boxed()
+    }
+}
+
+/// A prompt whose first answer cannot contain the check's word — the model
+/// only learns it from the correction turn.
+fn check_request() -> Request {
+    Request {
+        model: None,
+        system: Some(
+            "Reply with a JSON object {\"word\": <a single English word>}. Follow any \
+             correction you receive exactly."
+                .to_owned(),
+        ),
+        messages: vec![Message {
+            role: Role::User,
+            content: "Name a colour.".to_owned(),
+        }],
+        generation: None,
+        format: Format::Json,
+        tools: vec![],
+        grants: Grants { workspace: None },
+        check: true,
     }
 }
 
@@ -160,7 +251,16 @@ fn workspace_request() -> Request {
         format: Format::Json,
         tools: vec![],
         grants: Grants { workspace: None },
+        check: false,
     }
+}
+
+/// The answer text as the JSON object the prompts ask for.
+fn object(answer: &Answer) -> Value {
+    let value: Value = serde_json::from_str(&answer.answer)
+        .unwrap_or_else(|e| panic!("the answer must be JSON ({e}): {}", answer.answer));
+    assert!(value.is_object(), "the answer must be a JSON object: {value}");
+    value
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -184,11 +284,10 @@ async fn live_genai_function_tool_loop() -> Result<()> {
         "the tool result must round-trip the session's answer"
     );
 
-    assert!(answer.value.is_object(), "the answer must be a JSON object: {:?}", answer.value);
+    let value = object(&answer);
     assert!(
-        answer.value.to_string().contains("shelf:alpha"),
-        "the tool's value must appear in the answer: {:?}",
-        answer.value
+        value.to_string().contains("shelf:alpha"),
+        "the tool's value must appear in the answer: {value}"
     );
 
     Ok(())
@@ -219,11 +318,57 @@ async fn live_genai_workspace_tools() -> Result<()> {
         read_turn.result
     );
 
-    assert!(answer.value.is_object(), "the answer must be a JSON object: {:?}", answer.value);
+    let value = object(&answer);
     assert!(
-        answer.value.to_string().contains(SENTINEL),
-        "the file's value must appear in the answer: {:?}",
-        answer.value
+        value.to_string().contains(SENTINEL),
+        "the file's value must appear in the answer: {value}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "live: needs a provider key (e.g. OPENAI_API_KEY); run with --run-ignored"]
+async fn live_genai_check_corrects_then_accepts() -> Result<()> {
+    let client = Client::connect().await?;
+    let (check, candidates) = LiveCheck::rejecting(1);
+    let answer: Answer = client.complete(check_request(), check).await.map_err(|e| {
+        anyhow::anyhow!("live genai completion failed (is the API key valid?): {e}")
+    })?;
+
+    let candidates = candidates.lock().expect("candidates lock").clone();
+    assert_eq!(candidates.len(), 2, "one rejection, one acceptance: {candidates:?}");
+    assert_eq!(answer.answer, candidates[1], "the accepted candidate is the answer");
+    let value = object(&answer);
+    assert_eq!(
+        value.get("word").and_then(Value::as_str),
+        Some(CHECK_WORD),
+        "the correction turn reached the model: {value}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "live: needs a provider key (e.g. OPENAI_API_KEY); run with --run-ignored"]
+async fn live_genai_check_exhausts() -> Result<()> {
+    let client = Client::connect().await?;
+    let (check, candidates) = LiveCheck::rejecting(usize::MAX);
+    let error = client
+        .complete(check_request(), check)
+        .await
+        .expect_err("every candidate is rejected, so the round budget ends the completion");
+
+    let correction = match error.downcast_ref::<Error>() {
+        Some(Error::BudgetExhausted(correction)) => correction,
+        other => panic!("expected the typed budget-exhausted carrying the correction: {other:?}"),
+    };
+    assert!(correction.contains("## Findings"), "the last correction is the detail: {correction}");
+    let candidates = candidates.lock().expect("candidates lock").clone();
+    assert!(candidates.len() > 1, "the backend must go round before giving up: {candidates:?}");
+    assert!(
+        correction.contains(candidates.last().expect("at least one candidate")),
+        "the detail names the last rejected candidate"
     );
 
     Ok(())

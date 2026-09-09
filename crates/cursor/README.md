@@ -9,8 +9,8 @@ Cursor model backend for the Omnia WASI runtime, implementing the
 wrapping Cursor's SDK behind Connect RPCs.
 
 Each completion creates a fresh bridge-managed agent that owns its own tool
-loop and edits the lent working tree directly, then returns a validated
-answer through the same boundary as `omnia-genai`. Guest-declared function
+loop and edits the lent working tree directly, then returns its answer
+through the same boundary as `omnia-genai`. Guest-declared function
 tools round-trip through the session exactly as genai's do: they are declared
 as SDK custom tools at `CreateAgent`, and when the agent calls one the bridge
 POSTs `CallCustomTool` to this crate's loopback callback endpoint, which routes
@@ -18,14 +18,19 @@ it into the completion's session via `ToolHost::call_tool` — so the guest's
 tool closure answers, under the host's declared-name check, budget, size cap,
 and per-call timeout. `Tool::Mcp` grants pass inline as the agent's
 `mcp_servers`; nothing is written into the workspace. The guest only ever
-sees the validated answer string; the model id, the API key, and the bridge
-protocol stay inside this crate.
+sees the answer string; the model id, the API key, and the bridge protocol
+stay inside this crate.
 
-When the first attempt's answer fails the format gate, the second (and last)
-attempt sends only the format-repair instruction on the same agent — its
-session already carries the prompt and the failed answer, so the provider's
-prompt cache stays warm. Agent scope is strictly one `complete` call: agents
-are never reused across completions, and each is deleted afterwards.
+The request's `format` reaches the agent as a final-answer instruction in
+the prompt — steering only; nothing here validates the answer. When the
+request sets `check`, the agent's answer is offered to the guest through
+`ToolHost::check`: `Ok` ends the completion, `Err(correction)` sends the
+guest's correction verbatim as the next prompt on the same agent — its
+session already carries the prompt and the rejected answer, so the
+provider's prompt cache stays warm. Two rounds are allowed; a rejection of
+the second fails the completion with the typed `budget-exhausted` carrying
+that correction. Agent scope is strictly one `complete` call: agents are
+never reused across completions, and each is deleted afterwards.
 
 MSRV: Rust 1.97
 
@@ -60,12 +65,12 @@ The model id is taken from each request (`request.model`); an unset value
 falls back to `CURSOR_MODEL`, else `auto` (Cursor's server-side selection).
 The request's `generation` controls (temperature, max tokens, effort, …)
 are ignored: `CreateAgent` has no sampling knobs. Each `Send` — the opening
-prompt, and a format-repair if any — is bounded twice: an inactivity window
+prompt, and a check's correction if any — is bounded twice: an inactivity window
 (`CURSOR_INACTIVITY_SECS`, default 120s) cancels a run whose stream has gone
 silent (keepalive frames do not count), while the absolute wall-clock cap
 (`CURSOR_TIMEOUT_SECS`, default 600s) backstops a run that streams forever.
-A completion that repairs therefore gets a fresh inactivity window and a
-fresh cap on the second send. The two errors are distinct
+A completion that is corrected therefore gets a fresh inactivity window and
+a fresh cap on the second send. The two errors are distinct
 (`inactive for Ns` vs `timed out after Ns (absolute cap …)`).
 `Client::connect()` / `FromEnv` reads the optional `CURSOR_TIMEOUT_SECS`,
 `CURSOR_INACTIVITY_SECS`, and `CURSOR_MODEL`; callers that need different
@@ -118,10 +123,13 @@ The full guest + runtime demo lives in [`examples/cursor`](../../examples/cursor
 
 [`tests/live.rs`](tests/live.rs) drives real completions through the
 `wasi-model` boundary: the plain acceptance run, a function-tool round-trip
-with a lent workspace, a no-workspace function-tool run, and an in-process
-MCP grant without a lent workspace (so the empty built-in allowlist still
-admits MCP). All are `#[ignore]`d so they never spawn a process in CI; run
-them with `cursor-sdk-bridge` installed:
+with a lent workspace, a no-workspace function-tool run, an in-process MCP
+grant without a lent workspace (so the empty built-in allowlist still admits
+MCP), and the guest `check` loop (a stand-in check rejects the first answer
+with a correction the agent must follow on its own session, and one that
+rejects both proves the typed `budget-exhausted`). All are `#[ignore]`d so
+they never spawn a process in CI; run them with `cursor-sdk-bridge`
+installed:
 
 ```bash
 CURSOR_API_KEY=... \

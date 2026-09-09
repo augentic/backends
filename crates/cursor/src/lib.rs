@@ -71,8 +71,8 @@ mod config {
         #[env(from = "CURSOR_MODEL", default = "auto")]
         pub model: String,
         /// Absolute wall-clock cap in seconds on one agent run (the opening
-        /// prompt, or a format-repair); timed-out runs are cancelled. A
-        /// completion that repairs gets a fresh cap on the second send.
+        /// prompt, or a check's correction); timed-out runs are cancelled. A
+        /// completion that is corrected gets a fresh cap on the second send.
         #[env(from = "CURSOR_TIMEOUT_SECS", default = "600")]
         pub timeout_secs: u64,
         /// Inactivity bound in seconds: a run is cancelled after this long

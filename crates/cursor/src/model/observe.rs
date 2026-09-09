@@ -106,7 +106,7 @@ impl Completion {
             histogram.cursor_output_tokens = self.output_tokens,
             histogram.cursor_reasoning_tokens = self.reasoning_tokens,
             monotonic_counter.cursor_completions = 1_u64,
-            monotonic_counter.cursor_repairs = u64::from(outcome == "repair"),
+            monotonic_counter.cursor_corrections = u64::from(outcome == "corrected"),
             "completion"
         );
     }
@@ -140,8 +140,6 @@ pub enum Failure {
     },
     /// Hard tool-host failure (or a closed abort channel).
     Aborted(String),
-    /// Format gate rejected both the first answer and the repair.
-    Invalid(String),
 }
 
 impl Failure {
@@ -150,7 +148,6 @@ impl Failure {
             Self::Timeout { .. } => "timeout",
             Self::Inactive { .. } => "inactive",
             Self::Aborted(_) => "abort",
-            Self::Invalid(_) => "invalid",
         }
     }
 }
@@ -172,16 +169,22 @@ impl std::fmt::Display for Failure {
                  {inactivity_secs}s, absolute cap {cap_secs}s)"
             ),
             Self::Aborted(reason) => write!(f, "completion aborted: {reason}"),
-            Self::Invalid(reason) => write!(f, "no valid answer after 2 attempts: {reason}"),
         }
     }
 }
 
 impl std::error::Error for Failure {}
 
-/// Classify a failed `complete` from a [`Failure`] when present.
+/// Classify a failed `complete`: a [`Failure`] by variant, the typed
+/// `budget-exhausted` a rejected check ends on, anything else `error`.
 pub fn outcome_of(error: &anyhow::Error) -> &'static str {
-    error.downcast_ref::<Failure>().map_or("error", Failure::outcome)
+    if let Some(failure) = error.downcast_ref::<Failure>() {
+        return failure.outcome();
+    }
+    match error.downcast_ref::<omnia_wasi_model::Error>() {
+        Some(omnia_wasi_model::Error::BudgetExhausted(_)) => "exhausted",
+        _ => "error",
+    }
 }
 
 /// Reconstructs the tool transcript and run metadata from the SDK stream.
@@ -389,8 +392,9 @@ mod tests {
         let aborted: anyhow::Error = Failure::Aborted("session closed".to_owned()).into();
         assert_eq!(super::outcome_of(&aborted), "abort");
 
-        let invalid: anyhow::Error = Failure::Invalid("not json".to_owned()).into();
-        assert_eq!(super::outcome_of(&invalid), "invalid");
+        let rejected: anyhow::Error =
+            omnia_wasi_model::Error::BudgetExhausted("say more".to_owned()).into();
+        assert_eq!(super::outcome_of(&rejected), "exhausted");
 
         assert_eq!(super::outcome_of(&anyhow::anyhow!("bridge RPC failed")), "error");
     }

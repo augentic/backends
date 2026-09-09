@@ -53,7 +53,7 @@ impl Completion {
         }
     }
 
-    // Count an answer-parse attempt as started (tool rounds do not count).
+    // Count a candidate answer as produced (tool rounds do not count).
     pub const fn new_attempt(&mut self) {
         self.attempts = self.attempts.saturating_add(1);
     }
@@ -99,7 +99,7 @@ impl Completion {
             histogram.genai_output_tokens = self.output_tokens,
             histogram.genai_reasoning_tokens = self.reasoning_tokens,
             monotonic_counter.genai_completions = 1_u64,
-            monotonic_counter.genai_repairs = u64::from(outcome == "repair"),
+            monotonic_counter.genai_corrections = u64::from(outcome == "corrected"),
             "completion"
         );
     }
@@ -119,15 +119,12 @@ impl Drop for Completion {
 pub enum Failure {
     // Round budget spent without the model producing a final text answer.
     Exhausted { rounds: usize },
-    // Format gate found no parseable answer on the final round.
-    Invalid { rounds: usize, reason: String },
 }
 
 impl Failure {
     pub const fn outcome(&self) -> &'static str {
         match self {
             Self::Exhausted { .. } => "exhausted",
-            Self::Invalid { .. } => "invalid",
         }
     }
 }
@@ -138,18 +135,22 @@ impl std::fmt::Display for Failure {
             Self::Exhausted { rounds } => {
                 write!(f, "no answer after {rounds} model round-trips")
             }
-            Self::Invalid { rounds, reason } => {
-                write!(f, "no valid answer after {rounds} model round-trips: {reason}")
-            }
         }
     }
 }
 
 impl std::error::Error for Failure {}
 
-/// Classify a failed `complete` from a [`Failure`] when present.
+/// Classify a failed `complete`: a [`Failure`] by variant, the typed
+/// `budget-exhausted` a rejected check ends on, anything else `error`.
 pub fn outcome_of(error: &anyhow::Error) -> &'static str {
-    error.downcast_ref::<Failure>().map_or("error", Failure::outcome)
+    if let Some(failure) = error.downcast_ref::<Failure>() {
+        return failure.outcome();
+    }
+    match error.downcast_ref::<omnia_wasi_model::Error>() {
+        Some(omnia_wasi_model::Error::BudgetExhausted(_)) => "exhausted",
+        _ => "error",
+    }
 }
 
 #[cfg(test)]
@@ -161,12 +162,12 @@ mod tests {
         let exhausted: anyhow::Error = Failure::Exhausted { rounds: 8 }.into();
         assert_eq!(outcome_of(&exhausted), "exhausted");
 
-        let invalid: anyhow::Error = Failure::Invalid {
-            rounds: 8,
-            reason: "not json".to_owned(),
-        }
-        .into();
-        assert_eq!(outcome_of(&invalid), "invalid");
+        let rejected: anyhow::Error =
+            omnia_wasi_model::Error::BudgetExhausted("say more".to_owned()).into();
+        assert_eq!(outcome_of(&rejected), "exhausted");
+
+        let other: anyhow::Error = omnia_wasi_model::Error::Backend("down".to_owned()).into();
+        assert_eq!(outcome_of(&other), "error");
 
         assert_eq!(outcome_of(&anyhow::anyhow!("provider unreachable")), "error");
     }
@@ -176,14 +177,6 @@ mod tests {
         assert_eq!(
             Failure::Exhausted { rounds: 8 }.to_string(),
             "no answer after 8 model round-trips"
-        );
-        assert_eq!(
-            Failure::Invalid {
-                rounds: 8,
-                reason: "not json".to_owned()
-            }
-            .to_string(),
-            "no valid answer after 8 model round-trips: not json"
         );
     }
 }

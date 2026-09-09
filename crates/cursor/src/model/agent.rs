@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
-use omnia_wasi_model::{Answer, Candidate, Format, ToolHost, Transcript, Usage};
+use omnia_wasi_model::{Answer, Error, Format, ToolHost, Transcript, Usage};
 use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep_until};
 
@@ -18,12 +18,18 @@ use crate::Client;
 use crate::bridge::{Rpc, RunStatus, RunStreamResult};
 use crate::endpoint::Attached;
 
+// Candidates offered to the guest's check before the round budget ends the
+// completion: the opening prompt plus one correction on the same agent.
+const MAX_ROUNDS: usize = 2;
+
 pub struct Agent {
     rpc: Rpc,
     id: String,
     deadlines: Deadlines,
     prompt: String,
     format: Format,
+    check: bool,
+    tool_host: Arc<dyn ToolHost>,
     live_run: Option<String>,
     abort_rx: mpsc::UnboundedReceiver<String>,
     completion: Option<Completion>,
@@ -45,7 +51,8 @@ impl Agent {
         };
 
         let (abort_tx, abort_rx) = mpsc::unbounded_channel();
-        let attached = client.bridge.attach(created.agent_id.clone(), tool_host, abort_tx);
+        let attached =
+            client.bridge.attach(created.agent_id.clone(), Arc::clone(&tool_host), abort_tx);
 
         Ok(Self {
             rpc,
@@ -53,6 +60,8 @@ impl Agent {
             deadlines: client.deadlines,
             prompt: turn.prompt,
             format: turn.format,
+            check: turn.check,
+            tool_host,
             live_run: None,
             abort_rx,
             completion: Some(completion),
@@ -65,7 +74,7 @@ impl Agent {
         let result = self.run().await;
         let attempts = self.completion.as_ref().map_or(0, Completion::attempts);
         let outcome = match &result {
-            Ok(_) if attempts > 1 => "repair",
+            Ok(_) if attempts > 1 => "corrected",
             Ok(_) => "ok",
             Err(error) => observe::outcome_of(error),
         };
@@ -76,33 +85,37 @@ impl Agent {
     }
 
     async fn run(&mut self) -> Result<Answer> {
-        let prompt = std::mem::take(&mut self.prompt);
-        let reason = match self.try_complete(&prompt).await? {
-            Verdict::Done(answer) => return Ok(answer),
-            Verdict::Repair(reason) => reason,
-        };
+        let mut prompt = std::mem::take(&mut self.prompt);
+        for round in 1..=MAX_ROUNDS {
+            if let Some(completion) = &mut self.completion {
+                completion.new_attempt();
+            }
+            let response = self.send(&prompt).await?;
+            if let Some(completion) = &mut self.completion {
+                let tools = response.transcript.as_ref().map_or(0, |t| t.turns.len());
+                completion.record(response.result.len(), tools, response.usage.as_ref());
+            }
 
-        tracing::debug!(%reason, "repairing answer");
-        let repaired = self.format.repair(&reason);
+            let candidate = self.format.candidate(&response.result);
+            if !self.check {
+                return Ok(response.answer(candidate));
+            }
 
-        match self.try_complete(&repaired).await? {
-            Verdict::Done(answer) => Ok(answer),
-            Verdict::Repair(reason) => Err(Failure::Invalid(reason).into()),
+            match self.tool_host.check(candidate.clone()).await? {
+                Ok(()) => return Ok(response.answer(candidate)),
+                // The agent keeps its session, so the correction alone is
+                // the next prompt; on the last round it is the typed
+                // failure the guest sees.
+                Err(correction) if round == MAX_ROUNDS => {
+                    bail!(Error::BudgetExhausted(correction));
+                }
+                Err(correction) => {
+                    tracing::debug!(%correction, "check rejected the candidate");
+                    prompt = correction;
+                }
+            }
         }
-    }
-
-    async fn try_complete(&mut self, text: &str) -> Result<Verdict> {
-        if let Some(completion) = &mut self.completion {
-            completion.new_attempt();
-        }
-
-        let response = self.send(text).await?;
-        if let Some(completion) = &mut self.completion {
-            let tools = response.transcript.as_ref().map_or(0, |t| t.turns.len());
-            completion.record(response.result.len(), tools, response.usage.as_ref());
-        }
-
-        Ok(response.answer(&self.format))
+        unreachable!("every round returns or bails")
     }
 
     async fn send(&mut self, text: &str) -> Result<Response> {
@@ -221,21 +234,13 @@ struct Response {
 }
 
 impl Response {
-    fn answer(self, format: &Format) -> Verdict {
-        match format.parse(&self.result) {
-            Ok(Candidate::Valid(value)) => Verdict::Done(Answer {
-                value,
-                usage: self.usage,
-                transcript: self.transcript,
-            }),
-            Ok(Candidate::Invalid { reason, .. }) | Err(reason) => Verdict::Repair(reason),
+    fn answer(self, candidate: String) -> Answer {
+        Answer {
+            answer: candidate,
+            usage: self.usage,
+            transcript: self.transcript,
         }
     }
-}
-
-enum Verdict {
-    Done(Answer),
-    Repair(String),
 }
 
 /// Inactivity and absolute bounds on one run, from the connect options.

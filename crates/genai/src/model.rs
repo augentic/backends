@@ -3,9 +3,10 @@
 //! Each completion translates a validated [`Request`] into a provider
 //! conversation and drives it within a shared round budget. Guest function
 //! calls are delegated through [`ToolHost::call_tool`], while the `read` and
-//! `list` tools operate directly on a lent workspace. When an answer fails
-//! format validation, the backend keeps it in the conversation and asks the
-//! provider to repair it.
+//! `list` tools operate directly on a lent workspace. When the request asks
+//! for a `check`, each final text is offered to the guest through
+//! [`ToolHost::check`]; a rejection stays in the conversation with the
+//! guest's correction as the next user turn, and the loop goes round.
 
 mod conversation;
 mod observe;

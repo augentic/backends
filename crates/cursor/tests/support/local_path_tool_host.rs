@@ -1,8 +1,10 @@
 //! [`ToolHost`] stubs for the live tests: an optional node-local workspace
-//! lend, plus a `call_tool` responder proving the session round-trip.
+//! lend, a `call_tool` responder proving the session round-trip, and a
+//! `check` standing in for the guest's judgement.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use omnia_wasi_model::{DirEntry, FutureResult, ToolHost};
 use serde_json::json;
@@ -10,12 +12,20 @@ use serde_json::json;
 /// A unique token returned by the stub session's `lookup` tool.
 pub const TOOL_SENTINEL: &str = "OMNIA-TOOL-SENTINEL-7d21c3aa";
 
-/// Tool host that resolves the lent workspace to an optional path and answers
-/// `lookup` calls with [`TOOL_SENTINEL`], standing in for the guest's tool
-/// closure behind the session.
+/// The word the stub `check` demands; the model only learns it from the
+/// correction turn.
+pub const CHECK_WORD: &str = "quokka";
+
+/// Tool host that resolves the lent workspace to an optional path, answers
+/// `lookup` calls with [`TOOL_SENTINEL`], and plays the guest's `check`:
+/// the first `rejections` candidates are corrected toward [`CHECK_WORD`],
+/// the rest accepted. Every candidate offered is recorded.
 #[derive(Debug)]
 pub struct StubToolHost {
     path: Option<PathBuf>,
+    rejections: usize,
+    seen: AtomicUsize,
+    candidates: Arc<Mutex<Vec<String>>>,
 }
 
 impl ToolHost for StubToolHost {
@@ -41,17 +51,49 @@ impl ToolHost for StubToolHost {
         Box::pin(async { Err(anyhow::anyhow!("cursor never routes `write` through the host")) })
     }
 
+    fn check(&self, candidate: String) -> FutureResult<Result<(), String>> {
+        let seen = self.seen.fetch_add(1, Ordering::SeqCst);
+        self.candidates.lock().expect("candidates lock").push(candidate.clone());
+        let verdict = if seen < self.rejections {
+            Err(format!(
+                "## Previous answer (rejected)\n\n{candidate}\n\n## Findings\n\nThe `word` \
+                 property must be exactly \"{CHECK_WORD}\".\n\nProduce a corrected, complete \
+                 answer that resolves every finding."
+            ))
+        } else {
+            Ok(())
+        };
+        Box::pin(async move { Ok(verdict) })
+    }
+
     fn local_path(&self) -> Option<&Path> {
         self.path.as_deref()
     }
 }
 
+fn stub(path: Option<PathBuf>, rejections: usize) -> (Arc<dyn ToolHost>, Arc<Mutex<Vec<String>>>) {
+    let candidates = Arc::new(Mutex::new(Vec::new()));
+    let host = StubToolHost {
+        path,
+        rejections,
+        seen: AtomicUsize::new(0),
+        candidates: Arc::clone(&candidates),
+    };
+    (Arc::new(host), candidates)
+}
+
 /// A tool host that lends `path` as the completion's node-local workspace.
 pub fn local_path_tool_host(path: PathBuf) -> Arc<dyn ToolHost> {
-    Arc::new(StubToolHost { path: Some(path) })
+    stub(Some(path), 0).0
 }
 
 /// A tool host with no local tree: the references-only completion shape.
 pub fn no_tool_host() -> Arc<dyn ToolHost> {
-    Arc::new(StubToolHost { path: None })
+    stub(None, 0).0
+}
+
+/// A workspace-less tool host whose `check` rejects the first `rejections`
+/// candidates, plus the record of every candidate offered.
+pub fn checking_tool_host(rejections: usize) -> (Arc<dyn ToolHost>, Arc<Mutex<Vec<String>>>) {
+    stub(None, rejections)
 }
