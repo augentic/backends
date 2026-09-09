@@ -1765,7 +1765,6 @@ dependencies = [
  "omnia-guest",
  "omnia-wasi-blobstore",
  "omnia-wasi-docstore",
- "omnia-wasi-http",
  "omnia-wasi-model",
  "omnia-wasi-otel",
  "serde",
